@@ -1,0 +1,344 @@
+//@version=6
+indicator("Diversitas Pro", shorttitle="DIV-PRO", overlay=true, max_bars_back=5000, max_labels_count=50, max_lines_count=50)
+
+// ============================================================================
+// DIVERSITAS PRO v3
+//
+// v3 CHANGES (from external review):
+// 1. Volatility regime adaptive thresholds (orthogonal signal)
+// 2. BTC regime filter for altcoins (cross-asset context)
+// 3. Normalized ADX (relative trend strength, not absolute)
+// 4. Market structure filter (higher highs / lower lows)
+// 5. Blow-off top + vol shock emergency exit
+// 6. Regime-aware drawdown brake
+// ============================================================================
+
+// === TRACKLINE ===
+// === TRACKLINE (Kijun-sen style: midpoint of highest high and lowest low) ===
+trackPeriod = input.int(75, "Trackline Period", minval=20, maxval=120, group="Trackline", tooltip="Kijun-sen style trackline. Midpoint of highest high and lowest low over N bars. 75 bars is about 3.5 months. Longer = fewer crossings in chop.")
+trackBuf = input.float(3.0, "Trackline Buffer %", minval=0.0, maxval=5.0, step=0.25, group="Trackline")
+
+// === MOMENTUM ===
+rsiLen = input.int(14, "RSI Length", minval=5, maxval=30, group="Momentum")
+rsiThresh = input.float(45.0, "RSI Threshold", minval=30.0, maxval=60.0, group="Momentum")
+emaFast = input.int(21, "Fast EMA", minval=5, maxval=50, group="Momentum")
+emaSlow = input.int(55, "Slow EMA", minval=20, maxval=100, group="Momentum")
+adxLen = input.int(14, "ADX Length", minval=5, maxval=30, group="Momentum")
+structLen = input.int(20, "Structure Lookback", minval=10, maxval=50, group="Momentum", tooltip="Bars to check for higher highs / lower lows. Market structure filter.")
+
+// === MACRO ===
+wkEmaLen = input.int(21, "Weekly EMA Length", minval=10, maxval=50, group="Macro")
+wkSmaLen = input.int(30, "Weekly SMA Length", minval=10, maxval=50, group="Macro")
+useBtcFilter = input.bool(true, "BTC Filter (for altcoins)", group="Macro", tooltip="When enabled on non-BTC charts, green dots require BTC to be above its daily 50-EMA. Disable on BTC chart itself.")
+
+// === VOLUME ===
+volLen = input.int(20, "Volume MA Length", minval=5, maxval=50, group="Volume")
+
+// === VOLATILITY ===
+volLookback = input.int(20, "Vol Lookback Days", minval=5, maxval=60, group="Volatility")
+targetVol = input.float(25.0, "Target Portfolio Vol %", minval=5.0, maxval=60.0, step=5.0, group="Volatility")
+blowoffDist = input.float(25.0, "Blow-off Distance %", minval=10.0, maxval=40.0, step=1.0, group="Volatility", tooltip="Emergency BEAR if price is this % above trackline with RSI > 80. Set higher with Kijun trackline since it stays flat during rallies.")
+volShockMul = input.float(1.5, "Vol Shock Multiplier", minval=1.2, maxval=3.0, step=0.1, group="Volatility", tooltip="If current vol > this * 50-bar avg vol, emergency BEAR fires.")
+
+// === ANTI-CHURN ===
+confirmBars = input.int(3, "Confirmation Bars", minval=1, maxval=5, group="Anti-Churn")
+reentryHold = input.int(15, "Re-entry Hold Lock", minval=1, maxval=30, group="Anti-Churn")
+graceBars = input.int(5, "Green Dot Grace", minval=1, maxval=10, group="Anti-Churn")
+exitGraceBars = input.int(3, "Exit Grace", minval=1, maxval=5, group="Anti-Churn")
+convSmooth = input.int(5, "Conviction Smoothing", minval=1, maxval=7, group="Anti-Churn")
+
+// === DISPLAY ===
+skipWknd = input.bool(true, "Ignore Weekends", group="Display")
+showDots = input.bool(true, "Show Dots", group="Display")
+showBG = input.bool(true, "Show Background", group="Display")
+showLabels = input.bool(true, "Show Labels", group="Display")
+
+// === WEEKEND ===
+isWeekend = skipWknd and (dayofweek == dayofweek.saturday or dayofweek == dayofweek.sunday)
+
+// ============================================================================
+// INDICATORS
+// ============================================================================
+
+// Kijun-sen trackline: midpoint of N-bar high and N-bar low
+// Flattens during consolidation, steps on breakouts — matches current model behaviour
+trackHigh = ta.highest(high, trackPeriod)
+trackLow = ta.lowest(low, trackPeriod)
+trackline = (trackHigh + trackLow) / 2.0
+trackRising = trackline > trackline[1]
+bufAmt = trackline * (trackBuf / 100.0)
+aboveTL = close > (trackline + bufAmt)
+belowTL = close < (trackline - bufAmt)
+distPct = (close - trackline) / trackline * 100
+
+rsiVal = ta.rsi(close, rsiLen)
+fEMA = ta.ema(close, emaFast)
+sEMA = ta.ema(close, emaSlow)
+volMA = ta.sma(volume, volLen)
+volRatio = volMA > 0 ? volume / volMA : 1.0
+
+// --- 200-day MA bear market filter ---
+// When price is below a falling 200MA, we're likely in a prolonged bear market.
+// Bear market rallies frequently cross the trackline but fail at the 200MA.
+// Instead of hard-blocking, we raise the conviction threshold significantly.
+sma200 = ta.sma(close, 200)
+sma200Falling = sma200 < sma200[1]
+belowSma200 = close < sma200
+bearMarketRegime = belowSma200 and sma200Falling
+
+// --- ADX: normalized to its own rolling mean (not static threshold) ---
+calcADX(len) =>
+    up = ta.change(high)
+    down = -ta.change(low)
+    pDM = up > down and up > 0 ? up : 0
+    nDM = down > up and down > 0 ? down : 0
+    trur = ta.rma(ta.tr, len)
+    pDI = 100 * ta.rma(pDM, len) / trur
+    nDI = 100 * ta.rma(nDM, len) / trur
+    sum = pDI + nDI
+    dx = sum == 0 ? 0 : 100 * math.abs(pDI - nDI) / sum
+    ta.rma(dx, len)
+
+adxVal = calcADX(adxLen)
+adxMean = ta.sma(adxVal, 100)
+adxOK = adxVal > adxMean
+
+// --- Market structure: higher highs vs lower lows ---
+barsLastHH = ta.barssince(high >= ta.highest(high, structLen)[1])
+barsLastLL = ta.barssince(low <= ta.lowest(low, structLen)[1])
+structureBull = barsLastLL > barsLastHH
+
+// --- Weekly macro ---
+wkEMA = request.security(syminfo.tickerid, "W", ta.ema(close, wkEmaLen))
+wkEMAprev = request.security(syminfo.tickerid, "W", ta.ema(close, wkEmaLen)[1])
+wkSMA = request.security(syminfo.tickerid, "W", ta.sma(close, wkSmaLen))
+wkClose = request.security(syminfo.tickerid, "W", close)
+wkEmaRising = wkEMA > wkEMAprev
+aboveWkSMA = wkClose > wkSMA
+
+// --- BTC filter (for altcoin charts) ---
+btcClose = request.security("COINBASE:BTCUSD", "D", close)
+btcEMA50 = request.security("COINBASE:BTCUSD", "D", ta.ema(close, 50))
+btcBull = btcClose > btcEMA50
+btcFilterOK = not useBtcFilter or btcBull
+
+// --- Volatility ---
+logRet = math.log(close / close[1])
+dailyStd = ta.stdev(logRet, volLookback)
+annualVol = dailyStd * math.sqrt(365) * 100
+
+// Volatility regime classification (orthogonal signal)
+volSMA100 = ta.sma(annualVol, 100)
+volStd100 = ta.stdev(annualVol, 100)
+volZ = volStd100 > 0 ? (annualVol - volSMA100) / volStd100 : 0.0
+highVolRegime = volZ > 1.0
+lowVolRegime = volZ < -1.0
+
+// --- Drawdown (regime-aware) ---
+var float peakPrice = na
+peakPrice := na(peakPrice) ? close : math.max(peakPrice, close)
+ddPct = (close - peakPrice) / peakPrice * 100
+
+// --- Blow-off top + vol shock detection ---
+blowoff = distPct > blowoffDist and rsiVal > 80
+volShock = annualVol > ta.sma(annualVol, 50) * volShockMul
+
+// ============================================================================
+// CONVICTION SCORE (0-100, smoothed, with adaptive threshold)
+// ============================================================================
+
+// Trend (0-30)
+trendRaw = math.max(0.0, math.min(1.0, (distPct + 5.0) / 10.0))
+trendBonus = trackRising ? 0.1 : 0.0
+trendScore = math.min(1.0, trendRaw + trendBonus) * 30.0
+
+// Momentum (0-25)
+rsiNorm = math.max(0.0, math.min(1.0, (rsiVal - 30.0) / 35.0))
+emaSpread = (fEMA - sEMA) / sEMA * 100
+emaNorm = math.max(0.0, math.min(1.0, (emaSpread + 2.0) / 5.0))
+momScore = (rsiNorm * 0.5 + emaNorm * 0.5) * 25.0
+
+// Macro (0-20)
+macroScore = ((wkEmaRising ? 0.4 : 0.0) + (aboveWkSMA ? 0.4 : 0.0) + (wkClose > wkEMA ? 0.2 : 0.0)) * 20.0
+
+// Volume (0-15)
+volNorm = math.max(0.0, math.min(1.0, (volRatio - 0.5) / 1.5))
+volScore = volNorm * 15.0
+
+// DD brake (0-10) - regime-aware: penalize less during rising trackline
+ddNorm = math.max(0.0, math.min(1.0, (ddPct + 30.0) / 30.0))
+ddPenalty = trackRising ? 0.3 : 1.0
+ddScore = ddNorm * 10.0 * ddPenalty
+
+// Raw conviction then smooth
+rawConviction = trendScore + momScore + macroScore + volScore + ddScore
+conviction = ta.sma(rawConviction, convSmooth)
+
+// Trend persistence: proportion of up-closes over last 10 bars
+// Strong trends close up most days. Choppy trends close up ~50%.
+// This naturally de-risks in chop without adding a filter.
+trendPersistence = math.sum(close > close[1] ? 1.0 : 0.0, 10) / 10.0
+
+// Weekly higher timeframe hard gate
+// Not just in conviction score — BULL signal requires weekly trend confirmation
+htfBull = request.security(syminfo.tickerid, "W", close > ta.ema(close, 20))
+
+// Vol-adjusted allocation, scaled by trend persistence
+volScale = annualVol > 0 ? math.min(1.0, targetVol / annualVol) : 1.0
+finalAlloc = math.max(0.0, math.min(100.0, conviction * volScale * trendPersistence))
+
+// Dynamic conviction threshold based on volatility regime + 200MA bear market filter
+bearMarketPenalty = bearMarketRegime ? 15.0 : 0.0
+dynamicThresh = math.min(85.0, (highVolRegime ? 70.0 : lowVolRegime ? 55.0 : 60.0) + bearMarketPenalty)
+
+// ============================================================================
+// GREEN / RED DOTS
+// Green dot requires: above TL + conviction >= dynamic threshold + ADX trending
+//   + market structure bullish + BTC filter (on alts)
+// ============================================================================
+
+greenDot = aboveTL and conviction >= dynamicThresh and adxOK and structureBull and btcFilterOK and htfBull and not isWeekend
+redDot = belowTL and not isWeekend
+
+// ============================================================================
+// STATE MACHINE
+// ============================================================================
+
+var int rawState = 3
+if not isWeekend
+    if belowTL
+        rawState := 3
+    else if greenDot
+        rawState := 1
+    else if aboveTL
+        rawState := 2
+
+// --- Display state (3 states, for background + table) ---
+var int displayState = 3
+var int rawHoldCount = 0
+var int prevRaw = 3
+var int greenAbsentCount = 0
+var int belowCount = 0
+
+if not isWeekend
+    if not greenDot and aboveTL
+        greenAbsentCount := greenAbsentCount + 1
+    else
+        greenAbsentCount := 0
+    if belowTL
+        belowCount := belowCount + 1
+    else
+        belowCount := 0
+    if rawState == prevRaw
+        rawHoldCount := rawHoldCount + 1
+    else
+        rawHoldCount := 1
+    prevRaw := rawState
+
+if not isWeekend
+    if belowTL and belowCount >= exitGraceBars
+        displayState := 3
+    else if aboveTL and greenDot
+        displayState := 1
+    else if aboveTL and not greenDot and greenAbsentCount >= graceBars
+        displayState := 2
+
+// --- Signal state (2 states: BULL/BEAR) ---
+var int signalState = 3
+var int barsSinceSignal = 999
+barsSinceSignal := barsSinceSignal + 1
+
+if not isWeekend
+    // BEAR: exit grace bars below buffer OR blow-off top OR vol shock
+    if rawState == 3 and belowCount >= exitGraceBars and signalState != 3
+        signalState := 3
+    else if blowoff and signalState == 1
+        signalState := 3
+    else if volShock and belowTL and signalState != 3
+        signalState := 3
+
+    // BULL: green dots + confirmation + re-entry lock + structure
+    else if rawState == 1 and signalState != 1 and rawHoldCount >= confirmBars and barsSinceSignal >= reentryHold
+        signalState := 1
+        barsSinceSignal := 0
+
+var int prevSignal = 3
+signalChanged = signalState != prevSignal
+prevSignal := signalState
+
+// ============================================================================
+// PLOTS
+// ============================================================================
+
+plot(trackline, "Trackline", color=trackRising ? color.new(#00E676, 0) : color.new(#FF5252, 0), linewidth=3)
+plot(sma200, "200 MA", color=color.new(#FF9900, 50), linewidth=1)
+
+plotshape(showDots and greenDot, title="Green Dot", style=shape.circle, location=location.belowbar, color=color.new(#00E676, 0), size=size.tiny)
+plotshape(showDots and redDot, title="Red Dot", style=shape.circle, location=location.abovebar, color=color.new(#FF5252, 0), size=size.tiny)
+
+var color bg = na
+if showBG
+    if displayState == 1
+        bg := color.new(#00C853, 92)
+    else if displayState == 2
+        bg := color.new(#FFD600, 93)
+    else
+        bg := color.new(#FF1744, 94)
+else
+    bg := na
+bgcolor(bg)
+
+if showLabels and signalChanged and not isWeekend
+    if signalState == 1
+        label.new(bar_index, low, "BULL", style=label.style_label_up, color=color.new(#00C853, 0), textcolor=color.white, size=size.normal)
+    else
+        label.new(bar_index, high, "BEAR", style=label.style_label_down, color=color.new(#FF1744, 0), textcolor=color.white, size=size.normal)
+
+// ============================================================================
+// STATUS TABLE
+// ============================================================================
+
+var table tbl = table.new(position.top_right, 2, 7, bgcolor=color.new(#0D1117, 0), border_width=1, border_color=color.new(#30363D, 0))
+
+if barstate.islast
+    sigStr = signalState == 1 ? "BULL" : "BEAR"
+    sigClr = signalState == 1 ? color.new(#00C853, 0) : color.new(#FF1744, 0)
+    dispStr = displayState == 1 ? "BULL" : displayState == 2 ? "HEDGED" : "BEAR"
+    dispClr = displayState == 1 ? color.new(#00C853, 0) : displayState == 2 ? color.new(#FFD600, 0) : color.new(#FF1744, 0)
+
+    table.cell(tbl, 0, 0, "DIVERSITAS", text_color=color.white, text_size=size.normal, bgcolor=color.new(#161B22, 0))
+    table.cell(tbl, 1, 0, sigStr, text_color=color.white, text_size=size.normal, bgcolor=sigClr)
+
+    table.cell(tbl, 0, 1, "Regime", text_color=color.gray, text_size=size.small)
+    table.cell(tbl, 1, 1, dispStr, text_color=dispClr, text_size=size.small)
+
+    table.cell(tbl, 0, 2, "200 MA", text_color=color.gray, text_size=size.small)
+    maStr = bearMarketRegime ? "BEAR MKT (thr +" + str.tostring(math.round(bearMarketPenalty)) + ")" : belowSma200 ? "BELOW" : "ABOVE"
+    maClr = bearMarketRegime ? color.new(#FF1744, 0) : belowSma200 ? color.new(#EF9F27, 0) : color.new(#00E676, 0)
+    table.cell(tbl, 1, 2, maStr, text_color=maClr, text_size=size.small)
+
+    table.cell(tbl, 0, 3, "Threshold", text_color=color.gray, text_size=size.small)
+    thClr = dynamicThresh >= 70 ? color.new(#FF5252, 0) : dynamicThresh <= 55 ? color.new(#00E676, 0) : color.new(#EF9F27, 0)
+    table.cell(tbl, 1, 3, str.tostring(math.round(dynamicThresh)) + " (conv " + str.tostring(math.round(conviction)) + ")", text_color=thClr, text_size=size.small)
+
+    table.cell(tbl, 0, 4, "Trackline", text_color=color.gray, text_size=size.small)
+    tClr = trackRising ? color.new(#00E676, 0) : color.new(#FF5252, 0)
+    table.cell(tbl, 1, 4, str.tostring(trackline, "#.00") + (trackRising ? " RISING" : " FALLING"), text_color=tClr, text_size=size.small)
+
+    table.cell(tbl, 0, 5, "Price vs TL", text_color=color.gray, text_size=size.small)
+    dClr = distPct > 0 ? color.new(#00E676, 0) : color.new(#FF5252, 0)
+    table.cell(tbl, 1, 5, (distPct > 0 ? "+" : "") + str.tostring(distPct, "#.1") + "%", text_color=dClr, text_size=size.small)
+
+    table.cell(tbl, 0, 6, "Trend Quality", text_color=color.gray, text_size=size.small)
+    tpPct = math.round(trendPersistence * 100)
+    tpClr = tpPct >= 60 ? color.new(#00E676, 0) : tpPct >= 40 ? color.new(#EF9F27, 0) : color.new(#FF5252, 0)
+    table.cell(tbl, 1, 6, str.tostring(tpPct) + "%", text_color=tpClr, text_size=size.small)
+
+// ============================================================================
+// ALERTS
+// ============================================================================
+
+alertcondition(signalChanged and signalState == 1, title="BULL", message="DIVERSITAS: BULL - {{ticker}} at {{close}}")
+alertcondition(signalChanged and signalState == 3, title="BEAR", message="DIVERSITAS: BEAR - {{ticker}} at {{close}}")
+alertcondition(blowoff, title="BLOW-OFF", message="DIVERSITAS: BLOW-OFF TOP WARNING - {{ticker}} at {{close}} - RSI > 80 and extended")
+alertcondition(volShock, title="VOL SHOCK", message="DIVERSITAS: VOLATILITY SHOCK - {{ticker}} at {{close}}")
