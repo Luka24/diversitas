@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from diversitas import indicators as ind
+from shared import indicators as ind
 
 
 @pytest.fixture

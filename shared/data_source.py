@@ -8,18 +8,42 @@ Source ordering (per call):
     1. Binance public REST  (no key, 6000 weight/min)
     2. yfinance              (no key, ~15 min latency, daily candles only)
 
-Symbol resolution uses Config.symbol_map.
+Symbol resolution: pass `config` (any object exposing a `.symbol_map` dict)
+or rely on the built-in DEFAULT_SYMBOL_MAP fallback. This keeps the module
+config-agnostic — both `full` and `lean` Diversitas variants share it.
 """
 from __future__ import annotations
 import time
 import warnings
-from typing import Optional
+from typing import Any, Mapping, Optional
 
 import numpy as np
 import pandas as pd
 import requests
 
-from .config import Config, DEFAULT_CONFIG
+
+# Default symbol → per-source identifier mapping. Both LeanConfig and (Full)
+# Config also carry this map; callers can override by passing `config`.
+DEFAULT_SYMBOL_MAP: Mapping[str, Mapping[str, str]] = {
+    "BTC": {"binance": "BTCUSDT", "yahoo": "BTC-USD", "coingecko": "bitcoin"},
+    "ETH": {"binance": "ETHUSDT", "yahoo": "ETH-USD", "coingecko": "ethereum"},
+    "SOL": {"binance": "SOLUSDT", "yahoo": "SOL-USD", "coingecko": "solana"},
+    "BNB": {"binance": "BNBUSDT", "yahoo": "BNB-USD", "coingecko": "binancecoin"},
+    "XRP": {"binance": "XRPUSDT", "yahoo": "XRP-USD", "coingecko": "ripple"},
+    "ADA": {"binance": "ADAUSDT", "yahoo": "ADA-USD", "coingecko": "cardano"},
+    "AVAX": {"binance": "AVAXUSDT", "yahoo": "AVAX-USD", "coingecko": "avalanche-2"},
+    "LINK": {"binance": "LINKUSDT", "yahoo": "LINK-USD", "coingecko": "chainlink"},
+}
+
+
+def _resolve_symbol_map(config: Any) -> Mapping[str, Mapping[str, str]]:
+    """Accept either a Config object (with .symbol_map) or None for default."""
+    if config is None:
+        return DEFAULT_SYMBOL_MAP
+    sm = getattr(config, "symbol_map", None)
+    if sm is None:
+        return DEFAULT_SYMBOL_MAP
+    return sm
 
 
 BINANCE_URL = "https://api.binance.com/api/v3/klines"
@@ -135,24 +159,27 @@ def fetch_candles(
     symbol: str,
     interval: str = "1d",
     bars: int = 500,
-    config: Config = DEFAULT_CONFIG,
+    config: Any = None,
     prefer: str = "binance",
 ) -> pd.DataFrame:
     """Public entry point.
 
     Args:
-        symbol: logical symbol, e.g. 'BTC', 'ETH'. Must be in config.symbol_map.
+        symbol: logical symbol, e.g. 'BTC', 'ETH'. Must be in symbol_map.
         interval: '1d', '1w', '4h', '1h'.
         bars: number of most-recent candles to return.
+        config: any object exposing `.symbol_map` (e.g. Config, LeanConfig).
+                Pass `None` to use the built-in DEFAULT_SYMBOL_MAP.
         prefer: 'binance' (default) or 'yahoo' to force a source.
 
     Returns:
         DataFrame indexed by UTC timestamp, columns [open, high, low, close, volume].
     """
+    symbol_map = _resolve_symbol_map(config)
     symbol = symbol.upper()
-    if symbol not in config.symbol_map:
+    if symbol not in symbol_map:
         raise ValueError(
-            f"Unknown symbol {symbol!r}. Known: {sorted(config.symbol_map)}"
+            f"Unknown symbol {symbol!r}. Known: {sorted(symbol_map)}"
         )
     if interval not in _INTERVAL_MAP:
         raise ValueError(f"Unsupported interval {interval!r}")
@@ -164,13 +191,13 @@ def fetch_candles(
         try:
             if src == "binance":
                 return _binance_fetch(
-                    config.symbol_map[symbol]["binance"],
+                    symbol_map[symbol]["binance"],
                     _INTERVAL_MAP[interval]["binance"],
                     bars,
                 )
             if src == "yahoo":
                 return _yf_fetch(
-                    config.symbol_map[symbol]["yahoo"],
+                    symbol_map[symbol]["yahoo"],
                     interval,
                     bars,
                 )
@@ -182,7 +209,7 @@ def fetch_candles(
     )
 
 
-def fetch_btc_daily(bars: int = 500, config: Config = DEFAULT_CONFIG) -> pd.DataFrame:
+def fetch_btc_daily(bars: int = 500, config: Any = None) -> pd.DataFrame:
     """Convenience: BTC daily for the cross-asset filter."""
     return fetch_candles("BTC", "1d", bars=bars, config=config)
 

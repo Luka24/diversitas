@@ -55,8 +55,3 @@ class LeanConfig:
 
 
 DEFAULT_CONFIG = LeanConfig()
-
-# Alias so that the shared `data_source.py` (copied from full/) can use the
-# same `Config` type name without modification. Both configs expose the same
-# `symbol_map` shape, which is all data_source needs.
-Config = LeanConfig
