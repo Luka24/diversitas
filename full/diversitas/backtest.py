@@ -11,8 +11,8 @@ import sys
 
 import pandas as pd
 
+from shared.data_source import fetch_candles, fetch_btc_daily
 from .config import Config
-from .data_source import fetch_candles, fetch_btc_daily
 from .strategy import run_strategy, S_BULL, S_BEAR
 
 

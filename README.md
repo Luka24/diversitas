@@ -1,70 +1,136 @@
-# Diversitas Pro v3 — Python port + live dashboard
+# Diversitas — Python ports + live dashboards
 
-Faithful Python implementation of the `diversitas_pro_v3_200ma.pine` TradingView indicator, with a live Streamlit dashboard backed by Binance public market data.
+Two Python implementations of the **Diversitas** family of Pine Script trading
+indicators, each with its own live Streamlit dashboard backed by Binance public
+market data.
 
-## Install
+```
+.
+├── full/    # Diversitas Pro v3 — full model with conviction score (0-100)
+└── lean/    # Diversitas Lean — minimalist variant, hard regime block
+```
+
+## Quick start
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
+
+# Full dashboard (Pro v3 — conviction-based)
+.venv/bin/streamlit run full/diversitas/dashboard.py --server.port 8501
+
+# Lean dashboard (minimalist — entry gates as PASS/FAIL)
+.venv/bin/streamlit run lean/diversitas/dashboard.py --server.port 8502
 ```
 
-## Backtest from the terminal
+Open <http://localhost:8501> (Full) or <http://localhost:8502> (Lean).
+
+## Backtest from terminal
 
 ```bash
-.venv/bin/python -m diversitas.backtest BTC           # default 1500 daily bars
-.venv/bin/python -m diversitas.backtest ETH 1000      # ETH with BTC filter
-.venv/bin/python -m diversitas.backtest SOL 800 --no-btc-filter
+# Full
+cd full
+../.venv/bin/python -m diversitas.backtest BTC 1500
+../.venv/bin/python -m diversitas.backtest ETH 1000
+
+# Lean
+cd lean
+../.venv/bin/python -m diversitas.backtest BTC 1500
+../.venv/bin/python -m diversitas.backtest ETH 1000 --btc-filter
 ```
-
-Output: latest-bar status, signal distribution, every signal transition, naive equity proxy.
-
-## Live dashboard
-
-```bash
-.venv/bin/streamlit run diversitas/dashboard.py
-```
-Open <http://localhost:8501> in a browser.
-
-Features:
-- Symbol selector (BTC / ETH / SOL / BNB / XRP / ADA / AVAX / LINK)
-- Candlestick chart with segmented trackline, 200 MA, green/red dots, BULL/BEAR labels, regime background
-- Conviction subplot with dynamic threshold overlay
-- Conviction breakdown (5 components stacked)
-- Status panel mirroring the Pine table
-- BTC cross-asset filter toggle, 60 s auto-refresh, manual refresh button
 
 ## Tests
 
 ```bash
-.venv/bin/python -m pytest diversitas/tests/ -v
+.venv/bin/python -m pytest shared/tests/ -v        # 9 indicator tests
+cd full && ../.venv/bin/python -m pytest diversitas/tests/ -v   # 9 strategy tests
+cd lean && ../.venv/bin/python -m pytest diversitas/tests/ -v   # 12 strategy tests
 ```
-18 tests covering indicators (RSI, EMA, RMA, ADX, bars_since, stdev) and strategy (state machine, re-entry lock, confirm bars, blow-off, weekend filter, conviction bounds).
+Total: **30 tests**, all passing.
+
+## What's the difference?
+
+| Property | Full (Pro v3) | Lean |
+|---|---|---|
+| Entry decision | **Conviction score 0–100** (Trend 30 + Momentum 25 + Macro 20 + Volume 15 + DD 10) | **Hard AND** of 5–6 gates |
+| Bear regime | Soft (+15 threshold penalty) | **Hard block** — no entries at all |
+| Filters | Trackline, ADX, market structure (HH/LL), weekly EMA gate, 200 MA, BTC | Trackline (+ slope filter), 50 MA, 200 MA |
+| State machines | 3 (raw / display / signal) with grace bars | 1 (signal) + display tint |
+| `barsSinceSignal` reset | On BULL only | On both directions |
+| Allocation | `conviction × volScale × trendPersistence` | `100 × volScale` when BULL |
+| Default target vol | 25 % | 50 % |
+| BTC filter default | ON | OFF |
+| Weekend filter | Optional | None (24/7) |
+| Pine source | 345 lines | 242 lines |
+
+**When to use which:**
+- **Full** — when you want gradual sizing, defensive behaviour in bear markets,
+  and explicit cross-asset / cross-timeframe confirmation.
+- **Lean** — when you want fewer parameters, transparent yes/no entries, and
+  more aggressive sizing during clear trends.
 
 ## Data sources
 
-- **Primary**: Binance public REST (`/api/v3/klines`, no key, 6000 weight/min).
-- **Fallback**: `yfinance` (`BTC-USD`, `ETH-USD`, …).
+Primary: **Binance** public REST (`/api/v3/klines`, no key, 6000 weight/min).
+Fallback: **yfinance**.
 
-See `API_RESEARCH.md` for full evaluation.
+See `API_RESEARCH.md` for the full evaluation.
 
 ## Documents
 
-- `STRATEGY_ANALYSIS.md` — Pine → Python mapping, formulas, state machine spec.
-- `API_RESEARCH.md` — comparison of 6 candidate data APIs and the choice rationale.
-- `VALIDATION.md` — test results, backtest sanity check, dashboard render verification.
+| File | Purpose |
+|---|---|
+| `full/STRATEGY_ANALYSIS.md` | Pine → Python mapping for Pro v3 |
+| `full/AUDIT.md` | Line-by-line fidelity check vs Pine |
+| `full/VALIDATION.md` | Tests + backtest + dashboard verification |
+| `lean/STRATEGY_ANALYSIS.md` | Pine → Python mapping for Lean |
+| `lean/VALIDATION.md` | Lean validation + diff vs Full |
+| `lean/CLAUDE_PROMPT.md` | Re-runnable prompt to regenerate the Lean port |
+| `API_RESEARCH.md` | Evaluation of 6 crypto data APIs |
 
 ## Project layout
 
 ```
-diversitas/
-├── config.py        # Config dataclass mirroring Pine inputs
-├── data_source.py   # Binance + yfinance fetching, weekly resample
-├── indicators.py    # RSI, EMA, SMA, RMA, ADX, bars_since, stdev (Pine-compatible)
-├── strategy.py      # compute_features + run_state_machines + build_summary
-├── backtest.py      # CLI runner
-├── dashboard.py     # Streamlit live UI
-└── tests/
-    ├── test_indicators.py
-    └── test_strategy.py
+DIVERSITAS/
+├── API_RESEARCH.md
+├── README.md
+├── requirements.txt
+├── conftest.py             # adds project root to sys.path for pytest
+├── shared/                 # code used by BOTH variants — single source of truth
+│   ├── indicators.py       # RSI, EMA, SMA, RMA, ADX, bars_since, stdev
+│   ├── data_source.py      # Binance + yfinance fetching, weekly resample
+│   └── tests/
+│       └── test_indicators.py
+├── full/
+│   ├── AUDIT.md
+│   ├── STRATEGY_ANALYSIS.md
+│   ├── VALIDATION.md
+│   ├── conftest.py         # adds full/ + project root to sys.path
+│   ├── diversitas_pro_v3_200ma.pine
+│   └── diversitas/         # variant-specific Python package
+│       ├── config.py       # Config dataclass
+│       ├── strategy.py     # imports from `shared`
+│       ├── backtest.py
+│       ├── dashboard.py
+│       └── tests/
+│           └── test_strategy.py
+└── lean/
+    ├── CLAUDE_PROMPT.md
+    ├── STRATEGY_ANALYSIS.md
+    ├── VALIDATION.md
+    ├── conftest.py
+    ├── diversitas_lean.pine
+    └── diversitas/
+        ├── config.py       # LeanConfig dataclass
+        ├── strategy.py     # imports from `shared`
+        ├── backtest.py
+        ├── dashboard.py
+        └── tests/
+            └── test_strategy.py
 ```
+
+Indicators and the data layer live in `shared/` — a bug fix in one place
+benefits both variants. Each variant directory contains only what is
+variant-specific (config, strategy, backtest, dashboard, tests). Both Python
+packages are named `diversitas` but resolve to the correct subdir via the
+`sys.path` setup in each `conftest.py` / `dashboard.py`.

@@ -13,9 +13,9 @@ import math
 import numpy as np
 import pandas as pd
 
-from . import indicators as ind
+from shared import indicators as ind
+from shared.data_source import to_weekly
 from .config import Config, DEFAULT_CONFIG
-from .data_source import to_weekly
 
 
 # State codes — mirror Pine

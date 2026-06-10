@@ -14,24 +14,26 @@ Features:
 """
 from __future__ import annotations
 import sys
-import time
 from pathlib import Path
 
-# Allow `streamlit run diversitas/dashboard.py` to work — Streamlit runs the
-# file as __main__, so we need the project root on sys.path before importing
-# our own package.
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
+# Allow `streamlit run full/diversitas/dashboard.py` to work — Streamlit runs
+# the file as __main__, so we add two sys.path entries:
+#   1. `DIVERSITAS/`  → so `from shared import ...` resolves
+#   2. `DIVERSITAS/full/` → so `from diversitas import ...` resolves to THIS variant
+_VARIANT_ROOT = Path(__file__).resolve().parent.parent          # DIVERSITAS/full
+_PROJECT_ROOT = _VARIANT_ROOT.parent                            # DIVERSITAS
+for p in (_PROJECT_ROOT, _VARIANT_ROOT):
+    if str(p) not in sys.path:
+        sys.path.insert(0, str(p))
 
-import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 
+from shared.data_source import fetch_candles, fetch_btc_daily
 from diversitas.config import Config, DEFAULT_CONFIG
-from diversitas.data_source import fetch_candles, fetch_btc_daily
 from diversitas.strategy import run_strategy, S_BULL, S_NEUTRAL, S_BEAR
 
 
@@ -331,6 +333,225 @@ def _row(label: str, value: str, value_colour: str = None) -> str:
     )
 
 
+def _build_trade_ledger(df: pd.DataFrame) -> list[dict]:
+    """Convert the signal_state series into completed trades (BULL→BEAR pairs)
+    plus the currently-open position if any.
+
+    Each entry: dict with entry_date, exit_date, entry_px, exit_px, pnl_pct,
+    duration_days, entry_conv, signal_at_entry, open (bool).
+    """
+    changes = df[df["signal_changed"]]
+    trades: list[dict] = []
+    open_entry = None
+    for ts, row in changes.iterrows():
+        sig = int(row["signal_state"])
+        if sig == S_BULL:
+            open_entry = {
+                "entry_date": ts, "entry_px": float(row["close"]),
+                "entry_conv": float(row["conviction"]),
+                "entry_thr": float(row["dynamic_threshold"]),
+            }
+        elif sig == S_BEAR and open_entry is not None:
+            duration = (ts - open_entry["entry_date"]).days
+            pnl = (row["close"] / open_entry["entry_px"] - 1.0) * 100.0
+            trades.append({
+                **open_entry,
+                "exit_date": ts, "exit_px": float(row["close"]),
+                "duration_days": duration, "pnl_pct": pnl,
+                "open": False,
+            })
+            open_entry = None
+    # Currently open trade
+    last = df.iloc[-1]
+    if open_entry is not None and int(last["signal_state"]) == S_BULL:
+        duration = (last.name - open_entry["entry_date"]).days
+        pnl = (last["close"] / open_entry["entry_px"] - 1.0) * 100.0
+        trades.append({
+            **open_entry,
+            "exit_date": last.name, "exit_px": float(last["close"]),
+            "duration_days": duration, "pnl_pct": pnl,
+            "open": True,
+        })
+    return trades
+
+
+def _render_trade_ledger(trades: list[dict], n: int = 12) -> str:
+    """HTML table of recent trades — colour-coded by P&L, with badges for state."""
+    if not trades:
+        return (
+            f'<div style="color:{COL_DIM};padding:24px;text-align:center;'
+            f'background:{COL_PANEL};border:1px solid {COL_BORDER};border-radius:6px">'
+            f"No completed trades in the loaded window.</div>"
+        )
+
+    show = trades[-n:]
+    rows = []
+    for t in show:
+        is_open = t["open"]
+        pnl = t["pnl_pct"]
+        pnl_colour = COL_BULL if pnl > 0 else COL_BEAR if pnl < 0 else COL_DIM
+        pnl_txt = f"{pnl:+.2f}%"
+        status_badge = (
+            f'<span style="background:{COL_ACCENT}22;color:{COL_ACCENT};'
+            f'padding:2px 8px;border-radius:3px;font-size:10px;'
+            f'font-weight:600;letter-spacing:0.5px">OPEN</span>'
+        ) if is_open else (
+            f'<span style="color:{COL_DIM};font-size:11px">closed</span>'
+        )
+        exit_date_txt = (
+            "—" if is_open else t["exit_date"].strftime("%Y-%m-%d")
+        )
+        rows.append(
+            f'<tr style="border-bottom:1px solid {COL_BORDER}">'
+            f'<td style="padding:10px 12px;color:{COL_TEXT};font-family:monospace;'
+            f'font-size:12px">{t["entry_date"].strftime("%Y-%m-%d")}</td>'
+            f'<td style="padding:10px 12px;color:{COL_DIM};font-family:monospace;'
+            f'font-size:12px">{exit_date_txt}</td>'
+            f'<td style="padding:10px 12px;color:{COL_TEXT};font-family:monospace;'
+            f'font-size:12px;text-align:right">${t["entry_px"]:,.2f}</td>'
+            f'<td style="padding:10px 12px;color:{COL_DIM};font-family:monospace;'
+            f'font-size:12px;text-align:right">${t["exit_px"]:,.2f}</td>'
+            f'<td style="padding:10px 12px;color:{COL_DIM};font-family:monospace;'
+            f'font-size:12px;text-align:right">{t["duration_days"]}d</td>'
+            f'<td style="padding:10px 12px;color:{COL_DIM};font-family:monospace;'
+            f'font-size:12px;text-align:right">{t["entry_conv"]:.0f}/{t["entry_thr"]:.0f}</td>'
+            f'<td style="padding:10px 12px;color:{pnl_colour};font-family:monospace;'
+            f'font-size:13px;font-weight:600;text-align:right">{pnl_txt}</td>'
+            f'<td style="padding:10px 12px;text-align:center">{status_badge}</td>'
+            f"</tr>"
+        )
+    header_cells = [
+        ("ENTRY", "left"), ("EXIT", "left"),
+        ("ENTRY PX", "right"), ("EXIT PX", "right"),
+        ("DUR", "right"), ("CONV/THR", "right"),
+        ("P&L", "right"), ("STATUS", "center"),
+    ]
+    header = "".join(
+        f'<th style="padding:8px 12px;color:{COL_DIM};font-size:10px;'
+        f'text-transform:uppercase;letter-spacing:1px;text-align:{align};'
+        f'border-bottom:1px solid {COL_BORDER};font-weight:600">{label}</th>'
+        for label, align in header_cells
+    )
+    return (
+        f'<div style="background:{COL_PANEL};border:1px solid {COL_BORDER};'
+        f'border-radius:6px;overflow:hidden">'
+        f'<table style="width:100%;border-collapse:collapse">'
+        f"<thead><tr>{header}</tr></thead>"
+        f"<tbody>{''.join(rows)}</tbody>"
+        f"</table></div>"
+    )
+
+
+def _render_signal_stats(trades: list[dict], df: pd.DataFrame) -> str:
+    """Aggregate stats: total trades, win rate, avg duration, avg PnL,
+    best/worst trade, current streak."""
+    closed = [t for t in trades if not t["open"]]
+    n_total = len(closed)
+    if n_total == 0:
+        return (
+            f'<div style="color:{COL_DIM};padding:14px;background:{COL_PANEL};'
+            f'border:1px solid {COL_BORDER};border-radius:6px;text-align:center">'
+            f"No completed trades yet.</div>"
+        )
+    wins = [t for t in closed if t["pnl_pct"] > 0]
+    losses = [t for t in closed if t["pnl_pct"] <= 0]
+    win_rate = len(wins) / n_total * 100
+    avg_pnl = sum(t["pnl_pct"] for t in closed) / n_total
+    avg_dur = sum(t["duration_days"] for t in closed) / n_total
+    best = max(closed, key=lambda t: t["pnl_pct"])
+    worst = min(closed, key=lambda t: t["pnl_pct"])
+    # Cumulative compounded equity (BULL-only)
+    eq = 1.0
+    for t in closed:
+        eq *= (1.0 + t["pnl_pct"] / 100.0)
+    cum_pnl = (eq - 1.0) * 100.0
+    cum_colour = COL_BULL if cum_pnl > 0 else COL_BEAR
+
+    # Buy-and-hold over the loaded window
+    bh_first = df["close"].iloc[0]
+    bh_last = df["close"].iloc[-1]
+    bh_pnl = (bh_last / bh_first - 1.0) * 100.0
+    bh_colour = COL_BULL if bh_pnl > 0 else COL_BEAR
+
+    pnl_colour = COL_BULL if avg_pnl > 0 else COL_BEAR
+    wr_colour = COL_BULL if win_rate >= 50 else COL_HEDGED if win_rate >= 40 else COL_BEAR
+
+    cells = [
+        ("Trades", f"{n_total}", COL_TEXT),
+        ("Win rate", f"{win_rate:.0f}%", wr_colour),
+        ("Avg P&L", f"{avg_pnl:+.2f}%", pnl_colour),
+        ("Avg duration", f"{avg_dur:.0f}d", COL_TEXT),
+        ("Best", f"{best['pnl_pct']:+.1f}%", COL_BULL),
+        ("Worst", f"{worst['pnl_pct']:+.1f}%", COL_BEAR),
+        ("Strategy total", f"{cum_pnl:+.1f}%", cum_colour),
+        ("Buy & hold", f"{bh_pnl:+.1f}%", bh_colour),
+    ]
+    items = "".join(
+        f'<div style="flex:1;padding:12px 14px;border-right:1px solid {COL_BORDER}">'
+        f'<div style="color:{COL_DIM};font-size:10px;text-transform:uppercase;'
+        f'letter-spacing:1px;margin-bottom:3px">{label}</div>'
+        f'<div style="color:{colour};font-size:16px;font-weight:600;'
+        f'font-family:monospace">{value}</div></div>'
+        for label, value, colour in cells
+    )
+    return (
+        f'<div style="background:{COL_PANEL};border:1px solid {COL_BORDER};'
+        f'border-radius:6px;display:flex;overflow:hidden">{items}</div>'
+    )
+
+
+def _build_vol_alloc_chart(df: pd.DataFrame) -> go.Figure:
+    """Bottom mini-chart: annual vol % + final allocation %.
+    Two-line panel that complements the breakdown chart."""
+    win = df.tail(240).copy()
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    fig.add_trace(go.Scatter(
+        x=win.index, y=win["annual_vol"], mode="lines",
+        line=dict(color=COL_HEDGED, width=1.5),
+        name="Annual vol %",
+        hovertemplate="Vol %{y:.1f}%<extra></extra>",
+    ), secondary_y=False)
+
+    fig.add_trace(go.Scatter(
+        x=win.index, y=win["final_alloc"], mode="lines",
+        line=dict(color=COL_ACCENT, width=1.5),
+        fill="tozeroy", fillcolor="rgba(88,166,255,0.10)",
+        name="Allocation %",
+        hovertemplate="Alloc %{y:.1f}%<extra></extra>",
+    ), secondary_y=True)
+
+    fig.update_layout(
+        template="plotly_dark",
+        height=240, margin=dict(l=10, r=20, t=40, b=10),
+        title=dict(
+            text=f"<span style='color:{COL_DIM};font-size:12px;"
+                 f"text-transform:uppercase;letter-spacing:1px'>"
+                 f"Volatility & allocation · last 240 bars</span>",
+            x=0.01, y=0.94,
+        ),
+        paper_bgcolor=COL_BG, plot_bgcolor=COL_BG,
+        font=dict(color=COL_TEXT, family="-apple-system, system-ui, sans-serif"),
+        legend=dict(
+            orientation="h", yanchor="bottom", y=1.02, x=0,
+            bgcolor="rgba(0,0,0,0)", font=dict(size=10, color=COL_DIM),
+        ),
+        hoverlabel=dict(bgcolor=COL_PANEL, bordercolor=COL_BORDER,
+                        font=dict(color=COL_TEXT, size=11)),
+        hovermode="x unified",
+    )
+    fig.update_yaxes(gridcolor=COL_GRID, zerolinecolor=COL_GRID,
+                     tickfont=dict(color=COL_HEDGED, size=10),
+                     title_text="Vol %", title_font=dict(color=COL_HEDGED, size=10),
+                     secondary_y=False)
+    fig.update_yaxes(showgrid=False,
+                     tickfont=dict(color=COL_ACCENT, size=10),
+                     title_text="Alloc %", title_font=dict(color=COL_ACCENT, size=10),
+                     range=[0, 100], secondary_y=True)
+    fig.update_xaxes(gridcolor=COL_GRID, tickfont=dict(color=COL_DIM, size=10))
+    return fig
+
+
 # --------- main app ---------
 
 def main() -> None:
@@ -524,33 +745,43 @@ def main() -> None:
     with right:
         st.plotly_chart(_build_breakdown_chart(df), use_container_width=True)
 
-    # --- transitions table ---
+    # ===== BOTTOM HALF: trade history =====
+
+    # --- Signal stats summary bar ---
+    trades = _build_trade_ledger(df)
     st.markdown(
         f"<div style='color:{COL_DIM};font-size:11px;"
         f"text-transform:uppercase;letter-spacing:1.5px;"
-        f"margin:18px 0 8px 0'>Recent signal transitions</div>",
+        f"margin:24px 0 8px 0'>Performance summary · loaded window</div>",
         unsafe_allow_html=True,
     )
-    transitions = df[df["signal_changed"]].tail(15).copy()
-    if len(transitions):
-        transitions["Date"] = transitions.index.strftime("%Y-%m-%d")
-        transitions["Signal"] = transitions["signal_state"].map(
-            {S_BULL: "BULL", S_BEAR: "BEAR"}
-        )
-        transitions["Close"] = transitions["close"].map("${:,.2f}".format)
-        transitions["Conviction"] = transitions["conviction"].round(1)
-        transitions["Threshold"] = transitions["dynamic_threshold"].astype(int)
-        st.dataframe(
-            transitions[["Date", "Signal", "Close", "Conviction", "Threshold"]],
-            hide_index=True, use_container_width=True,
-        )
-    else:
-        st.info("No signal transitions in loaded history.")
+    st.markdown(_render_signal_stats(trades, df), unsafe_allow_html=True)
 
-    # --- auto-refresh ---
+    # --- Volatility & allocation history (full width) ---
+    st.plotly_chart(_build_vol_alloc_chart(df), use_container_width=True)
+
+    # --- Trade ledger (entry/exit pairs with P&L) ---
+    st.markdown(
+        f"<div style='color:{COL_DIM};font-size:11px;"
+        f"text-transform:uppercase;letter-spacing:1.5px;"
+        f"margin:20px 0 8px 0'>Trade ledger · last 12</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown(_render_trade_ledger(trades, n=12), unsafe_allow_html=True)
+
+    st.markdown(
+        f'<div style="color:{COL_VERY_DIM};font-size:10px;margin-top:10px;'
+        f'font-family:monospace;text-align:right">'
+        f"Naive long-flat backtest · no slippage / fees"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    # --- non-blocking auto-refresh ---
+    # st_autorefresh schedules a rerun every `interval` ms on the client side
+    # without blocking the Python thread. Keeps the UI responsive to clicks.
     if auto_refresh:
-        time.sleep(60)
-        st.rerun()
+        st_autorefresh(interval=60_000, key="auto_refresh_tick")
 
 
 if __name__ == "__main__":

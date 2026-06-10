@@ -16,7 +16,7 @@ import math
 import numpy as np
 import pandas as pd
 
-from . import indicators as ind
+from shared import indicators as ind
 from .config import LeanConfig, DEFAULT_CONFIG
 
 

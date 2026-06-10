@@ -9,23 +9,26 @@ gate panel shows each entry condition as PASS/FAIL.
 """
 from __future__ import annotations
 import sys
-import time
 from pathlib import Path
 
-# Add project subdir to sys.path so `from diversitas...` works when this file
-# is invoked as `streamlit run lean/diversitas/dashboard.py`.
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
+# Add two sys.path entries so the script can be launched as
+# `streamlit run lean/diversitas/dashboard.py`:
+#   1. `DIVERSITAS/`     → so `from shared import ...` resolves
+#   2. `DIVERSITAS/lean/` → so `from diversitas import ...` resolves to THIS variant
+_VARIANT_ROOT = Path(__file__).resolve().parent.parent          # DIVERSITAS/lean
+_PROJECT_ROOT = _VARIANT_ROOT.parent                            # DIVERSITAS
+for p in (_PROJECT_ROOT, _VARIANT_ROOT):
+    if str(p) not in sys.path:
+        sys.path.insert(0, str(p))
 
-import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
+from streamlit_autorefresh import st_autorefresh
 
+from shared.data_source import fetch_candles, fetch_btc_daily
 from diversitas.config import LeanConfig, DEFAULT_CONFIG
-from diversitas.data_source import fetch_candles, fetch_btc_daily
 from diversitas.strategy import run_strategy, S_BULL, S_NEUTRAL, S_BEAR
 
 
@@ -691,9 +694,10 @@ def main() -> None:
         unsafe_allow_html=True,
     )
 
+    # Non-blocking auto-refresh — schedules a client-side rerun every 60 s
+    # without blocking the Python thread, so clicks stay responsive.
     if auto_refresh:
-        time.sleep(60)
-        st.rerun()
+        st_autorefresh(interval=60_000, key="auto_refresh_tick_lean")
 
 
 if __name__ == "__main__":
