@@ -42,11 +42,11 @@ cd lean
 ## Tests
 
 ```bash
-.venv/bin/python -m pytest shared/tests/ -v        # 9 indicator tests
+.venv/bin/python -m pytest shared/tests/ -v        # 9 indicators + 11 data-source = 20
 cd full && ../.venv/bin/python -m pytest diversitas/tests/ -v   # 9 strategy tests
 cd lean && ../.venv/bin/python -m pytest diversitas/tests/ -v   # 12 strategy tests
 ```
-Total: **30 tests**, all passing.
+Total: **41 tests**, all passing.
 
 ## What's the difference?
 
@@ -71,10 +71,15 @@ Total: **30 tests**, all passing.
 
 ## Data sources
 
-Primary: **Binance** public REST (`/api/v3/klines`, no key, 6000 weight/min).
-Fallback: **yfinance**.
+Three-tier failover, all keyless and public:
 
-See `API_RESEARCH.md` for the full evaluation.
+1. **Binance** public REST (`/api/v3/klines`, 6000 weight/min) — fastest
+   throughput, deepest altcoin coverage, geo-blocked in the US.
+2. **Coinbase Advanced Trade** (`/products/{id}/candles`, 10 req/sec) —
+   US-regulated, deepest history (2015), kicks in when Binance is unreachable.
+3. **yfinance** (Yahoo Finance scraper) — last-resort, ~2 s latency.
+
+See `API_REPORT.md` for the live probe results that drove this ordering.
 
 ## Documents
 
