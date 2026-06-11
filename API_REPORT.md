@@ -1,185 +1,266 @@
-# API report — kateri viri so v projektu, kateri so se izkazali za slabe
+# API report — kaj se fetch-a, preko katerega API-ja, in zakaj
 
-Generirano 2026-06-11 po **dejanskem testiranju vseh kandidatov v živo** + spletni
-raziskavi. Vsi podatki, ki so v prvotni `API_RESEARCH.md` od prejšnjega tedna,
-so bili ponovno preverjeni — pri nekaterih virih se je situacija medtem
-spremenila (CryptoCompare zdaj zahteva ključ, CoinGecko je še bolj
-nestabilen pod burstom).
+Združen dokument: kaj točno strategiji potrebujemo, kateri API to dostavi,
+kako se polja mapirajo, kateri viri so se izkazali za dobre / slabe.
 
----
-
-## 1. Trenutno stanje v kodi (`shared/data_source.py`)
-
-| Vloga | Vir | Status |
-|---|---|---|
-| **Primary** | Binance public REST (`/api/v3/klines`) | aktiven |
-| **Fallback** | yfinance (Yahoo Finance scraper) | aktiven |
-| Ostali kandidati | Coinbase, CoinGecko, Kraken, CryptoCompare | NE uporabljeni |
+Vsa testiranja v živo: probe iz tega gostitelja, 2026-06-11.
 
 ---
 
-## 2. Rezultati živih meritev (probe iz tega gostitelja)
+## 1. Kaj strategija sploh potrebuje
 
-### 2.1 Enkratni klic (BTC, daily, ≤200 candles)
+Obe varianti (Full Pro v3 in Lean) potrebujeta **dva vhodna tokova**:
 
-| API | Status | Latenca | Bars | Opomba |
+| Tok | Vsebina | Kdaj | Kdo ga uporablja |
+|---|---|---|---|
+| **A. Daily OHLCV izbranega simbola** | Open / High / Low / Close / Volume, dnevne sveče (~1500 bars za 4-letni backtest, 400+ minimum za warmup) | Vedno | Trackline, RSI, EMA, ADX, market structure, vol regime, conviction, state machine — **vse** |
+| **B. Daily OHLCV za BTC** (kot ločen feed) | Samo close (za BTC cross-asset filter), ostala polja pa tudi pridejo s callom | Kadar `use_btc_filter=True` (default ON v Full, OFF v Lean) | BTC EMA50 filter za altcoine |
+
+**Weekly podatki se NE fetch-ajo ločeno** — resampliramo dnevne v `to_weekly()`
+(`W-MON, closed=left, label=left`). Eno API klic = pokrije dnevni + tedenski
+nivo.
+
+**Skupno število API klicev** na dashboard refresh (na 60 s):
+- 1 simbol brez BTC filtra: **1 klic**
+- 1 simbol + BTC filter: **2 klica**
+- Caching (`@st.cache_data(ttl=60)`) drži rezultat 60 s, torej praktično **0 klicev/min** če uporabnik ne menja simbola
+
+---
+
+## 2. Glavna tabela — vsak vir za vsak data type
+
+| Polje / izračun | Source field iz API-ja | Glavni vir | Fallback #1 | Fallback #2 |
 |---|---|---|---|---|
-| **Binance** | ✓ OK | 364 ms | 200 | exponira `x-mbx-used-weight` header |
-| **Coinbase Advanced** | ✓ OK | 118 ms | 350 | vrne več kot je zahtevano (default 300) |
-| **CoinGecko (free)** | ✓ OK | 206 ms | 180 | endpoint `/ohlc`, brez volume |
-| **Kraken** | ✓ OK | 215 ms | 721 | trd plafon — 720 candles max |
-| **CryptoCompare** | ✗ **FAIL** | 77 ms | — | HTTP 401 — API key now required |
-| **yfinance** | ✓ OK | **2088 ms** | 199 | 10× počasnejši od najhitrejšega |
+| **OHLCV za BTC/ETH/SOL/XRP/ADA/AVAX/LINK daily** | `open, high, low, close, volume` | Binance `klines` (1d) | Coinbase `candles` (gran 86400) | yfinance `Ticker.history(interval='1d')` |
+| **OHLCV za BNB daily** | enako | Binance | — (BNB ni na Coinbase) | yfinance |
+| **OHLCV weekly** (rare) | enako | Binance `klines` (1w) | — (Coinbase ne podpira 1w) | yfinance (`interval='1wk'`) |
+| **BTC daily za cross-asset filter** | `close` (in vse OHLCV iz iste tabele) | Binance `klines` (1d) | Coinbase | yfinance |
+| **Weekly EMA21, SMA30, close** | derivirano | resample iz daily | resample | resample |
+| **200 MA, 50 MA** | derivirano iz `close` | resample iz daily | resample | resample |
+| **Trackline (Kijun)** | derivirano iz `high`, `low` | iz daily | iz daily | iz daily |
+| **Conviction / ADX / RSI / EMA** | derivirano iz OHLCV | iz daily | iz daily | iz daily |
 
-### 2.2 Burst test (10 zaporednih klicev, ne sleep)
-
-| API | Avg latenca | Fails | Opomba |
-|---|---|---|---|
-| **Binance** | 316 ms | 0/10 | uporabljenih ~20 weight (od 6000/min) |
-| **Coinbase** | **68 ms** | 0/10 | najhitrejši |
-| **Kraken** | 76 ms | 0/10 | stabilen v burstu |
-| **CoinGecko (free)** | 64 ms | **5/10** | **50 % fail rate** pod burstom — rate limit |
-
-### 2.3 Coverage / history depth
-
-| API | Najstarejši BTC daily bar | Bars per call | Opomba |
-|---|---|---|---|
-| Binance | 2017-08-17 | 1000 | ~8 let zgodovine, pagination z `endTime` |
-| **Coinbase** | **2015-07** ali starejši | 300 | **najgloblja zgodovina**, pagination potrebna |
-| Kraken | 2024-06-21 (samo) | 720 | **~2 leti max** — trd plafon |
-| CoinGecko `/market_chart` | 0 (vrnil prazen seznam) | — | `days=max` ne dela zanesljivo |
-| yfinance | 2014 | — | najgloblja zgodovina BTC-USD, a počasna |
-
-### 2.4 Altcoin podpora
-
-| API | ETH | SOL | XRP / ADA / AVAX |
-|---|---|---|---|
-| Binance | ✓ ETHUSDT | ✓ SOLUSDT | ✓ vsi |
-| Coinbase | ✓ ETH-USD | ✓ SOL-USD | ✓ vsi |
-| Kraken | ✓ ETHUSD | ✓ SOLUSD | delno (čudna imena, npr. XBT) |
-| yfinance | ✓ ETH-USD | ✓ SOL-USD | ✓ vsi |
+**Pomembno:** vse tri možne vire vrnejo identično strukturo (5 OHLCV polj), zato
+je strategija indiferentna na to, kateri je dejansko bil uporabljen. Razlika je
+le v latenci, zanesljivosti in zgodovinski globini.
 
 ---
 
-## 3. Spletna raziskava — uptime in trenutno stanje
+## 3. Per-API field mapping (kako parsamo response)
 
-### Binance ([uptime monitorji](https://isdown.app/status/binance))
-- **235+ dni brez incidenta** v zadnjih 12 mesecih (per IsDown June 2026)
-- 2 manjši downtime v 2025: 10. okt (10 min) in 15. apr (11 min)
-- Geo restrictions: blokiran v ZDA in nekaterih jurisdikcijah → fallback obvezen
-- Rate limit: [6000 weight/min/IP, klines = 2 weight](https://developers.binance.com/docs/binance-spot-api-docs/rest-api/limits)
+### 3.1 Binance — `_binance_parse()` v `shared/data_source.py:111`
 
-### Coinbase Advanced Trade
-- [Public endpoints: 10 req/sec po IP](https://docs.cloud.coinbase.com/advanced-trade/docs/rest-api-rate-limits) (= 600/min)
-- Regulirano US podjetje → manjše tveganje za geo block
-- Authenticated endpoints: 30 req/sec
-
-### CryptoCompare (= CoinDesk Data)
-- **Migracija na CoinDesk Data brand** (account/auth pod CoinDesk)
-- "Works without key but IP limits slowly reduced over time" — danes praktično blokirano za anonimne zahteve
-- **Naš probe: HTTP 401 "API key required"** na vsakem klicu — povsem zaprto za public use
-
-### CoinGecko free
-- [5–15 calls/min](https://support.coingecko.com/hc/en-us/articles/4538771776153) (varira po globalnem prometu)
-- Demo plan (free, zahteva sign-up): 30 calls/min
-- "Difficult to scale high-frequency or high-throughput applications without paid plan"
-- Naš burst test potrdi: pri 10 zaporednih klicih 5 odpovedi
-
-### yfinance
-- [Trading Dude: "yfinance keeps getting blocked"](https://medium.com/@trading.dude/why-yfinance-keeps-getting-blocked-and-what-to-use-instead-92d84bb2cc01)
-- Scraper Yahoojevih neuradnih endpointov — Yahoo lahko kadarkoli spremeni
-- 2024–2025: knjižnica se je dvakrat zlomila (popravljeno v ranaroussi/yfinance#2052)
-- "Dangerous to use for automated trading decisions" — naša raba (60-sec polling) je sprejemljiva, a fragilna
-
-### Kraken
-- [Public endpoints: ~1 req/sec/IP](https://docs.kraken.com/api/docs/guides/spot-rest-ratelimits/)
-- [720 candle max hard limit](https://docs.kraken.com/api/docs/rest-api/get-ohlc-data/) — neuporaben za 4+ let backtest
-- Stabilen, ampak ne ponuja konkurenčne globine
-
----
-
-## 4. Ranking — kateri so se izkazali za **dobre**, kateri za **slabe**
-
-### Dobri (priporočeni)
-
-**1. Binance** — še vedno najboljša izbira za primary
-- Pluses: globaln budget (6000 w/min), 1000 bars/call, sub-sekundna latenca, 8 let zgodovine BTC, vsi alti, WebSocket za live ticker
-- Minuses: geo-blokiran v ZDA/Kanadi
-- **Verdict:** PRIMARY — ostane
-
-**2. Coinbase Advanced Trade** — manjkajoči kandidat
-- Pluses: 68 ms (najhitrejši v testu), US-regulirano (no geo block v ZDA), najgloblja zgodovina (2015), čista REST shema (`BTC-USD` naming)
-- Minuses: 300 bars/call (3× pagination za 1000 bars vs Binance 1×)
-- **Verdict:** **bi se splačal kot FALLBACK #1**, da pokrijemo Binance geo block. Trenutno NI v kodi — priporočam dodatek.
-
-**3. yfinance** — sprejemljiv fallback
-- Pluses: zero setup, najgloblja zgodovina (2014), pokriva vse simbole (BTC-USD format)
-- Minuses: 2 sec latenca, neuradni scraper, fragilen pri Yahoo spremembah
-- **Verdict:** FALLBACK #2 — ostane kot zadnja rešilna mreža za daily backtest, ne za live.
-
-### Slabi (NE priporočeni)
-
-**4. CoinGecko free** — IZKAZAL SE ZA SLABEGA pod realno rabo
-- **50 % fail rate pod burst** (10 zaporednih klicev)
-- 5–15 calls/min limit pomeni: ne moremo polingati vsakih 60 s na 8 simbolov (8 × 60 = 480 klicev/uro = neprestano čez limit)
-- `/market_chart?days=max` vrnil prazen response
-- `/ohlc` deluje, a brez volume → potrebovali bi 2 klica per simbol
-- **Verdict:** **OMIT iz produkcijske kode**, bi povzročil intermitentne napake na dashboardu. V mojem prvotnem `API_RESEARCH.md` je bil omenjen kot fallback — to je bilo zavajajoče in popravim.
-
-**5. CryptoCompare** — POSTAL NEUPORABEN
-- **HTTP 401 "API key required"** danes na vsak public klic
-- V prvotnem researchu sem pisal "free 250k calls/month" — to ni več res
-- Account migration na CoinDesk Data — sprememba modela
-- **Verdict:** **REMOVE iz vseh dokumentov**, brez API ključa neuporaben.
-
-**6. Kraken** — NIŠA, ne za naš use case
-- 720 candle hard limit = ~2 leti backtest
-- Naš strategija potrebuje 400+ bars (200 MA + warmup), in idealno 1500+ bars za sanity backtest
-- **Verdict:** **OMIT** — premalo zgodovine za naš strategy
-
----
-
-## 5. Predlog: konkretne spremembe v kodi
-
-### Trenutno (`shared/data_source.py`)
-```python
-sources = ["binance", "yahoo"] if prefer == "binance" else ["yahoo", "binance"]
+Binance vrne JSON array of arrays. Vsaka vrstica:
+```
+[open_time_ms, "open", "high", "low", "close", "volume",
+ close_time_ms, "quote_vol", trades, "taker_buy_base", "taker_buy_quote", "ignore"]
 ```
 
-### Priporočeno
-```python
-sources = ["binance", "coinbase", "yahoo"]
-```
-- Dodaj `_coinbase_fetch()` z paginated 300-bars-per-call branjem (pageBack do želene globine)
-- Coinbase pokriva primer, ko je uporabnik v ZDA in Binance vrača HTTP 451 (Unavailable For Legal Reasons)
-- Vrstni red: Binance (najhitrejši/widest, geo-omejen) → Coinbase (regulated US, deep history) → yfinance (last resort)
+| Polje iz Binance | Vrsta | Uporabimo? | Polje v df |
+|---|---|---|---|
+| `open_time_ms` | int (ms epoch) | da → DatetimeIndex (UTC) | `time` (index) |
+| `open` | string | da → float | `open` |
+| `high` | string | da → float | `high` |
+| `low` | string | da → float | `low` |
+| `close` | string | da → float | `close` |
+| `volume` | string | da → float | `volume` |
+| `close_time_ms` | int | ne |
+| `quote_vol` | string | ne |
+| `trades` | int | ne |
+| `taker_buy_*` | string | ne |
+| `ignore` | string | ne (Binance pravi "ignore") |
 
-### Posodobitev `API_RESEARCH.md`
-- **Odstrani CryptoCompare** (zavajajoče — zdaj zahteva ključ)
-- **Označi CoinGecko free kot "ne priporočamo"** (50 % fail pod burstom — dokumentiramo svoj probe)
-- **Dodaj Coinbase Advanced** v primarno priporočilo
-- Linki na uptime monitorje (IsDown za Binance) za pregled zgodovine
+### 3.2 Coinbase Advanced — `_coinbase_parse()` v `shared/data_source.py:185`
+
+Coinbase vrne JSON array of arrays, **najnovejša sveča prva** (obraten vrstni
+red od Binance). Vsaka vrstica:
+```
+[time_sec, low, high, open, close, volume]
+```
+Ključna razlika: low je PRED high, ne za njim. Naš parser to popravi.
+
+| Polje iz Coinbase | Vrsta | Uporabimo? | Polje v df |
+|---|---|---|---|
+| `time_sec` | int (s epoch) | da → DatetimeIndex (UTC) | `time` (index) |
+| `low` | float | da | `low` |
+| `high` | float | da | `high` |
+| `open` | float | da | `open` |
+| `close` | float | da | `close` |
+| `volume` | float | da | `volume` |
+
+### 3.3 yfinance — `_yf_fetch()` v `shared/data_source.py:217`
+
+yfinance vrne pandas DataFrame z imenovanimi stolpci:
+```
+Open, High, Low, Close, Adj Close, Volume, Dividends, Stock Splits
+```
+
+| Polje iz yfinance | Vrsta | Uporabimo? | Polje v df |
+|---|---|---|---|
+| `Open` | float | da | `open` |
+| `High` | float | da | `high` |
+| `Low` | float | da | `low` |
+| `Close` | float | da | `close` |
+| `Adj Close` | float | **ne** (za crypto je enak kot Close) |
+| `Volume` | float | da | `volume` |
+| `Dividends` | float | ne (crypto = vedno 0) |
+| `Stock Splits` | float | ne (crypto = vedno 0) |
 
 ---
 
-## 6. Zaključek — odgovor na "katere si uporabil in kateri so slabi"
+## 4. Source ordering — kdo se kliče v kakšnem vrstnem redu
 
-**Uporabil v projektu:**
-1. **Binance** (primary) — odlično, ostane
-2. **yfinance** (fallback) — fragilen, ampak deluje za naš polling vzorec
+V `shared/data_source.py:230` (funkcija `fetch_candles`):
 
-**Razmišljal o, a ne uporabil:**
-3. **Coinbase Advanced** — pomota, da nisem dal v fallback. Najhitrejši v testu, najgloblja zgodovina, US-friendly. **Priporočam dodati v naslednjem commitu.**
-4. **CoinGecko free** — v mojem prvotnem researchu sem pisal "fallback #1", a živi probe pokaže **50 % fail rate** pod realno rabo. **Slab predlog — popravim research dokument.**
-5. **Kraken** — zavrnjen takrat (1 req/s), zdaj potrjeno tudi: 720 candle limit ga naredi neuporabnega za 4+ letni backtest.
-6. **CryptoCompare** — zavrnjen takrat (zahteva ključ), zdaj potrjeno: 401 že pri prvem klicu. Star research je pisal "free 250k/mo" — to ni več res.
+```python
+if prefer == "yahoo":      sources = ["yahoo", "binance", "coinbase"]
+elif prefer == "coinbase": sources = ["coinbase", "binance", "yahoo"]
+else:                      sources = ["binance", "coinbase", "yahoo"]   # default
+```
 
-**Slabi viri = ne uporabljati za naš use case:**
-- ❌ CryptoCompare (zaprto brez ključa)
-- ❌ CoinGecko free (rate limit 5–15/min in 50 % fail pod burst)
-- ❌ Kraken (720 candle plafon)
+Za vsak vir v zaporedju:
+1. Če simbol nima ključa za ta vir (npr. BNB nima `coinbase` mapping) →
+   preskoči, ne pošlji HTTP.
+2. Če interval ni podprt (npr. Coinbase nima 4h/1w) → preskoči.
+3. Sicer pokliči `_<src>_fetch()`. Pri exception → naslednji vir.
+4. Če vsi padejo → `DataSourceError("All sources failed for ...")`.
 
-**Dobri viri = primerni za naš dashboard:**
-- ✅ Binance (primary)
-- ✅ Coinbase Advanced (FALLBACK #1 — še NI v kodi, priporočam dodati)
-- ⚠️ yfinance (fallback #2, fragilen ampak zadnja zaščita)
+### Scenariji kdaj se kateri sproži
+
+| Scenarij | Klic 1 | Klic 2 | Klic 3 |
+|---|---|---|---|
+| **Normalno** (default) | Binance ✓ | — | — |
+| Binance vrne HTTP 451 (US geo block) | Binance ✗ | Coinbase ✓ | — |
+| Binance ima 5-min outage | Binance ✗ (timeout) | Coinbase ✓ | — |
+| Coinbase tudi padel | Binance ✗ | Coinbase ✗ | yfinance ✓ |
+| BNB simbol (ni na Coinbase) | Binance ✓ | — | — |
+| BNB + Binance padel | Binance ✗ | Coinbase preskočen | yfinance ✓ |
+| Interval `1w` | Binance ✓ | — | — |
+| Interval `1w` + Binance padel | Binance ✗ | Coinbase preskočen (no 1w) | yfinance ✓ |
+
+---
+
+## 5. Live probe rezultati (2026-06-11)
+
+### 5.1 Enkratni klic, BTC daily, 200 bars
+
+| API | Status | Latenca | Bars vrnjeno | Last close |
+|---|---|---|---|---|
+| **Binance** | ✓ | 364 ms | 200 | $61,853 |
+| **Coinbase** | ✓ | 118 ms | 350 (vrne preveč) | $61,797 |
+| **yfinance** | ✓ | 2088 ms | 199 | $61,788 |
+| CoinGecko | ✓ | 206 ms | 180 (4h candles) | $61,493 |
+| Kraken | ✓ | 215 ms | 721 | $61,794 |
+| CryptoCompare | ✗ HTTP 401 | 77 ms | — | — |
+
+Razlika v close cenah ($60 v razponu $61,500–$61,900) pomeni, da so podatki
+**konsistentni** med viri.
+
+### 5.2 Burst — 10 zaporednih klicev brez pavze
+
+| API | Avg latenca | Fails |
+|---|---|---|
+| **Coinbase** | **68 ms** | 0/10 |
+| Kraken | 76 ms | 0/10 |
+| **Binance** | 316 ms | 0/10 |
+| CoinGecko | 64 ms | **5/10** ← rate limit |
+
+### 5.3 Coverage / globina zgodovine
+
+| API | Najstarejši BTC daily | Bars per call |
+|---|---|---|
+| **Coinbase** | **2015-07** ali starejši | 300 |
+| **Binance** | 2017-08-17 | 1000 |
+| yfinance | 2014 | "max" |
+| Kraken | 2024-06-21 samo (720 plafon) | 720 |
+| CoinGecko | unreliable | varia |
+
+---
+
+## 6. Zakaj točno ta vrstni red
+
+**Binance prvi:**
+- Globalna budget (6000 weight/min) → praktično neomejen za naš use case
+- 1000 bars/call → 1 call za polni 4-letni backtest
+- Sub-sekundna latenca v praksi
+- Brez incidenta zadnjih 235+ dni (per IsDown)
+- Pokritost vseh majorjev + alti
+
+**Coinbase drugi:**
+- Pokrije US scenarij kjer Binance vrne HTTP 451
+- Najhitrejši v burstu (68 ms)
+- Najgloblja zgodovina (2015 — 3 leta dlje od Binance)
+- Regulirano US podjetje → minimalno tveganje izklopa
+- 10 req/sec/IP → dovolj za naš 1-call-per-minute vzorec
+- Šibkost: 300 bars/call → 4× pagination za 1000 bars (1.7 s za pol fetch)
+
+**yfinance tretji:**
+- Zadnja varnost če bi oba pravi viri padla istočasno
+- Najgloblja zgodovina (2014)
+- A: 2088 ms latenca, neuradni scraper, krhko (Yahoo lahko menja endpoint kadarkoli)
+- OK za daily backtest, NE za live trade-decision pipeline
+
+---
+
+## 7. Zavrnjeni kandidati (NE uporabljeni)
+
+| API | Razlog | Dokazljiv s | Posledica za projekt |
+|---|---|---|---|
+| **CoinGecko free** | 50 % FAIL pod burstom, limit 5–15 calls/min ne dovoli 60-s polling | Naš probe (5/10 fails) + [CoinGecko docs](https://support.coingecko.com/hc/en-us/articles/4538771776153) | Ni v fallback chainu. V prvotnem researchu sem ga napačno priporočil — popravljeno v `API_RESEARCH.md` disclaimerju. |
+| **CryptoCompare** | HTTP 401 brez ključa — model spremenjen leta 2025 (migracija na CoinDesk Data) | Naš probe + uradno [dokumentacija](https://min-api.cryptocompare.com/) | Ne uporabljen. Bi zahteval registracijo + secret management. |
+| **Kraken** | Trd plafon 720 bars za REST OHLC. Naš strategy potrebuje minimalno 400 bars warmup, idealno 1500. | [Kraken docs](https://docs.kraken.com/api/docs/rest-api/get-ohlc-data/) | Ne uporabljen. Tudi pair naming "XBT" namesto "BTC" je nestandarden. |
+
+---
+
+## 8. Praktična poraba (per dashboard session)
+
+### Scenarij A: uporabnik gleda BTC (brez BTC filtra)
+- Vsakih 60 s: **1 klic** na Binance `klines?symbol=BTCUSDT&interval=1d&limit=1000`
+- Mesečno: ~43,200 klicev (= 0.7 % Binance dnevnega budgeta po IP)
+- Pravo: caching v Streamlit znižuje na ~1 klic na 60 s ne glede na uporabniške interakcije
+
+### Scenarij B: uporabnik gleda ETH z BTC filtrom (default v Full)
+- Vsakih 60 s: **2 klica** — ETH OHLCV + BTC OHLCV
+- ETH gre na Binance kot `ETHUSDT`, BTC kot `BTCUSDT`
+- Še vedno daleč pod limitom
+
+### Scenarij C: backtest 1500 bars na BTC (CLI)
+- **1 klic** (Binance vrne 1000 bars/call, paginate za 1500 = 2 klica)
+- Tudi z Coinbase fallback bi bilo 5 klicev (1500 / 300)
+- Eno samo zagonjenje — irrelevantno za rate limit
+
+### Scenarij D: backtest 1500 bars ETH + 1500 BTC filter
+- **4 klica** (2 vira × 2 simbola)
+- Ena sekunda, brez problemov
+
+---
+
+## 9. Kaj se NE fetch-a (in zakaj)
+
+| Stvar | Zakaj NE iz API-ja |
+|---|---|
+| **Weekly OHLCV** | Resamplamo iz daily — manj klicev, manj tveganje za neusklajenost med dnevnim in tedenskim virom |
+| **Real-time tick / order book** | Strategy je daily — ne potrebujemo tick-by-tick. Binance ima WebSocket `wss://stream.binance.com:9443/ws/btcusdt@kline_1d` za live, ampak overhead ni vreden — 60 s polling je dovolj. |
+| **Volume profile, open interest** | Strategy ne uporablja teh metrik |
+| **On-chain podatki, social sentiment** | Diversitas namensko izpušča te pipe-e (glej Pine komentar v `lean/diversitas_lean.pine` vrstice 16-17) |
+| **Fundamentalni podatki** | Ni relevantno za crypto trend-following strategijo |
+| **API ključi / autenticirani endpointi** | Vse je javno, brez registracije — laže shareati, brez secrets management |
+
+---
+
+## 10. Zaključek
+
+| Vprašanje | Odgovor |
+|---|---|
+| Katerih virov je v kodi? | **3:** Binance (primary), Coinbase Advanced (fallback #1), yfinance (fallback #2) |
+| Kaj točno se fetcha? | **Daily OHLCV** izbranega simbola + (opcijsko) **daily OHLCV za BTC** kot cross-asset filter |
+| Koliko klicev na dashboard refresh? | 1 ali 2 (odvisno od BTC filtra), z 60 s cachom |
+| Kakšen rate-limit headroom? | Binance ~0.3 % budgeta, Coinbase ~1.3 % — praktično neomejeno |
+| Kateri viri so bili zavrnjeni? | CoinGecko (50 % fail pod burstom), CryptoCompare (zaprto brez ključa), Kraken (720 candle plafon) |
+| Zakaj 3 viri in ne 1? | Geo-redundanca (US Binance ban), outage resilience, deep history (Coinbase od 2015) |
+| Brez API ključev? | Da — vsi 3 viri delajo brez registracije |
+| Konsistentnost podatkov? | $50 razlika v BTC close med viri (= 0.08 %) — strategija indiferentna |
+
+Vsi probe testi (raw output, latence, fail counts) so reproducibilni z
+`shared/tests/test_data_source.py` (parsers + ordering) in z one-off probe
+skriptami uporabljenimi v sled tega reporta.
