@@ -1,3 +1,13 @@
+> **OPOMBA (2026-06-11):** Dele tega dokumenta je nadomestil novejši
+> `API_REPORT.md`, ki vsebuje rezultate dejanskih live probe testov.
+> Dva starejša priporočila iz spodnjega so zdaj neaktualna:
+> - **CryptoCompare** ZDAJ zahteva API ključ (HTTP 401 brez njega) —
+>   pred letom ni bilo tako.
+> - **CoinGecko free** ima v praksi **50 % fail rate** pod burstom (5–15
+>   calls/min limit). NE priporočamo za live dashboard.
+>
+> Za posodobljen ranking glej `API_REPORT.md`.
+
 # Crypto market-data API research
 
 For Diversitas Pro v3 we need:
