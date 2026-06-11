@@ -1,4 +1,4 @@
-"""Crypto candle fetching — Binance primary, yfinance fallback.
+"""Crypto candle fetching — Binance primary, Coinbase + yfinance fallbacks.
 
 Public API of this module:
     fetch_candles(symbol, interval='1d', bars=500) -> pd.DataFrame
@@ -6,7 +6,11 @@ Public API of this module:
 
 Source ordering (per call):
     1. Binance public REST  (no key, 6000 weight/min)
-    2. yfinance              (no key, ~15 min latency, daily candles only)
+    2. Coinbase Advanced    (no key, 10 req/sec, deepest history from 2015,
+                             US-friendly when Binance is geo-blocked)
+    3. yfinance              (no key, ~15 min latency, daily candles only)
+
+Rationale documented in API_REPORT.md.
 
 Symbol resolution: pass `config` (any object exposing a `.symbol_map` dict)
 or rely on the built-in DEFAULT_SYMBOL_MAP fallback. This keeps the module
@@ -25,14 +29,15 @@ import requests
 # Default symbol → per-source identifier mapping. Both LeanConfig and (Full)
 # Config also carry this map; callers can override by passing `config`.
 DEFAULT_SYMBOL_MAP: Mapping[str, Mapping[str, str]] = {
-    "BTC": {"binance": "BTCUSDT", "yahoo": "BTC-USD", "coingecko": "bitcoin"},
-    "ETH": {"binance": "ETHUSDT", "yahoo": "ETH-USD", "coingecko": "ethereum"},
-    "SOL": {"binance": "SOLUSDT", "yahoo": "SOL-USD", "coingecko": "solana"},
+    "BTC": {"binance": "BTCUSDT", "coinbase": "BTC-USD", "yahoo": "BTC-USD", "coingecko": "bitcoin"},
+    "ETH": {"binance": "ETHUSDT", "coinbase": "ETH-USD", "yahoo": "ETH-USD", "coingecko": "ethereum"},
+    "SOL": {"binance": "SOLUSDT", "coinbase": "SOL-USD", "yahoo": "SOL-USD", "coingecko": "solana"},
+    # BNB is not listed on Coinbase — leave the key out so fallback skips it.
     "BNB": {"binance": "BNBUSDT", "yahoo": "BNB-USD", "coingecko": "binancecoin"},
-    "XRP": {"binance": "XRPUSDT", "yahoo": "XRP-USD", "coingecko": "ripple"},
-    "ADA": {"binance": "ADAUSDT", "yahoo": "ADA-USD", "coingecko": "cardano"},
-    "AVAX": {"binance": "AVAXUSDT", "yahoo": "AVAX-USD", "coingecko": "avalanche-2"},
-    "LINK": {"binance": "LINKUSDT", "yahoo": "LINK-USD", "coingecko": "chainlink"},
+    "XRP": {"binance": "XRPUSDT", "coinbase": "XRP-USD", "yahoo": "XRP-USD", "coingecko": "ripple"},
+    "ADA": {"binance": "ADAUSDT", "coinbase": "ADA-USD", "yahoo": "ADA-USD", "coingecko": "cardano"},
+    "AVAX": {"binance": "AVAXUSDT", "coinbase": "AVAX-USD", "yahoo": "AVAX-USD", "coingecko": "avalanche-2"},
+    "LINK": {"binance": "LINKUSDT", "coinbase": "LINK-USD", "yahoo": "LINK-USD", "coingecko": "chainlink"},
 }
 
 
@@ -47,13 +52,16 @@ def _resolve_symbol_map(config: Any) -> Mapping[str, Mapping[str, str]]:
 
 
 BINANCE_URL = "https://api.binance.com/api/v3/klines"
+COINBASE_URL = "https://api.exchange.coinbase.com/products/{pid}/candles"
 
-# Logical interval -> (Binance code, pandas resample rule, yfinance interval)
+# Logical interval -> per-source code / granularity.
+# Coinbase only supports a fixed set of granularities (seconds):
+#   60 / 300 / 900 / 3600 / 21600 / 86400. We mark unsupported as None.
 _INTERVAL_MAP = {
-    "1d": {"binance": "1d", "yf": "1d"},
-    "1w": {"binance": "1w", "yf": "1wk"},
-    "4h": {"binance": "4h", "yf": "1h"},  # yf has no 4h, caller resamples
-    "1h": {"binance": "1h", "yf": "1h"},
+    "1d": {"binance": "1d", "yf": "1d",  "coinbase_sec": 86400},
+    "1w": {"binance": "1w", "yf": "1wk", "coinbase_sec": None},  # caller resamples
+    "4h": {"binance": "4h", "yf": "1h",  "coinbase_sec": None},  # 14400 not supported
+    "1h": {"binance": "1h", "yf": "1h",  "coinbase_sec": 3600},
 }
 
 
@@ -123,6 +131,87 @@ def _binance_parse(raw: list[list]) -> pd.DataFrame:
     return df
 
 
+def _coinbase_fetch(product_id: str, interval: str, bars: int) -> pd.DataFrame:
+    """Fetch up to `bars` recent candles from Coinbase Advanced Trade.
+
+    The endpoint is `/products/{id}/candles` (max 300 candles/call). We
+    paginate backwards via the `end` parameter using the oldest timestamp
+    of the previous page minus one granularity step.
+
+    Coinbase returns candles **newest first**, as arrays
+    `[time_sec, low, high, open, close, volume]`.
+
+    Only supports granularities listed in `_INTERVAL_MAP[interval]['coinbase_sec']`;
+    raises DataSourceError for unsupported intervals (caller's source loop
+    will fall through to the next provider).
+    """
+    gran = _INTERVAL_MAP[interval]["coinbase_sec"]
+    if gran is None:
+        raise DataSourceError(
+            f"Coinbase does not support interval {interval!r} natively"
+        )
+
+    per_call = 300
+    remaining = bars
+    chunks: list[pd.DataFrame] = []
+    end_ts: Optional[int] = None  # epoch seconds
+
+    headers = {"User-Agent": "diversitas/1.0"}
+
+    while remaining > 0:
+        params: dict = {"granularity": gran}
+        if end_ts is not None:
+            # end is inclusive on Coinbase — step one granularity back
+            end_dt = pd.Timestamp(end_ts, unit="s", tz="UTC")
+            start_dt = end_dt - pd.Timedelta(seconds=gran * per_call)
+            params["start"] = start_dt.isoformat()
+            params["end"] = end_dt.isoformat()
+
+        r = requests.get(
+            COINBASE_URL.format(pid=product_id),
+            params=params, headers=headers, timeout=15,
+        )
+        if r.status_code == 429:
+            raise DataSourceError("Coinbase rate limit hit (HTTP 429)")
+        if r.status_code != 200:
+            raise DataSourceError(
+                f"Coinbase HTTP {r.status_code}: {r.text[:200]}"
+            )
+        raw = r.json()
+        if not isinstance(raw, list) or not raw:
+            break
+
+        df_chunk = _coinbase_parse(raw)
+        chunks.append(df_chunk)
+        remaining -= len(df_chunk)
+        # next page: end = earliest_returned - 1 second
+        earliest_ts = int(min(row[0] for row in raw))
+        end_ts = earliest_ts - 1
+        if len(raw) < per_call:
+            break
+        time.sleep(0.1)  # be polite (10 req/sec IP cap)
+
+    if not chunks:
+        raise DataSourceError(
+            f"Coinbase returned no candles for {product_id}"
+        )
+
+    df = pd.concat(chunks).sort_index()
+    df = df[~df.index.duplicated(keep="last")]
+    return df.tail(bars)
+
+
+def _coinbase_parse(raw: list[list]) -> pd.DataFrame:
+    """Coinbase candle order: [time_sec, low, high, open, close, volume]."""
+    cols = ["time_sec", "low", "high", "open", "close", "volume"]
+    df = pd.DataFrame(raw, columns=cols)
+    df["time"] = pd.to_datetime(df["time_sec"].astype("int64"), unit="s", utc=True)
+    for c in ["open", "high", "low", "close", "volume"]:
+        df[c] = df[c].astype(float)
+    df = df.set_index("time")[["open", "high", "low", "close", "volume"]]
+    return df
+
+
 def _yf_fetch(symbol_yf: str, interval: str, bars: int) -> pd.DataFrame:
     """yfinance fallback. Daily candles only — for weekly we resample after."""
     import yfinance as yf
@@ -170,7 +259,9 @@ def fetch_candles(
         bars: number of most-recent candles to return.
         config: any object exposing `.symbol_map` (e.g. Config, LeanConfig).
                 Pass `None` to use the built-in DEFAULT_SYMBOL_MAP.
-        prefer: 'binance' (default) or 'yahoo' to force a source.
+        prefer: which source to try FIRST. Accepts 'binance' (default),
+                'coinbase', or 'yahoo'. The other two are tried in order
+                as fallbacks if the preferred one fails.
 
     Returns:
         DataFrame indexed by UTC timestamp, columns [open, high, low, close, volume].
@@ -184,18 +275,38 @@ def fetch_candles(
     if interval not in _INTERVAL_MAP:
         raise ValueError(f"Unsupported interval {interval!r}")
 
-    sources = ["binance", "yahoo"] if prefer == "binance" else ["yahoo", "binance"]
-    last_err: Optional[Exception] = None
+    # Source ordering: primary first, then fallbacks. `prefer` can override
+    # the primary; we always try Coinbase before yfinance because Coinbase is
+    # a real exchange (Yahoo is a scraper).
+    if prefer == "yahoo":
+        sources = ["yahoo", "binance", "coinbase"]
+    elif prefer == "coinbase":
+        sources = ["coinbase", "binance", "yahoo"]
+    else:  # default / "binance"
+        sources = ["binance", "coinbase", "yahoo"]
 
+    last_err: Optional[Exception] = None
     for src in sources:
         try:
             if src == "binance":
+                if "binance" not in symbol_map[symbol]:
+                    raise DataSourceError(f"No Binance id for {symbol}")
                 return _binance_fetch(
                     symbol_map[symbol]["binance"],
                     _INTERVAL_MAP[interval]["binance"],
                     bars,
                 )
+            if src == "coinbase":
+                if "coinbase" not in symbol_map[symbol]:
+                    raise DataSourceError(f"No Coinbase product for {symbol}")
+                return _coinbase_fetch(
+                    symbol_map[symbol]["coinbase"],
+                    interval,
+                    bars,
+                )
             if src == "yahoo":
+                if "yahoo" not in symbol_map[symbol]:
+                    raise DataSourceError(f"No Yahoo ticker for {symbol}")
                 return _yf_fetch(
                     symbol_map[symbol]["yahoo"],
                     interval,
