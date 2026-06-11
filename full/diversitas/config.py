@@ -12,7 +12,9 @@ class Config:
 
     # Momentum
     rsi_len: int = 14
-    rsi_thresh: float = 45.0
+    # NOTE: Pine declares `rsiThresh` (default 45) but never uses it —
+    # blowoff uses a hardcoded `rsiVal > 80`. We do not mirror the dead
+    # input here. See full/AUDIT.md §11 (Pine bug #1) for the rationale.
     ema_fast: int = 21
     ema_slow: int = 55
     adx_len: int = 14

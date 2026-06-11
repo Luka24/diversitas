@@ -19,7 +19,7 @@ Status: ✅ = identično, ⚠️ = manjši odstop (sprejemljiv, dokumentiran),
 | 1 | `trackPeriod` | 75 | `track_period` | 75 | ✅ |
 | 2 | `trackBuf` | 3.0 | `track_buf_pct` | 3.0 | ✅ |
 | 3 | `rsiLen` | 14 | `rsi_len` | 14 | ✅ |
-| 4 | `rsiThresh` | 45.0 | `rsi_thresh` | 45.0 | 🐛 (glej spodaj) |
+| 4 | `rsiThresh` | 45.0 | — | — | 🐛 (Pine dead code; Python opušča — glej §11) |
 | 5 | `emaFast` | 21 | `ema_fast` | 21 | ✅ |
 | 6 | `emaSlow` | 55 | `ema_slow` | 55 | ✅ |
 | 7 | `adxLen` | 14 | `adx_len` | 14 | ✅ |
@@ -64,13 +64,15 @@ blowoff = distPct > blowoffDist and rsiVal > 80   // ← 80 ni rsiThresh!
 "RSI Threshold" parameter (privzeto 45), ampak spreminjanje nima
 nobenega učinka na signal. Zavajajoča UI control.
 
-Python `config.py` vrstica 15 (`rsi_thresh: float = 45.0`) faithfulno
-reflektira to mrtvo polje — tudi v Pythonu se nikjer ne uporablja.
-Brez napake v portu, samo zvest prenos Pine napake.
+**Stanje Python porta (po commitu, ki odstrani polje):**
+Python `Config` v `full/diversitas/config.py` polja `rsi_thresh` **ne
+deklarira več**. Komentar v viru opozarja na Pine dead-input napako za
+prihodnje prevajalce. To je edini načrtovani odstop od 1:1 mapinga
+inputov — odstranili smo polje, ki bi tudi v Pythonu bilo mrtvo.
 
-**Priporočilo:** v Pine bi `rsiThresh` morali ali uporabiti (npr.
-zamenjati hardcoded `80` v blowoff), ali ga izbrisati. Trenutno
-v obeh ostane kot inert dead code.
+**Priporočilo za Pine vir:** `rsiThresh` morali bodisi uporabiti (npr.
+`rsiVal > rsiThresh` v blowoff namesto hardcoded `80`), bodisi izbrisati.
+Trenutno je zavajajoč UI element v TradingView.
 
 ---
 
@@ -581,8 +583,8 @@ preneseni.
 
 1. **Pine ima 1 dead input (`rsiThresh`)** ki ne vpliva na nič. UI control
    v TradingView je zavajajoč — uporabnik misli da nastavlja RSI threshold,
-   ampak blowoff uporablja hardcoded `80`. Python sledi Pine in tudi
-   ohranja mrtvo polje.
+   ampak blowoff uporablja hardcoded `80`. Python od tega commita dalje
+   **opušča to mrtvo polje** (komentar v viru opozarja na Pine napako).
 
 2. **`barsSinceSignal` reset SAMO na BULL** (ne na BEAR) je namerno
    v Full designu — dovoljuje hitre BULL→BEAR(blowoff)→BULL whipsawe.
@@ -597,9 +599,10 @@ preneseni.
    da je `ddPct` odvisen od količine naložene zgodovine. Tako v Pine
    kot v Python. Pričakovano vedenje, ni bug.
 
-**Priporočilo:** Pine bi `rsiThresh` ali uporabili (npr. v blowoff:
-`rsiVal > rsiThresh` z default 80) ali odstranili. Trenutno Python faithful
-ohranja Pine napako.
+**Status v Pythonu:** Polje `rsi_thresh` je odstranjeno iz `Config`
+(eden namernih odstop od 1:1 inputov, ker bi tudi tu bilo mrtvo).
+**Pine vir** še vedno vsebuje dead input — priporočamo, da ga ali
+uporabite v blowoff (`rsiVal > rsiThresh`) ali izbrišete.
 
 **Strategija v Pythonu je pravilno (in faithfully) implementirana.**
 Nobenega popravka v `strategy.py` ali `config.py` ni potrebno za skladnost
