@@ -590,7 +590,8 @@ def main() -> None:
 
     st.markdown(
         f"""<style>
-        div.block-container {{padding-top:0.8rem;padding-bottom:0.8rem;max-width:1600px}}
+        header[data-testid="stHeader"] {{display:none !important}}
+        div.block-container {{padding-top:0.5rem;padding-bottom:0.8rem;max-width:1600px}}
         .stApp {{background:{COL_BG}}}
         section.main {{background:{COL_BG}}}
         section[data-testid="stSidebar"] {{background:{COL_PANEL};border-right:1px solid {COL_BORDER}}}
