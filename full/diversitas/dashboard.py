@@ -70,8 +70,8 @@ def _load_btc(bars: int) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def _run(symbol: str, bars: int, use_btc_filter: bool):
-    cfg   = Config(use_btc_filter=use_btc_filter)
+def _run(symbol: str, bars: int, use_btc_filter: bool, use_er: bool):
+    cfg   = Config(use_btc_filter=use_btc_filter, use_er=use_er)
     daily = _load_candles(symbol, bars)
     btc   = _load_btc(bars) if use_btc_filter else None
     return cfg, daily, run_strategy(daily, btc_daily=btc, config=cfg)
@@ -708,6 +708,12 @@ def main() -> None:
             help="When ON the strategy only signals BULL if BTC is also in a bull regime. "
                  "Reduces false entries during broad crypto downturns. Disable on BTC itself.",
         )
+        use_er = st.checkbox(
+            "Efficiency Ratio filter", value=True,
+            help="Kaufman Efficiency Ratio: ER = |net change over N bars| / sum(|daily changes|). "
+                 "Near 1 = clean trend, near 0 = sideways chop. "
+                 "When ON, entries are blocked during choppy markets (ER < 0.30).",
+        )
         st.divider()
         st.markdown(
             f"<div style='color:{COL_DIM};font-size:10px;text-transform:uppercase;"
@@ -750,7 +756,7 @@ def main() -> None:
         bars = 2000
 
     try:
-        cfg, daily, result = _run(symbol, bars, use_btc_filter)
+        cfg, daily, result = _run(symbol, bars, use_btc_filter, use_er)
     except Exception as e:
         st.error(f"Data load failed for {symbol}: {e}")
         st.stop()
@@ -814,6 +820,13 @@ def main() -> None:
                  "Annualised 30-day rolling volatility of daily returns (std × √365). "
                  "HIGH = volatile regime, threshold raised, harder to stay long. "
                  "LOW = calm market, threshold lowered, continuation favoured."),
+            _row("Efficiency Ratio",
+                 f'{s["er"]:.2f}  {"TREND" if s["er_ok"] else "CHOP"}',
+                 COL_BULL if s["er_ok"] else COL_BEAR,
+                 "Kaufman Efficiency Ratio over 10 bars. "
+                 "Formula: |close − close[10]| / sum(|daily changes|, 10). "
+                 "TREND (≥ 0.30) = directional move, entries allowed. "
+                 "CHOP (< 0.30) = sideways noise, entries blocked (when filter ON)."),
         ]
         if use_btc_filter:
             detail_rows.append(_row("BTC filter",
