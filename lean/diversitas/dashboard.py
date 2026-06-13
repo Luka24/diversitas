@@ -114,7 +114,7 @@ def _chart_layout(fig: go.Figure, height: int) -> None:
     fig.update_layout(
         template=COL_TEMPLATE,
         height=height,
-        margin=dict(l=0, r=70, t=8, b=8),
+        margin=dict(l=0, r=70, t=42, b=8),
         paper_bgcolor=COL_BG, plot_bgcolor=COL_BG,
         font=dict(color=COL_TEXT, family="-apple-system,system-ui,sans-serif", size=11),
         legend=dict(
@@ -584,32 +584,9 @@ def main() -> None:
         initial_sidebar_state="expanded",
     )
 
-    with st.sidebar:
-        st.markdown(
-            "<div style='font-size:17px;font-weight:700;letter-spacing:2px;"
-            "margin-bottom:0'>DIVERSITAS</div>"
-            "<div style='font-size:10px;letter-spacing:1.5px;text-transform:uppercase;"
-            "margin-bottom:16px;opacity:0.5'>Lean · Live</div>",
-            unsafe_allow_html=True,
-        )
-        symbol         = st.selectbox("Symbol", list(DEFAULT_CONFIG.symbol_map.keys()), index=0)
-        bars           = st.slider("History (bars)", 400, 2000, 1000, 100)
-        use_btc_filter = st.checkbox("BTC cross-asset filter", value=False,
-                                     help="OFF by default in Lean.")
-        dark_mode      = st.checkbox("Dark theme", value=True)
-        auto_refresh   = st.checkbox("Auto-refresh (60 s)", value=True)
-        if st.button("↺  Refresh now", type="primary", use_container_width=True):
-            _load_candles.clear()
-            _load_btc.clear()
-            _run.clear()
-        st.divider()
-        st.markdown(
-            "<div style='font-size:10px;line-height:1.6;opacity:0.45'>"
-            "Data · Binance primary, yfinance fallback<br>Cache · 60 s TTL</div>",
-            unsafe_allow_html=True,
-        )
-
-    _set_theme(dark_mode)
+    # Read theme from session_state BEFORE rendering sidebar so COL_TEXT is correct
+    # when we inject inline color into the sidebar title HTML.
+    _set_theme(st.session_state.get("lean_dark_theme", True))
 
     st.markdown(
         f"""<style>
@@ -621,6 +598,35 @@ def main() -> None:
         </style>""",
         unsafe_allow_html=True,
     )
+
+    with st.sidebar:
+        st.markdown(
+            f"<div style='color:{COL_TEXT};font-size:17px;font-weight:700;"
+            f"letter-spacing:2px;margin-bottom:0'>DIVERSITAS</div>"
+            f"<div style='color:{COL_DIM};font-size:10px;letter-spacing:1.5px;"
+            f"text-transform:uppercase;margin-bottom:16px'>Lean · Live</div>",
+            unsafe_allow_html=True,
+        )
+        symbol         = st.selectbox("Symbol", list(DEFAULT_CONFIG.symbol_map.keys()), index=0)
+        bars           = st.slider("History (bars)", 400, 2000, 1000, 100)
+        use_btc_filter = st.checkbox("BTC cross-asset filter", value=False,
+                                     help="OFF by default in Lean.")
+        st.checkbox("Dark theme", value=True, key="lean_dark_theme")
+        dark_mode      = st.session_state.get("lean_dark_theme", True)
+        auto_refresh   = st.checkbox("Auto-refresh (60 s)", value=True)
+        if st.button("↺  Refresh now", type="primary", use_container_width=True):
+            _load_candles.clear()
+            _load_btc.clear()
+            _run.clear()
+        st.divider()
+        st.markdown(
+            f"<div style='color:{COL_VERY_DIM};font-size:10px;line-height:1.6'>"
+            f"Data · Binance primary, yfinance fallback<br>Cache · 60 s TTL</div>",
+            unsafe_allow_html=True,
+        )
+
+    # Re-apply theme in case checkbox changed this run (takes effect next rerun for sidebar)
+    _set_theme(dark_mode)
 
     try:
         cfg, daily, result = _run(symbol, bars, use_btc_filter)
