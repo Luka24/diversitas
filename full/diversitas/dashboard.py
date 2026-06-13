@@ -137,11 +137,12 @@ def _chart_layout(fig: go.Figure, height: int) -> None:
 
 # ── HTML helpers ──────────────────────────────────────────────────────────────
 
-def _row(label: str, value: str, colour: str = "") -> str:
-    vc = colour or COL_TEXT
+def _row(label: str, value: str, colour: str = "", tip: str = "") -> str:
+    vc    = colour or COL_TEXT
+    title = f' title="{tip}"' if tip else ""
     return (
         f'<div style="display:flex;justify-content:space-between;'
-        f'padding:7px 0;border-bottom:1px solid {COL_BORDER}">'
+        f'padding:7px 0;border-bottom:1px solid {COL_BORDER}"{title}>'
         f'<span style="color:{COL_DIM};font-size:11px">{label}</span>'
         f'<span style="color:{vc};font-size:12px;font-weight:500;'
         f'font-family:monospace">{value}</span>'
@@ -181,6 +182,10 @@ def _status_bar(s: dict, symbol: str, use_btc_filter: bool) -> str:
         return (f'<span style="color:{COL_DIM};font-size:10px;text-transform:uppercase;'
                 f'letter-spacing:0.4px;margin-right:4px">{txt}</span>')
 
+    def item(label_txt: str, chip_html: str, tooltip: str) -> str:
+        return (f'{sep}<span title="{tooltip}" style="cursor:help">'
+                f'{lbl(label_txt)}{chip_html}</span>')
+
     sep = (f'<span style="color:{COL_BORDER};padding:0 14px;'
            f'font-size:15px;vertical-align:middle">│</span>')
 
@@ -194,19 +199,42 @@ def _status_bar(s: dict, symbol: str, use_btc_filter: bool) -> str:
     if use_btc_filter:
         arrow   = "▲" if s["btc_bull"] else "▼"
         btc_col = COL_BULL if s["btc_bull"] else COL_BEAR
-        btc_part = sep + chip("BTC " + arrow, btc_col)
+        btc_part = item("BTC", chip("BTC " + arrow, btc_col),
+                        "BTC cross-asset filter. ▲ = BTC in bull regime (entries allowed). "
+                        "▼ = BTC bear regime (entries blocked regardless of own signal).")
+
+    conv_chip = (f'{sep}<span title="Conviction score vs dynamic threshold. '
+                 f'Conviction aggregates trend quality, momentum and volatility regime into a 0-100 score. '
+                 f'When it falls below the threshold the strategy exits to cash." style="cursor:help">'
+                 f'{lbl("Conv")}{chip(conv_txt, COL_TEXT)}'
+                 f'<span style="color:{COL_DIM};font-size:11px"> / </span>{chip(thr_txt, thr_col)}</span>')
 
     content = (
-        f'<span style="color:{COL_TEXT};font-size:15px;font-weight:700;margin-right:10px">{symbol}/USD</span>'
-        f'<span style="color:{COL_TEXT};font-size:15px;font-family:monospace;margin-right:2px">{close_txt}</span>'
-        f'{sep}{lbl("Signal")}{chip(s["signal"], sig_col, bold=True)}'
-        f'{sep}{lbl("Regime")}{chip(s["regime"], reg_col)}'
-        f'{sep}{lbl("vs TL")}{chip(dist_txt, dist_col)}'
-        f'{sep}{lbl("Conv")}{chip(conv_txt, COL_TEXT)}'
-        f'<span style="color:{COL_DIM};font-size:11px"> / </span>{chip(thr_txt, thr_col)}'
-        f'{sep}{lbl("Alloc")}{chip(alloc_txt, COL_BLUE)}'
-        f'{sep}{lbl("Vol")}{chip(vol_txt, COL_DIM)}'
-        f'{btc_part}{warnings}'
+        f'<span title="Asset being analyzed. Price is the last close in the selected window."'
+        f' style="color:{COL_TEXT};font-size:15px;font-weight:700;margin-right:10px;cursor:help">{symbol}/USD</span>'
+        f'<span title="Last daily close price in USD."'
+        f' style="color:{COL_TEXT};font-size:15px;font-family:monospace;margin-right:2px;cursor:help">{close_txt}</span>'
+        + item("Signal", chip(s["signal"], sig_col, bold=True),
+               "Current trading signal. BULL = strategy is 100% long. BEAR = 0% (cash). "
+               "Flips to BULL when all entry conditions are met; exits when conviction falls below threshold "
+               "or any emergency condition (bear market, blow-off, vol shock) triggers.")
+        + item("Regime", chip(s["regime"], reg_col),
+               "Display regime from the longer-term state machine. "
+               "BULL = confirmed uptrend. BEAR = confirmed downtrend. "
+               "HEDGED = transitional period. May differ from Signal during slow reversals.")
+        + item("vs TL", chip(dist_txt, dist_col),
+               "Distance of the current close from the adaptive trackline, in %. "
+               "Positive (+) = above trackline (safe zone). "
+               "Negative (−) = below trackline; combined with low conviction triggers exit.")
+        + conv_chip
+        + item("Alloc", chip(alloc_txt, COL_BLUE),
+               "Current target allocation. Binary: 100% = fully long (BULL), 0% = cash (BEAR). "
+               "No partial positions. Pro v3 uses a binary allocation identical to Lean.")
+        + item("Vol", chip(vol_txt, COL_DIM),
+               "Annualised 30-day rolling volatility of daily returns (std × √365). "
+               "HIGH vol = larger price swings; raises the dynamic threshold making signals harder to trigger. "
+               "LOW vol = calm market; lowers threshold, making continuation more likely.")
+        + btc_part + warnings
     )
     ts = f'<span style="color:{COL_VERY_DIM};font-size:10px;font-family:monospace;margin-left:auto">{date_txt}</span>'
 
@@ -441,39 +469,66 @@ def _render_metrics_panel(metrics: dict, trades: list[dict]) -> str:
     worst  = min(closed, key=lambda t: t["pnl_pct"])["pnl_pct"] if closed else None
 
     rows_def = [
-        # (label, strat_val, strat_col, bh_val, bh_col)
+        # (label, strat_val, strat_col, bh_val, bh_col, tooltip)
         ("CAGR",
          _fmt_pct(strat.get("cagr")), _val_col(strat.get("cagr")),
-         _fmt_pct(bh.get("cagr")),   _val_col(bh.get("cagr"))),
+         _fmt_pct(bh.get("cagr")),   _val_col(bh.get("cagr")),
+         "Compound Annual Growth Rate — annualised return over the selected period. "
+         "Formula: (final_equity / initial_equity)^(1/years) − 1. "
+         "Accounts for compounding; a 10% CAGR doubles capital in ~7 years."),
         ("Sharpe Ratio",
          _fmt_ratio(strat.get("sharpe")), _val_col(strat.get("sharpe")),
-         _fmt_ratio(bh.get("sharpe")),    _val_col(bh.get("sharpe"))),
+         _fmt_ratio(bh.get("sharpe")),    _val_col(bh.get("sharpe")),
+         "Sharpe Ratio — risk-adjusted return relative to total volatility. "
+         "Formula: annualised_return / annualised_std_dev (0% risk-free rate assumed). "
+         "Above 1.0 is generally considered good; above 2.0 is excellent."),
         ("Sortino Ratio",
          _fmt_ratio(strat.get("sortino")), _val_col(strat.get("sortino")),
-         _fmt_ratio(bh.get("sortino")),    _val_col(bh.get("sortino"))),
+         _fmt_ratio(bh.get("sortino")),    _val_col(bh.get("sortino")),
+         "Sortino Ratio — like Sharpe but penalises only downside volatility (negative returns). "
+         "Formula: annualised_return / downside_std_dev. "
+         "Better metric for asymmetric profiles where upside volatility is welcome."),
         ("Max Drawdown",
          _fmt_pct(strat.get("max_dd")), _val_col(strat.get("max_dd"), positive_good=False),
-         _fmt_pct(bh.get("max_dd")),    _val_col(bh.get("max_dd"),    positive_good=False)),
+         _fmt_pct(bh.get("max_dd")),    _val_col(bh.get("max_dd"),    positive_good=False),
+         "Maximum peak-to-trough equity decline during the selected period. "
+         "Formula: min(equity / cumulative_max(equity) − 1). "
+         "Smaller absolute value = better capital protection. Key risk metric."),
         ("Calmar Ratio",
          _fmt_ratio(strat.get("calmar")), _val_col(strat.get("calmar")),
-         _fmt_ratio(bh.get("calmar")),    _val_col(bh.get("calmar"))),
+         _fmt_ratio(bh.get("calmar")),    _val_col(bh.get("calmar")),
+         "Calmar Ratio — CAGR divided by absolute Max Drawdown. "
+         "Formula: CAGR / |Max Drawdown|. "
+         "Measures return earned per unit of worst-case loss. Above 1.0 is solid."),
         ("Total Trades",
          str(n) if n else "—",            COL_TEXT,
-         "—",                             COL_VERY_DIM),
+         "—",                             COL_VERY_DIM,
+         "Number of completed (closed) round-trip trades in the selected window. "
+         "Open positions are not counted here."),
         ("Win Rate",
          f"{wr:.0f}%" if wr is not None else "—",
          COL_BULL if (wr or 0) >= 50 else COL_NEUTRAL if (wr or 0) >= 40 else COL_BEAR,
-         "—", COL_VERY_DIM),
+         "—", COL_VERY_DIM,
+         "Percentage of closed trades with a positive P&L. "
+         "Formula: winning_trades / total_trades × 100. "
+         "A strategy can be profitable below 50% win rate if winners are larger than losers."),
         ("Avg Trade P&L",
          f"{avg_pl:+.2f}%" if avg_pl is not None else "—",
          _val_col(avg_pl),
-         "—", COL_VERY_DIM),
+         "—", COL_VERY_DIM,
+         "Average profit or loss per closed trade, in %. "
+         "Formula: sum(all trade P&Ls) / number_of_trades. "
+         "Positive value means the strategy earns money on average per trade."),
         ("Avg Duration",
          f"{avg_d:.0f} d" if avg_d is not None else "—", COL_TEXT,
-         "—", COL_VERY_DIM),
+         "—", COL_VERY_DIM,
+         "Average holding duration per trade in calendar days. "
+         "Longer average duration indicates the strategy captures bigger trend moves."),
         ("Best / Worst",
          f"{best:+.1f}%  /  {worst:+.1f}%" if best is not None else "—",
-         COL_TEXT, "—", COL_VERY_DIM),
+         COL_TEXT, "—", COL_VERY_DIM,
+         "Best single-trade P&L and worst single-trade P&L in the selected window. "
+         "A large gap between best and worst signals high variance in individual trade outcomes."),
     ]
 
     hdr = (
@@ -484,12 +539,12 @@ def _render_metrics_panel(metrics: dict, trades: list[dict]) -> str:
         f'</tr>'
     )
     body = "".join(
-        f'<tr style="border-bottom:1px solid {COL_BORDER}">'
+        f'<tr style="border-bottom:1px solid {COL_BORDER};cursor:help" title="{tip}">'
         f'<td style="padding:8px 14px;color:{COL_DIM};font-size:11px">{lbl}</td>'
         f'<td style="padding:8px 14px;color:{sc};font-size:13px;font-weight:600;font-family:monospace;text-align:right">{sv}</td>'
         f'<td style="padding:8px 14px;color:{bc};font-size:12px;font-family:monospace;text-align:right">{bv}</td>'
         f'</tr>'
-        for lbl, sv, sc, bv, bc in rows_def
+        for lbl, sv, sc, bv, bc, tip in rows_def
     )
     return (
         f'<div style="background:{COL_PANEL};border:1px solid {COL_BORDER};'
@@ -738,17 +793,34 @@ def main() -> None:
         vol_colour = COL_BEAR if s["high_vol_regime"] else COL_BULL if s["low_vol_regime"] else COL_DIM
 
         detail_rows = [
-            _row("200 MA",           s["ma200_status"], ma_colour),
-            _row("Conviction / Thr", f'{s["conviction"]:.1f}  ·  {s["threshold"]:.0f}', thr_colour),
-            _row("Trackline",        f'${s["trackline"]:,.0f}  {"RISING" if s["track_rising"] else "FALLING"}', tl_colour),
+            _row("200 MA",           s["ma200_status"], ma_colour,
+                 "200-day moving average regime. ABOVE = price in long-term bull zone (entries allowed). "
+                 "BELOW = caution, entries are harder. BEAR MKT = confirmed downtrend; dynamic threshold "
+                 "rises by +15 making signals much harder to achieve."),
+            _row("Conviction / Thr", f'{s["conviction"]:.1f}  ·  {s["threshold"]:.0f}', thr_colour,
+                 "Conviction score (left) vs dynamic threshold (right). Conviction is a 0-100 composite "
+                 "of trend quality, momentum persistence, and volatility regime. "
+                 "Signal is BULL when conviction > threshold; BEAR when it falls below."),
+            _row("Trackline",        f'${s["trackline"]:,.0f}  {"RISING" if s["track_rising"] else "FALLING"}', tl_colour,
+                 "Current trackline price level and direction. The trackline is an adaptive support line. "
+                 "RISING = trend momentum building. FALLING = trend weakening. "
+                 "Price below the trackline contributes to lower conviction."),
             _row("Trend quality",    f"{tq:.0f}%",
-                 COL_BULL if tq >= 60 else COL_NEUTRAL if tq >= 40 else COL_BEAR),
-            _row("Annual vol",       f'{s["annual_vol"]:.1f}%  {vol_label}', vol_colour),
+                 COL_BULL if tq >= 60 else COL_NEUTRAL if tq >= 40 else COL_BEAR,
+                 "Trend persistence score (0-100%). Measures what fraction of recent bars closed "
+                 "above their respective moving averages and in the trend direction. "
+                 "High quality (>60%) strongly supports BULL signal."),
+            _row("Annual vol",       f'{s["annual_vol"]:.1f}%  {vol_label}', vol_colour,
+                 "Annualised 30-day rolling volatility of daily returns (std × √365). "
+                 "HIGH = volatile regime, threshold raised, harder to stay long. "
+                 "LOW = calm market, threshold lowered, continuation favoured."),
         ]
         if use_btc_filter:
             detail_rows.append(_row("BTC filter",
                                     "BTC BULL" if s["btc_bull"] else "BTC BEAR",
-                                    COL_BULL if s["btc_bull"] else COL_BEAR))
+                                    COL_BULL if s["btc_bull"] else COL_BEAR,
+                                    "BTC cross-asset regime filter. BULL = BTC above its trackline (entries allowed). "
+                                    "BEAR = BTC in downtrend; entries are blocked to avoid broad crypto market risk."))
         st.markdown(
             f'<div style="background:{COL_PANEL};border:1px solid {COL_BORDER};'
             f'border-radius:4px;padding:4px 16px">{"".join(detail_rows)}</div>',
