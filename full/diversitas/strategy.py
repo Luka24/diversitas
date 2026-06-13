@@ -143,7 +143,7 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
     er_change   = close.diff(cfg.er_len).abs()
     er_vol      = close.diff(1).abs().rolling(cfg.er_len, min_periods=cfg.er_len).sum()
     df["er"]    = np.where(er_vol > 0, er_change / er_vol, 0.0)
-    df["er_ok"] = ~cfg.use_er | (df["er"] > cfg.er_thresh)
+    df["er_ok"] = (not cfg.use_er) | (df["er"] > cfg.er_thresh)
 
     # --- Conviction score components ---
     trend_raw = ((df["dist_pct"] + 5.0) / 10.0).clip(0.0, 1.0)
