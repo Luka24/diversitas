@@ -599,6 +599,16 @@ def main() -> None:
         section.main {{background:{COL_BG}}}
         section[data-testid="stSidebar"] {{background:{COL_PANEL};border-right:1px solid {COL_BORDER}}}
         h1,h2,h3,h4 {{color:{COL_TEXT};font-weight:600}}
+        section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {{color:{COL_TEXT} !important;font-size:11px}}
+        section[data-testid="stSidebar"] div[data-baseweb="select"]>div:first-child {{background:{COL_PANEL} !important;border-color:{COL_BORDER} !important}}
+        section[data-testid="stSidebar"] div[data-baseweb="select"] span {{color:{COL_TEXT} !important}}
+        section[data-testid="stSidebar"] div[data-baseweb="select"] svg {{fill:{COL_DIM} !important}}
+        div[data-baseweb="popover"] ul {{background:{COL_PANEL} !important}}
+        div[data-baseweb="popover"] li {{color:{COL_TEXT} !important}}
+        div[data-baseweb="popover"] li:hover {{background:{COL_BORDER} !important}}
+        section[data-testid="stSidebar"] div[data-baseweb="input"]>div {{background:{COL_PANEL} !important;border-color:{COL_BORDER} !important}}
+        section[data-testid="stSidebar"] div[data-baseweb="input"] input {{color:{COL_TEXT} !important}}
+        section[data-testid="stSidebar"] [data-testid="stCheckbox"] label p {{color:{COL_TEXT} !important}}
         </style>""",
         unsafe_allow_html=True,
     )
@@ -616,6 +626,16 @@ def main() -> None:
         bars           = st.slider("History (bars)", 400, 2000, 1000, 100)
         use_btc_filter = st.checkbox("BTC cross-asset filter", value=(symbol != "BTC"),
                                      help="Disable on BTC itself.")
+        st.divider()
+        st.markdown(
+            f"<div style='color:{COL_DIM};font-size:10px;text-transform:uppercase;"
+            f"letter-spacing:1.2px;margin-bottom:2px'>Backtest window</div>",
+            unsafe_allow_html=True,
+        )
+        date_range = st.date_input(
+            "Backtest window", value=(), label_visibility="collapsed", format="YYYY-MM-DD",
+        )
+        st.divider()
         st.checkbox("Dark theme", value=True, key="full_dark_theme")
         dark_mode      = st.session_state.get("full_dark_theme", True)
         auto_refresh   = st.checkbox("Auto-refresh (60 s)", value=True)
@@ -639,8 +659,15 @@ def main() -> None:
         st.error(f"Data load failed for {symbol}: {e}")
         st.stop()
 
-    s       = result.summary
-    df      = result.df
+    s  = result.summary          # always current-bar status (unfiltered)
+    df = result.df
+    if len(date_range) == 2:
+        df = df.loc[str(date_range[0]):str(date_range[1])]
+    elif len(date_range) == 1:
+        df = df.loc[str(date_range[0]):]
+    if df.empty:
+        st.warning("No data in the selected date range — widen the window.")
+        st.stop()
     trades  = _build_trade_ledger(df)
     metrics = _compute_metrics(df)
 
