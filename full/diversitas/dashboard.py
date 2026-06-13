@@ -18,7 +18,7 @@ from streamlit_autorefresh import st_autorefresh
 
 from shared.data_source import fetch_candles, fetch_btc_daily
 from diversitas.config import Config, DEFAULT_CONFIG
-from diversitas.strategy import run_strategy, S_BULL, S_NEUTRAL, S_BEAR
+from diversitas.strategy import run_strategy, build_summary, S_BULL, S_NEUTRAL, S_BEAR
 
 
 TRADING_DAYS = 365  # crypto trades 365 d/yr
@@ -534,6 +534,27 @@ def _build_trade_ledger(df: pd.DataFrame) -> list[dict]:
     return trades
 
 
+def _trades_to_csv(trades: list[dict]) -> bytes:
+    if not trades:
+        cols = ["entry_date", "exit_date", "entry_px", "exit_px",
+                "duration_days", "pnl_pct", "exit_reason", "open"]
+        return pd.DataFrame(columns=cols).to_csv(index=False).encode("utf-8")
+    rows = [
+        {
+            "entry_date":    t["entry_date"].strftime("%Y-%m-%d"),
+            "exit_date":     t["exit_date"].strftime("%Y-%m-%d"),
+            "entry_px":      round(t["entry_px"], 2),
+            "exit_px":       round(t["exit_px"], 2),
+            "duration_days": t["duration_days"],
+            "pnl_pct":       round(t["pnl_pct"], 2),
+            "exit_reason":   t["exit_reason"],
+            "open":          t["open"],
+        }
+        for t in trades
+    ]
+    return pd.DataFrame(rows).to_csv(index=False).encode("utf-8")
+
+
 def _render_trade_ledger(trades: list[dict], n: int = 12) -> str:
     if not trades:
         return (f'<div style="color:{COL_DIM};padding:24px;text-align:center;'
@@ -629,12 +650,11 @@ def main() -> None:
         st.divider()
         st.markdown(
             f"<div style='color:{COL_DIM};font-size:10px;text-transform:uppercase;"
-            f"letter-spacing:1.2px;margin-bottom:2px'>Backtest window</div>",
+            f"letter-spacing:1.2px;margin-bottom:6px'>Backtest window</div>",
             unsafe_allow_html=True,
         )
-        date_range = st.date_input(
-            "Backtest window", value=(), label_visibility="collapsed", format="YYYY-MM-DD",
-        )
+        date_from = st.date_input("Od", value=None, format="YYYY-MM-DD")
+        date_to   = st.date_input("Do", value=None, format="YYYY-MM-DD")
         st.divider()
         st.checkbox("Dark theme", value=True, key="full_dark_theme")
         dark_mode      = st.session_state.get("full_dark_theme", True)
@@ -659,15 +679,15 @@ def main() -> None:
         st.error(f"Data load failed for {symbol}: {e}")
         st.stop()
 
-    s  = result.summary          # always current-bar status (unfiltered)
     df = result.df
-    if len(date_range) == 2:
-        df = df.loc[str(date_range[0]):str(date_range[1])]
-    elif len(date_range) == 1:
-        df = df.loc[str(date_range[0]):]
+    if date_from is not None:
+        df = df.loc[str(date_from):]
+    if date_to is not None:
+        df = df.loc[:str(date_to)]
     if df.empty:
         st.warning("No data in the selected date range — widen the window.")
         st.stop()
+    s = build_summary(df)
     trades  = _build_trade_ledger(df)
     metrics = _compute_metrics(df)
 
@@ -735,12 +755,24 @@ def main() -> None:
         st.plotly_chart(_build_equity_chart(metrics), use_container_width=True)
 
     # ── trade ledger ──────────────────────────────────────────────────────────
-    st.markdown(_section_label("Trade ledger · last 12"), unsafe_allow_html=True)
-    st.markdown(_render_trade_ledger(trades, n=12), unsafe_allow_html=True)
+    n_trades = len(trades)
+    hdr_col, dl_col = st.columns([8, 2])
+    with hdr_col:
+        st.markdown(
+            _section_label(f"Trade ledger · {n_trades} trade{'s' if n_trades != 1 else ''}"),
+            unsafe_allow_html=True,
+        )
+    with dl_col:
+        st.download_button(
+            "⬇  Export CSV", data=_trades_to_csv(trades),
+            file_name=f"trades_{symbol}_{pd.Timestamp.now():%Y%m%d}.csv",
+            mime="text/csv", use_container_width=True,
+        )
+    st.markdown(_render_trade_ledger(trades, n=n_trades), unsafe_allow_html=True)
     st.markdown(
         f'<div style="color:{COL_VERY_DIM};font-size:10px;margin-top:8px;'
         f'font-family:monospace;text-align:right">'
-        f'Naive long-flat backtest · no slippage / fees</div>',
+        f'Naive long-flat backtest · no slippage / fees · Pro v3</div>',
         unsafe_allow_html=True,
     )
 
