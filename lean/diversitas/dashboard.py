@@ -71,8 +71,8 @@ def _load_btc(bars: int) -> pd.DataFrame:
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def _run(symbol: str, bars: int, use_btc_filter: bool):
-    cfg   = LeanConfig(use_btc_filter=use_btc_filter)
+def _run(symbol: str, bars: int, use_btc_filter: bool, use_er: bool):
+    cfg   = LeanConfig(use_btc_filter=use_btc_filter, use_er=use_er)
     daily = _load_candles(symbol, bars)
     btc   = _load_btc(bars) if use_btc_filter else None
     return cfg, daily, run_strategy(daily, btc_daily=btc, config=cfg)
@@ -701,6 +701,12 @@ def main() -> None:
             help="When ON the strategy only signals BULL if BTC is also in a bull regime. "
                  "Reduces false entries during broad crypto downturns. OFF by default in Lean.",
         )
+        use_er = st.checkbox(
+            "Efficiency Ratio filter", value=True,
+            help="Kaufman Efficiency Ratio: ER = |net change over N bars| / sum(|daily changes|). "
+                 "Near 1 = clean trend, near 0 = sideways chop. "
+                 "When ON, entries are blocked during choppy markets (ER < 0.30).",
+        )
         st.divider()
         st.markdown(
             f"<div style='color:{COL_DIM};font-size:10px;text-transform:uppercase;"
@@ -743,7 +749,7 @@ def main() -> None:
         bars = 2000
 
     try:
-        cfg, daily, result = _run(symbol, bars, use_btc_filter)
+        cfg, daily, result = _run(symbol, bars, use_btc_filter, use_er)
     except Exception as e:
         st.error(f"Data load failed for {symbol}: {e}")
         st.stop()
@@ -777,6 +783,8 @@ def main() -> None:
             f'Entry gates · all must PASS for BULL</div>',
             unsafe_allow_html=True,
         )
+        er_val = float(last["er"]) if pd.notna(last["er"]) else 0.0
+        er_txt = f"ER {er_val:.2f} {'TREND' if s['er_ok'] else 'CHOP'}"
         gates = [
             ("Above trackline + buffer",
              bool(last["above_tl"]),
@@ -797,6 +805,12 @@ def main() -> None:
              bool(last["regime_ok"]),
              "The 200-day MA regime must not be in a confirmed bear market. "
              "Bear regime blocks all entries to avoid catching falling knives."),
+            (er_txt if cfg.use_er else "ER filter (OFF)",
+             bool(last["er_ok"]),
+             "Efficiency Ratio (Kaufman): ER = |net change over 10 bars| / sum(|daily changes|). "
+             "Near 1.0 = clean directional trend. Near 0 = sideways chop. "
+             f"Threshold: {cfg.er_thresh:.2f}. Entry blocked when ER is below threshold. "
+             "Disable in sidebar to allow entries in choppy conditions."),
         ]
         if cfg.use_btc_filter:
             gates.append((
@@ -897,6 +911,13 @@ def main() -> None:
                  "Annualised 30-day rolling volatility of daily returns (std × √365). "
                  "HIGH vol regime increases risk of false breakouts and reduces allocation. "
                  "LOW vol favours trend continuation."),
+            _row("Efficiency Ratio",
+                 f'{s["er"]:.2f}  {"TREND" if s["er_ok"] else "CHOP"}',
+                 COL_BULL if s["er_ok"] else COL_BEAR,
+                 "Kaufman Efficiency Ratio over 10 bars. "
+                 "Formula: |close − close[10]| / sum(|daily changes|, 10). "
+                 "TREND (≥ 0.30) = directional move, entries allowed. "
+                 "CHOP (< 0.30) = sideways noise, entries blocked (when filter ON)."),
         ]
         if cfg.use_btc_filter:
             detail.append(_row("BTC filter",

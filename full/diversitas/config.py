@@ -41,6 +41,11 @@ class Config:
     exit_grace_bars: int = 3
     conv_smooth: int = 5
 
+    # Efficiency Ratio trend filter (Kaufman)
+    use_er: bool = True
+    er_len: int = 10          # lookback bars
+    er_thresh: float = 0.30   # below this = chop, entry blocked
+
     # Display / behaviour
     skip_weekend: bool = True
 

@@ -38,6 +38,11 @@ class LeanConfig:
     use_vol_sizing: bool = True
     target_vol_pct: float = 50.0
 
+    # Efficiency Ratio trend filter (Kaufman)
+    use_er: bool = True
+    er_len: int = 10          # lookback bars
+    er_thresh: float = 0.30   # below this = chop, entry blocked
+
     # Optional cross-asset filter — OFF by default in Lean
     use_btc_filter: bool = False
 

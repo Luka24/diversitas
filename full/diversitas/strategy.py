@@ -139,6 +139,12 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
     vol_avg50 = ind.sma(df["annual_vol"], 50)
     df["vol_shock"] = df["annual_vol"] > (vol_avg50 * cfg.vol_shock_mul)
 
+    # --- Efficiency Ratio (Kaufman) ---
+    er_change   = close.diff(cfg.er_len).abs()
+    er_vol      = close.diff(1).abs().rolling(cfg.er_len, min_periods=cfg.er_len).sum()
+    df["er"]    = np.where(er_vol > 0, er_change / er_vol, 0.0)
+    df["er_ok"] = ~cfg.use_er | (df["er"] > cfg.er_thresh)
+
     # --- Conviction score components ---
     trend_raw = ((df["dist_pct"] + 5.0) / 10.0).clip(0.0, 1.0)
     trend_bonus = df["track_rising"].astype(float) * 0.1
@@ -210,6 +216,7 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
         & df["structure_bull"]
         & df["btc_filter_ok"]
         & df["htf_bull"]
+        & df["er_ok"]
         & ~df["is_weekend"]
     ).fillna(False)
     df["red_dot"] = (df["below_tl"] & ~df["is_weekend"]).fillna(False)
@@ -376,6 +383,8 @@ def build_summary(df: pd.DataFrame) -> dict:
         "blowoff": bool(last["blowoff"]),
         "vol_shock": bool(last["vol_shock"]),
         "btc_bull": bool(last["btc_bull"]),
+        "er": float(last["er"]) if pd.notna(last["er"]) else float("nan"),
+        "er_ok": bool(last["er_ok"]),
     }
 
 

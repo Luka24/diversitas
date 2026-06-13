@@ -83,6 +83,14 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
         df["btc_bull"] = True
         df["btc_filter_ok"] = True
 
+    # --- Efficiency Ratio (Kaufman) ---
+    # ER = |net change over N bars| / sum(|daily changes| over N bars)
+    # Near 1 = clean trend, near 0 = sideways chop.
+    er_change = close.diff(cfg.er_len).abs()
+    er_vol    = close.diff(1).abs().rolling(cfg.er_len, min_periods=cfg.er_len).sum()
+    df["er"]    = np.where(er_vol > 0, er_change / er_vol, 0.0)
+    df["er_ok"] = ~cfg.use_er | (df["er"] > cfg.er_thresh)
+
     # --- Entry / exit conditions ---
     # Entry distance: must be > buf + extra
     df["dist_entry_ok"] = df["dist_pct"] >= (cfg.track_buf_pct + cfg.min_dist_entry_pct)
@@ -94,6 +102,7 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
         & df["dist_entry_ok"]
         & df["regime_ok"]
         & df["btc_filter_ok"]
+        & df["er_ok"]
     ).fillna(False)
 
     df["trend_break"] = df["below_tl"]
@@ -245,6 +254,8 @@ def build_summary(df: pd.DataFrame) -> dict:
         "vol_shock": bool(last["vol_shock"]),
         "btc_bull": bool(last["btc_bull"]),
         "rsi": float(last["rsi"]) if pd.notna(last["rsi"]) else float("nan"),
+        "er": float(last["er"]) if pd.notna(last["er"]) else float("nan"),
+        "er_ok": bool(last["er_ok"]),
     }
 
 
