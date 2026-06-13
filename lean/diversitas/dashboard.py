@@ -112,7 +112,10 @@ def _status_bar(s: dict, symbol: str, cfg: LeanConfig) -> str:
         warnings += (f'<span style="color:{COL_BEAR};font-weight:700;'
                      f'font-size:11px;margin-left:8px">⚠ VOL SHOCK</span>')
 
-    rsi_txt = f"{rsi_val:.1f}" if not pd.isna(rsi_val) else "—"
+    rsi_txt   = f"{rsi_val:.1f}" if not pd.isna(rsi_val) else "—"
+    dist_txt  = f'{s["dist_pct"]:+.2f}%'
+    alloc_txt = f'{s["target_alloc"]:.0f}%'
+    vol_txt   = f'{s["annual_vol"]:.1f}%'
 
     content = (
         f'<span style="color:{COL_TEXT};font-size:15px;font-weight:700;'
@@ -124,13 +127,13 @@ def _status_bar(s: dict, symbol: str, cfg: LeanConfig) -> str:
         f'{sep}'
         f'{lbl("Regime")}{chip(s["regime"], reg_col)}'
         f'{sep}'
-        f'{lbl("vs TL")}{chip(f\'{s["dist_pct"]:+.2f}%\', dist_col)}'
+        f'{lbl("vs TL")}{chip(dist_txt, dist_col)}'
         f'{sep}'
         f'{lbl("RSI")}{chip(rsi_txt, rsi_col)}'
         f'{sep}'
-        f'{lbl("Alloc")}{chip(f\'{s["target_alloc"]:.0f}%\', COL_BLUE)}'
+        f'{lbl("Alloc")}{chip(alloc_txt, COL_BLUE)}'
         f'{sep}'
-        f'{lbl("Vol")}{chip(f\'{s["annual_vol"]:.1f}%\', COL_DIM)}'
+        f'{lbl("Vol")}{chip(vol_txt, COL_DIM)}'
         f'{warnings}'
     )
     if cfg.use_btc_filter:
