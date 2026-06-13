@@ -296,7 +296,7 @@ def _build_price_chart(df: pd.DataFrame, symbol: str) -> go.Figure:
                         line=dict(color=COL_BG, width=1)),
             text=["B"] * len(bulls), textposition="bottom center",
             textfont=dict(color=COL_BG, size=8, family="monospace"),
-            name="BULL signal", legendgroup="signals",
+            name="BULL signal", showlegend=False,
             hovertemplate="▲ BULL  %{x|%Y-%m-%d}  $%{customdata:,.0f}<extra></extra>",
             customdata=bulls["close"],
         ), row=1, col=1)
@@ -308,7 +308,7 @@ def _build_price_chart(df: pd.DataFrame, symbol: str) -> go.Figure:
                         line=dict(color=COL_BG, width=1)),
             text=["S"] * len(bears), textposition="top center",
             textfont=dict(color=COL_BG, size=8, family="monospace"),
-            name="BEAR signal", legendgroup="signals",
+            name="BEAR signal", showlegend=False,
             hovertemplate="▼ BEAR  %{x|%Y-%m-%d}  $%{customdata:,.0f}<extra></extra>",
             customdata=bears["close"],
         ), row=1, col=1)
