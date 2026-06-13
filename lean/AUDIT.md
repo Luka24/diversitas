@@ -202,13 +202,16 @@ Empirično preverjeno: `signalChanged == (signalState != signalState[i-1])` za v
 ### 5.2 targetAlloc (Pine 167)
 | Pine | Python | Status |
 |---|---|---|
-| `targetAlloc = signalState == 1 ? math.round(math.max(0.0, math.min(100.0, 100.0 * volScale))) : 0` | `if cur_sig == S_BULL: target_alloc[i] = round(min(100.0, max(0.0, 100.0 * vol_scale))) else: target_alloc[i] = 0.0` | ⚠️ |
+| `targetAlloc = signalState == 1 ? math.round(math.max(0.0, math.min(100.0, 100.0 * volScale))) : 0` | `target_alloc[i] = 100.0 if cur_sig == S_BULL else 0.0` | ⚠️ |
 
-⚠️ **Drugi minor odstop:** Pine `math.round()` zaokroži pol stran od nič
-(0.5 → 1, -0.5 → -1). Python `round()` uporablja banker's rounding
-(0.5 → 0, 1.5 → 2). V praksi pomembno samo kadar `100 * vol_scale` točno
-pristane na ×.5. Razlika je največ 1 enota allokacije (npr. 50 % vs 51 %).
-Vizualni odstop, brez vpliva na signal.
+⚠️ **Namerni odstop (po user feedbacku):** Pine pomnoži vol-scale
+(`100 × volScale`) ko BULL, kar lahko da delno alokacijo (npr. 50 % ko je
+`annualVol = 2 × targetVol`). Python od commit-a `<binary-alloc>` dalje
+**popolnoma binarni**: 100 % ko BULL, 0 % ko BEAR. Pri tem `use_vol_sizing`
+in `target_vol_pct` v `LeanConfig` ostaneta (lahko bi se uporabila v
+prihodnjem position-sizing layerju), ampak `target_alloc` ju ne uporablja
+več. To samodejno odpravi Pine-jevo banker's-vs-away-from-zero `round()`
+neujemanje (več ni `round()` klica).
 
 ---
 

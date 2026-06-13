@@ -172,14 +172,20 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
     up_close = (close > close.shift(1)).astype(float)
     df["trend_persistence"] = up_close.rolling(10, min_periods=10).mean()
 
-    # --- Final vol-adjusted allocation ---
+    # --- Vol scale (kept for the dashboard volatility panel) ---
     vol_scale = np.where(
         df["annual_vol"] > 0,
         np.minimum(1.0, cfg.target_vol_pct / df["annual_vol"].replace(0, np.nan)),
         1.0,
     )
     df["vol_scale"] = vol_scale
-    df["final_alloc"] = (df["conviction"] * vol_scale * df["trend_persistence"]).clip(0.0, 100.0)
+    # Final allocation is BINARY (0 % or 100 %) — populated by the state
+    # machine from signal_state. Initialised here so the column exists.
+    # This is a DELIBERATE deviation from Pine: Pine's `finalAlloc` is the
+    # continuous `conviction * volScale * trendPersistence` value, which
+    # can be partial even when signalState == BEAR. We treat the signal as
+    # the source of truth and allocate either all-in or all-out.
+    df["final_alloc"] = 0.0
 
     # --- Dynamic threshold ---
     bear_penalty = np.where(df["bear_market"], 15.0, 0.0)
@@ -225,6 +231,9 @@ def run_state_machines(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
     below_count = np.zeros(n, dtype=np.int32)
     raw_hold = np.zeros(n, dtype=np.int32)
     signal_changed = np.zeros(n, dtype=bool)
+    # Binary allocation: 100 % when BULL, 0 % otherwise. See note in
+    # compute_features about the deliberate deviation from Pine.
+    final_alloc = np.zeros(n, dtype=np.float32)
 
     # Init mirrors Pine var defaults
     cur_raw = S_BEAR
@@ -313,6 +322,7 @@ def run_state_machines(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
         green_absent[i] = green_absent_c
         below_count[i] = below_c
         raw_hold[i] = raw_hold_c
+        final_alloc[i] = 100.0 if cur_sig == S_BULL else 0.0
 
     df = df.copy()
     df["raw_state"] = raw_state
@@ -323,6 +333,7 @@ def run_state_machines(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
     df["below_count"] = below_count
     df["raw_hold"] = raw_hold
     df["signal_changed"] = signal_changed
+    df["final_alloc"] = final_alloc  # overwrites the placeholder from compute_features
     return df
 
 

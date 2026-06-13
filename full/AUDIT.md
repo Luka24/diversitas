@@ -291,7 +291,7 @@ komponente, ki uporablja `wkEmaLen`. Dva razlikovalna weekly checka — by desig
 | Pine | Python | Status |
 |---|---|---|
 | `volScale = annualVol > 0 ? min(1, targetVol / annualVol) : 1.0` | `np.where(annual_vol > 0, min(1, target_vol_pct / annual_vol), 1.0)` | ✅ |
-| `finalAlloc = max(0, min(100, conviction * volScale * trendPersistence))` | `(conviction * vol_scale * trend_persistence).clip(0, 100)` | ✅ |
+| `finalAlloc = max(0, min(100, conviction * volScale * trendPersistence))` | `100.0 if signal_state == BULL else 0.0` (binary) | ⚠️ namerni odstop (glej §12) |
 
 ### Dynamic threshold (Pine 191–192)
 | Pine | Python | Status |
@@ -531,7 +531,18 @@ else:
 Pine vedno kliče `request.security`. Python doda check za `btc_daily=None`.
 Defenzivnost, ne posega v logiko.
 
-### ⚠️ Odstop #2 — volZ NaN handling (strategy.py:129)
+### ⚠️ Odstop #3 — `final_alloc` je BINARNI 0/100, ne kontinuiran
+
+Pine vrstica 188 računa `finalAlloc = conviction × volScale × trendPersistence`
+neodvisno od `signalState`. To pomeni, da je `finalAlloc` lahko npr. 0.7 %
+medtem ko je `signalState == BEAR` — vidno v dashboardu, zmedeno.
+
+Python od commit-a `<binary-alloc>` dalje: `final_alloc = 100.0 if signal_state == BULL else 0.0`.
+Signal je vir resnice; alokacija je all-in ali all-out. To je **namerna**
+odločitev po user feedbacku ("0 % ali 100 %"). `vol_scale` in
+`trend_persistence` še vedno obstajata kot ločeni stolpci za prikaz v dashboardu.
+
+### ⚠️ Odstop #4 — volZ NaN handling (strategy.py:129)
 
 Pine: ternary preverja `volStd100 > 0`.
 Python: division ki postane NaN ko je delitelj 0, nato `fillna(0)`.

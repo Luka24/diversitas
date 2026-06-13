@@ -180,15 +180,14 @@ def run_state_machine(df: pd.DataFrame, cfg: LeanConfig) -> pd.DataFrame:
             cur_disp = S_NEUTRAL
         # else: hold
 
-        # --- Allocation (additive, applied after signal) ---
-        if cur_sig == S_BULL:
-            if cfg.use_vol_sizing and annual_vol_arr[i] > 0:
-                vol_scale = min(1.0, cfg.target_vol_pct / annual_vol_arr[i])
-            else:
-                vol_scale = 1.0
-            target_alloc[i] = round(min(100.0, max(0.0, 100.0 * vol_scale)))
-        else:
-            target_alloc[i] = 0.0
+        # --- Allocation (BINARY 0 / 100) ---
+        # Deliberate deviation from Pine: Pine's targetAlloc is the
+        # vol-scaled `100 * volScale` value (e.g. 50 % when vol = 2× target).
+        # We treat the signal as the source of truth — fully in or fully
+        # out. `use_vol_sizing` and `target_vol_pct` are kept in Config for
+        # future use (e.g. position-sizing layers) but no longer modulate
+        # the dashboard's reported allocation.
+        target_alloc[i] = 100.0 if cur_sig == S_BULL else 0.0
 
         signal_changed[i] = (cur_sig != prev_sig)
         prev_sig = cur_sig
