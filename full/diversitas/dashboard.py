@@ -116,8 +116,11 @@ def _status_bar(s: dict, symbol: str, use_btc_filter: bool) -> str:
         warnings += (f'<span style="color:{COL_BEAR};font-weight:700;'
                      f'font-size:11px;margin-left:8px">⚠ VOL SHOCK</span>')
 
-    conv_txt = f'{s["conviction"]:.0f}'
-    thr_txt  = f'{s["threshold"]:.0f}'
+    conv_txt  = f'{s["conviction"]:.0f}'
+    thr_txt   = f'{s["threshold"]:.0f}'
+    dist_txt  = f'{s["dist_pct"]:+.2f}%'
+    alloc_txt = f"{alloc_val:.0f}%"
+    vol_txt   = f'{s["annual_vol"]:.1f}%'
 
     content = (
         f'<span style="color:{COL_TEXT};font-size:15px;font-weight:700;'
@@ -129,15 +132,15 @@ def _status_bar(s: dict, symbol: str, use_btc_filter: bool) -> str:
         f'{sep}'
         f'{lbl("Regime")}{chip(s["regime"], reg_col)}'
         f'{sep}'
-        f'{lbl("vs TL")}{chip(f\'{s["dist_pct"]:+.2f}%\', dist_col)}'
+        f'{lbl("vs TL")}{chip(dist_txt, dist_col)}'
         f'{sep}'
         f'{lbl("Conv")}{chip(conv_txt, COL_TEXT)}'
         f'<span style="color:{COL_DIM};font-size:11px"> / </span>'
         f'{chip(thr_txt, thr_col)}'
         f'{sep}'
-        f'{lbl("Alloc")}{chip(f"{alloc_val:.0f}%", COL_BLUE)}'
+        f'{lbl("Alloc")}{chip(alloc_txt, COL_BLUE)}'
         f'{sep}'
-        f'{lbl("Vol")}{chip(f\'{s["annual_vol"]:.1f}%\', COL_DIM)}'
+        f'{lbl("Vol")}{chip(vol_txt, COL_DIM)}'
         f'{warnings}'
     )
     if use_btc_filter:
