@@ -9,6 +9,7 @@ for p in (_PROJECT_ROOT, _VARIANT_ROOT):
     if str(p) not in sys.path:
         sys.path.insert(0, str(p))
 
+import datetime
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -643,22 +644,36 @@ def main() -> None:
             f"text-transform:uppercase;margin-bottom:16px'>Pro v3 · Live</div>",
             unsafe_allow_html=True,
         )
-        symbol         = st.selectbox("Symbol", list(DEFAULT_CONFIG.symbol_map.keys()), index=0)
-        bars           = st.slider("History (bars)", 400, 2000, 1000, 100)
-        use_btc_filter = st.checkbox("BTC cross-asset filter", value=(symbol != "BTC"),
-                                     help="Disable on BTC itself.")
+        symbol         = st.selectbox(
+            "Symbol", list(DEFAULT_CONFIG.symbol_map.keys()), index=0,
+            help="Asset to analyze. Data fetched from Binance (primary) or yfinance (fallback).",
+        )
+        use_btc_filter = st.checkbox(
+            "BTC cross-asset filter", value=(symbol != "BTC"),
+            help="When ON the strategy only signals BULL if BTC is also in a bull regime. "
+                 "Reduces false entries during broad crypto downturns. Disable on BTC itself.",
+        )
         st.divider()
         st.markdown(
             f"<div style='color:{COL_DIM};font-size:10px;text-transform:uppercase;"
             f"letter-spacing:1.2px;margin-bottom:6px'>Backtest window</div>",
             unsafe_allow_html=True,
         )
-        date_from = st.date_input("Od", value=None, format="YYYY-MM-DD")
-        date_to   = st.date_input("Do", value=None, format="YYYY-MM-DD")
+        _today = datetime.date.today()
+        date_from = st.date_input(
+            "Od", value=None, max_value=_today, format="YYYY-MM-DD",
+            help="Start date of the analysis window. Leave empty to use all available history.",
+        )
+        date_to = st.date_input(
+            "Do", value=_today, max_value=_today, format="YYYY-MM-DD",
+            help="End date of the analysis window. Defaults to today.",
+        )
         st.divider()
-        st.checkbox("Dark theme", value=True, key="full_dark_theme")
+        st.checkbox("Dark theme", value=True, key="full_dark_theme",
+                    help="Toggle between dark (TradingView-style) and light background.")
         dark_mode      = st.session_state.get("full_dark_theme", True)
-        auto_refresh   = st.checkbox("Auto-refresh (60 s)", value=True)
+        auto_refresh   = st.checkbox("Auto-refresh (60 s)", value=True,
+                                     help="Automatically reload data every 60 seconds.")
         if st.button("↺  Refresh now", type="primary", use_container_width=True):
             _load_candles.clear()
             _load_btc.clear()
@@ -672,6 +687,12 @@ def main() -> None:
 
     # Re-apply theme in case checkbox changed this run (takes effect next rerun for sidebar)
     _set_theme(dark_mode)
+
+    if date_from is not None:
+        _days = (datetime.date.today() - date_from).days + 200
+        bars  = max(600, ((_days // 100) + 1) * 100)
+    else:
+        bars = 2000
 
     try:
         cfg, daily, result = _run(symbol, bars, use_btc_filter)
@@ -697,10 +718,16 @@ def main() -> None:
     # ── price chart (full width) ──────────────────────────────────────────────
     st.plotly_chart(_build_price_chart(df, symbol), use_container_width=True)
 
-    # ── detail row: status + conviction breakdown ─────────────────────────────
-    left, right = st.columns([4, 6], gap="medium")
+    # ── detail row: status + exit gates + conviction breakdown ───────────────
+    left, mid, right = st.columns([3, 3, 6], gap="medium")
     with left:
-        st.markdown(_section_label("Status detail"), unsafe_allow_html=True)
+        st.markdown(
+            f'<div style="color:{COL_DIM};font-size:10px;text-transform:uppercase;'
+            f'letter-spacing:1.5px;margin:0 0 8px 0" '
+            f'title="Key indicator values as of the last bar in the selected window.">'
+            f'Status detail</div>',
+            unsafe_allow_html=True,
+        )
         ma_colour  = (COL_BEAR if s["bear_market"]
                       else COL_NEUTRAL if s["ma200_status"] == "BELOW" else COL_BULL)
         thr_colour = (COL_BEAR if s["threshold"] >= 70
@@ -741,6 +768,44 @@ def main() -> None:
         st.markdown(
             f'<div style="color:{COL_VERY_DIM};font-size:10px;margin-top:8px;'
             f'font-family:monospace">Last bar · {s["time"]:%Y-%m-%d %H:%M UTC}</div>',
+            unsafe_allow_html=True,
+        )
+    with mid:
+        st.markdown(
+            f'<div style="color:{COL_DIM};font-size:10px;text-transform:uppercase;'
+            f'letter-spacing:1.5px;margin:0 0 8px 0" '
+            f'title="If any exit gate becomes FAIL the conviction score has dropped '
+            f'below the dynamic threshold and the strategy exits to cash.">'
+            f'Exit gates · any FAIL triggers exit</div>',
+            unsafe_allow_html=True,
+        )
+        thr = s["threshold"]
+        conv = s["conviction"]
+        exit_gates = [
+            ("Conviction above threshold",
+             conv >= thr,
+             f"Conviction ({conv:.1f}) must stay above the dynamic threshold ({thr:.0f}). "
+             f"When it falls below, the trend is no longer strong enough to stay long."),
+            ("No bear market (200 MA)",
+             not s["bear_market"],
+             "A confirmed bear market forces an exit regardless of conviction. "
+             "The 200-day MA regime filter prevents holding through macro downturns."),
+            ("No blow-off top",
+             not s["blowoff"],
+             "A parabolic blow-off top triggers an exit — blow-offs historically precede "
+             "sharp and violent reversals."),
+            ("No volatility shock",
+             not s["vol_shock"],
+             "A sudden volatility spike (flash crash or black swan event) triggers an exit "
+             "to limit drawdown during chaotic conditions."),
+        ]
+        exit_html = "".join(
+            f'<div title="{tip}">{_gate_row(lbl, ok)}</div>'
+            for lbl, ok, tip in exit_gates
+        )
+        st.markdown(
+            f'<div style="background:{COL_PANEL};border:1px solid {COL_BORDER};'
+            f'border-radius:4px;overflow:hidden">{exit_html}</div>',
             unsafe_allow_html=True,
         )
     with right:
