@@ -109,6 +109,93 @@ def _compute_metrics(df: pd.DataFrame) -> dict:
     return {"strategy": _stats(strat_ret), "bh": _stats(bh_ret)}
 
 
+def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float) -> str:
+    strat = metrics["strategy"]
+    bh = metrics["bh"]
+    closed = [t for t in trades if not t["open"]]
+    n = len(closed)
+    wins = [t for t in closed if t["pnl_pct"] > 0]
+    wr = len(wins) / n * 100 if n else None
+    avg_pl = sum(t["pnl_pct"] for t in closed) / n if n else None
+    avg_d = sum(t["duration_days"] for t in closed) / n if n else None
+    best = max(closed, key=lambda t: t["pnl_pct"])["pnl_pct"] if closed else None
+    worst = min(closed, key=lambda t: t["pnl_pct"])["pnl_pct"] if closed else None
+    gross_profit = sum(t["pnl_pct"] for t in closed if t["pnl_pct"] > 0)
+    gross_loss = abs(sum(t["pnl_pct"] for t in closed if t["pnl_pct"] < 0))
+    pf = gross_profit / gross_loss if gross_loss > 1e-9 else None
+
+    def _card(label: str, value: str, colour: str,
+              bh_val: str = "", bh_col: str = "", tip: str = "") -> str:
+        bh_html = ""
+        if bh_val:
+            bh_html = (
+                f'<div style="margin-top:5px;font-size:11px;font-family:monospace">'
+                f'<span style="color:{COL_DIM}">B&H </span>'
+                f'<span style="color:{bh_col}">{bh_val}</span></div>'
+            )
+        return (
+            f'<div style="flex:1;background:{COL_PANEL};border:1px solid {COL_BORDER};'
+            f'border-radius:4px;padding:16px 10px;text-align:center;min-width:130px;cursor:help"'
+            f' title="{tip}">'
+            f'<div style="color:{COL_DIM};font-size:9px;text-transform:uppercase;'
+            f'letter-spacing:1.2px;margin-bottom:8px">{label}</div>'
+            f'<div style="color:{colour};font-size:24px;font-weight:700;'
+            f'font-family:monospace;line-height:1.1">{value}</div>'
+            f'{bh_html}</div>'
+        )
+
+    row1 = [
+        _card("CAGR", _fmt_pct(strat["cagr"]), _val_col(strat["cagr"]),
+              _fmt_pct(bh["cagr"]), _val_col(bh["cagr"]),
+              "Compound Annual Growth Rate"),
+        _card("Sharpe", _fmt_ratio(strat["sharpe"]), _val_col(strat["sharpe"]),
+              _fmt_ratio(bh["sharpe"]), _val_col(bh["sharpe"]),
+              "Risk-adjusted return (return / volatility)"),
+        _card("Sortino", _fmt_ratio(strat["sortino"]), _val_col(strat["sortino"]),
+              _fmt_ratio(bh["sortino"]), _val_col(bh["sortino"]),
+              "Return / downside volatility only"),
+        _card("Max Drawdown", _fmt_pct(strat["max_dd"]),
+              _val_col(strat["max_dd"], positive_good=False),
+              _fmt_pct(bh["max_dd"]), _val_col(bh["max_dd"], positive_good=False),
+              "Largest peak-to-trough equity decline"),
+        _card("Calmar", _fmt_ratio(strat["calmar"]), _val_col(strat["calmar"]),
+              _fmt_ratio(bh["calmar"]), _val_col(bh["calmar"]),
+              "CAGR / |Max Drawdown|"),
+        _card("Win Rate",
+              f"{wr:.0f}%" if wr is not None else "—",
+              COL_BULL if (wr or 0) >= 50 else COL_NEUTRAL if (wr or 0) >= 40 else COL_BEAR,
+              tip="Winning trades / total trades"),
+    ]
+    row2 = [
+        _card("Profit Factor",
+              _fmt_ratio(pf) if pf is not None else "—",
+              _val_col(pf) if pf is not None else COL_TEXT,
+              tip="Gross profit / gross loss"),
+        _card("Trades", str(n) if n else "—", COL_TEXT,
+              tip="Completed round-trip trades"),
+        _card("Avg P&L",
+              f"{avg_pl:+.2f}%" if avg_pl is not None else "—",
+              _val_col(avg_pl), tip="Average profit/loss per trade"),
+        _card("Avg Duration",
+              f"{avg_d:.0f}d" if avg_d is not None else "—", COL_TEXT,
+              tip="Average holding period in days"),
+        _card("Best / Worst",
+              f"{best:+.0f}% / {worst:+.0f}%" if best is not None else "—",
+              COL_TEXT, tip="Best and worst single-trade P&amp;L"),
+        _card("Exposure", f"{exposure:.0f}%", COL_BLUE,
+              tip="Time invested (BULL signal active)"),
+    ]
+
+    def _row_html(cards: list[str]) -> str:
+        return (f'<div style="display:flex;gap:10px;flex-wrap:wrap">'
+                f'{"".join(cards)}</div>')
+
+    return (
+        f'<div style="margin:8px 0 14px 0;display:flex;flex-direction:column;gap:10px">'
+        f'{_row_html(row1)}{_row_html(row2)}</div>'
+    )
+
+
 # ── shared chart style ────────────────────────────────────────────────────────
 
 def _chart_layout(fig: go.Figure, height: int) -> None:
@@ -437,7 +524,7 @@ def _build_equity_chart(metrics: dict) -> go.Figure:
         name="Drawdown %", hovertemplate="DD %{y:.1f}%<extra></extra>",
     ), row=2, col=1)
 
-    _chart_layout(fig, height=340)
+    _chart_layout(fig, height=420)
     fig.update_layout(title=dict(
         text=f'<span style="color:{COL_DIM};font-size:11px;text-transform:uppercase;letter-spacing:1px">Equity curve · strategy vs buy & hold (indexed to 100)</span>',
         x=0.01, y=0.99))
@@ -469,106 +556,6 @@ def _val_col(v, positive_good: bool = True) -> str:
         return COL_TEXT
     good = v > 0 if positive_good else v < 0
     return COL_BULL if good else COL_BEAR
-
-
-def _render_metrics_panel(metrics: dict, trades: list[dict]) -> str:
-    strat  = metrics["strategy"]
-    bh     = metrics["bh"]
-    closed = [t for t in trades if not t["open"]]
-    n      = len(closed)
-    wins   = [t for t in closed if t["pnl_pct"] > 0]
-    wr     = len(wins) / n * 100 if n else None
-    avg_pl = sum(t["pnl_pct"] for t in closed) / n if n else None
-    avg_d  = sum(t["duration_days"] for t in closed) / n if n else None
-    best   = max(closed, key=lambda t: t["pnl_pct"])["pnl_pct"] if closed else None
-    worst  = min(closed, key=lambda t: t["pnl_pct"])["pnl_pct"] if closed else None
-
-    rows_def = [
-        # (label, strat_val, strat_col, bh_val, bh_col, tooltip)
-        ("CAGR",
-         _fmt_pct(strat.get("cagr")), _val_col(strat.get("cagr")),
-         _fmt_pct(bh.get("cagr")),   _val_col(bh.get("cagr")),
-         "Compound Annual Growth Rate — annualised return over the selected period. "
-         "Formula: (final_equity / initial_equity)^(1/years) − 1. "
-         "Accounts for compounding; a 10% CAGR doubles capital in ~7 years."),
-        ("Sharpe Ratio",
-         _fmt_ratio(strat.get("sharpe")), _val_col(strat.get("sharpe")),
-         _fmt_ratio(bh.get("sharpe")),    _val_col(bh.get("sharpe")),
-         "Sharpe Ratio — risk-adjusted return relative to total volatility. "
-         "Formula: annualised_return / annualised_std_dev (0% risk-free rate assumed). "
-         "Above 1.0 is generally considered good; above 2.0 is excellent."),
-        ("Sortino Ratio",
-         _fmt_ratio(strat.get("sortino")), _val_col(strat.get("sortino")),
-         _fmt_ratio(bh.get("sortino")),    _val_col(bh.get("sortino")),
-         "Sortino Ratio — like Sharpe but penalises only downside volatility (negative returns). "
-         "Formula: annualised_return / downside_std_dev. "
-         "Better metric for asymmetric profiles where upside volatility is welcome."),
-        ("Max Drawdown",
-         _fmt_pct(strat.get("max_dd")), _val_col(strat.get("max_dd"), positive_good=False),
-         _fmt_pct(bh.get("max_dd")),    _val_col(bh.get("max_dd"),    positive_good=False),
-         "Maximum peak-to-trough equity decline during the selected period. "
-         "Formula: min(equity / cumulative_max(equity) − 1). "
-         "Smaller absolute value = better capital protection. Key risk metric."),
-        ("Calmar Ratio",
-         _fmt_ratio(strat.get("calmar")), _val_col(strat.get("calmar")),
-         _fmt_ratio(bh.get("calmar")),    _val_col(bh.get("calmar")),
-         "Calmar Ratio — CAGR divided by absolute Max Drawdown. "
-         "Formula: CAGR / |Max Drawdown|. "
-         "Measures return earned per unit of worst-case loss. Above 1.0 is solid."),
-        ("Total Trades",
-         str(n) if n else "—",            COL_TEXT,
-         "—",                             COL_VERY_DIM,
-         "Number of completed (closed) round-trip trades in the selected window. "
-         "Open positions are not counted here."),
-        ("Win Rate",
-         f"{wr:.0f}%" if wr is not None else "—",
-         COL_BULL if (wr or 0) >= 50 else COL_NEUTRAL if (wr or 0) >= 40 else COL_BEAR,
-         "—", COL_VERY_DIM,
-         "Percentage of closed trades with a positive P&L. "
-         "Formula: winning_trades / total_trades × 100. "
-         "A strategy can be profitable below 50% win rate if winners are larger than losers."),
-        ("Avg Trade P&L",
-         f"{avg_pl:+.2f}%" if avg_pl is not None else "—",
-         _val_col(avg_pl),
-         "—", COL_VERY_DIM,
-         "Average profit or loss per closed trade, in %. "
-         "Formula: sum(all trade P&Ls) / number_of_trades. "
-         "Positive value means the strategy earns money on average per trade."),
-        ("Avg Duration",
-         f"{avg_d:.0f} d" if avg_d is not None else "—", COL_TEXT,
-         "—", COL_VERY_DIM,
-         "Average holding duration per trade in calendar days. "
-         "Longer average duration indicates the strategy captures bigger trend moves."),
-        ("Best / Worst",
-         f"{best:+.1f}%  /  {worst:+.1f}%" if best is not None else "—",
-         COL_TEXT, "—", COL_VERY_DIM,
-         "Best single-trade P&L and worst single-trade P&L in the selected window. "
-         "A large gap between best and worst signals high variance in individual trade outcomes."),
-    ]
-
-    hdr = (
-        f'<tr>'
-        f'<th style="padding:8px 14px;color:{COL_DIM};font-size:10px;text-transform:uppercase;letter-spacing:0.8px;text-align:left;border-bottom:2px solid {COL_BORDER}">Metric</th>'
-        f'<th style="padding:8px 14px;color:{COL_BULL};font-size:10px;text-transform:uppercase;letter-spacing:0.8px;text-align:right;border-bottom:2px solid {COL_BORDER}">Strategy</th>'
-        f'<th style="padding:8px 14px;color:{COL_DIM};font-size:10px;text-transform:uppercase;letter-spacing:0.8px;text-align:right;border-bottom:2px solid {COL_BORDER}">Buy & Hold</th>'
-        f'</tr>'
-    )
-    body = "".join(
-        f'<tr style="border-bottom:1px solid {COL_BORDER};cursor:help" title="{tip}">'
-        f'<td style="padding:8px 14px;color:{COL_DIM};font-size:11px">{lbl}</td>'
-        f'<td style="padding:8px 14px;color:{sc};font-size:13px;font-weight:600;font-family:monospace;text-align:right">{sv}</td>'
-        f'<td style="padding:8px 14px;color:{bc};font-size:12px;font-family:monospace;text-align:right">{bv}</td>'
-        f'</tr>'
-        for lbl, sv, sc, bv, bc, tip in rows_def
-    )
-    return (
-        f'<div style="background:{COL_PANEL};border:1px solid {COL_BORDER};'
-        f'border-radius:4px;overflow:hidden">'
-        f'<table style="width:100%;border-collapse:collapse">'
-        f'<thead><tr>{hdr}</tr></thead>'
-        f'<tbody>{body}</tbody>'
-        f'</table></div>'
-    )
 
 
 # ── trade ledger ──────────────────────────────────────────────────────────────
@@ -735,14 +722,30 @@ def main() -> None:
             unsafe_allow_html=True,
         )
         _today = datetime.date.today()
-        date_from = st.date_input(
-            "Od", value=None, max_value=_today, format="YYYY-MM-DD",
-            help="Start date of the analysis window. Leave empty to use all available history.",
+        _period = st.selectbox(
+            "Period", ["All time", "2 years", "1 year", "Year to date",
+                       "6 months", "3 months", "Custom"],
+            index=0, label_visibility="collapsed",
+            help="Quick period selector. Choose 'Custom' to set exact Od/Do dates.",
         )
-        date_to = st.date_input(
-            "Do", value=_today, max_value=_today, format="YYYY-MM-DD",
-            help="End date of the analysis window. Defaults to today.",
-        )
+        _period_days = {"2 years": 730, "1 year": 365, "6 months": 180, "3 months": 90}
+        if _period == "Custom":
+            date_from = st.date_input(
+                "Od", value=None, max_value=_today, format="YYYY-MM-DD",
+                help="Start date of the analysis window.",
+            )
+            date_to = st.date_input(
+                "Do", value=_today, max_value=_today, format="YYYY-MM-DD",
+                help="End date of the analysis window.",
+            )
+        elif _period == "All time":
+            date_from, date_to = None, _today
+        elif _period == "Year to date":
+            date_from = datetime.date(_today.year, 1, 1)
+            date_to = _today
+        else:
+            date_from = _today - datetime.timedelta(days=_period_days[_period])
+            date_to = _today
         st.divider()
         st.checkbox("Dark theme", value=True, key="full_dark_theme",
                     help="Toggle between dark (TradingView-style) and light background.")
@@ -784,89 +787,68 @@ def main() -> None:
         st.warning("No data in the selected date range — widen the window.")
         st.stop()
     s = build_summary(df)
-    trades  = _build_trade_ledger(df)
-    metrics = _compute_metrics(df)
+    trades   = _build_trade_ledger(df)
+    metrics  = _compute_metrics(df)
+    exposure = (df["signal_state"].shift(1) == S_BULL).mean() * 100
 
     # ── status bar ────────────────────────────────────────────────────────────
     st.markdown(_status_bar(s, symbol, use_btc_filter), unsafe_allow_html=True)
 
+    # ── KPI hero cards ────────────────────────────────────────────────────────
+    st.markdown(_render_kpi_cards(metrics, trades, exposure), unsafe_allow_html=True)
+
     # ── price chart (full width) ──────────────────────────────────────────────
     st.plotly_chart(_build_price_chart(df, symbol), use_container_width=True)
 
-    # ── detail row: status + exit gates + conviction breakdown ───────────────
+    # ── detail row: entry gates + exit gates + conviction breakdown ────────────
+    last = df.iloc[-1]
     left, mid, right = st.columns([3, 3, 6], gap="medium")
     with left:
         st.markdown(
             f'<div style="color:{COL_DIM};font-size:10px;text-transform:uppercase;'
             f'letter-spacing:1.5px;margin:0 0 8px 0" '
-            f'title="Key indicator values as of the last bar in the selected window.">'
-            f'Status detail</div>',
+            f'title="All entry conditions must be PASS simultaneously for a BULL signal.">'
+            f'Entry gates · all must PASS for BULL</div>',
             unsafe_allow_html=True,
         )
-        ma_colour  = (COL_BEAR if s["bear_market"]
-                      else COL_NEUTRAL if s["ma200_status"] == "BELOW" else COL_BULL)
-        thr_colour = (COL_BEAR if s["threshold"] >= 70
-                      else COL_BULL if s["threshold"] <= 55 else COL_NEUTRAL)
-        tl_colour  = COL_BULL if s["track_rising"] else COL_BEAR
-        tq         = s["trend_quality_pct"]
-        vol_label  = "HIGH" if s["high_vol_regime"] else "LOW" if s["low_vol_regime"] else "NORMAL"
-        vol_colour = COL_BEAR if s["high_vol_regime"] else COL_BULL if s["low_vol_regime"] else COL_DIM
-
-        detail_rows = [
-            _row("200 MA",           s["ma200_status"], ma_colour,
-                 "200-day moving average regime. ABOVE = price in long-term bull zone (entries allowed). "
-                 "BELOW = caution, entries are harder. BEAR MKT = confirmed downtrend; dynamic threshold "
-                 "rises by +15 making signals much harder to achieve."),
-            _row("Conviction / Thr", f'{s["conviction"]:.1f}  ·  {s["threshold"]:.0f}', thr_colour,
-                 "Conviction score (left) vs dynamic threshold (right). Conviction is a 0-100 composite "
-                 "of trend quality, momentum persistence, and volatility regime. "
-                 "Signal is BULL when conviction > threshold; BEAR when it falls below."),
-            _row("Trackline",        f'${s["trackline"]:,.0f}  {"RISING" if s["track_rising"] else "FALLING"}', tl_colour,
-                 "Current trackline price level and direction. The trackline is an adaptive support line. "
-                 "RISING = trend momentum building. FALLING = trend weakening. "
-                 "Price below the trackline contributes to lower conviction."),
-            _row("Trend quality",    f"{tq:.0f}%",
-                 COL_BULL if tq >= 60 else COL_NEUTRAL if tq >= 40 else COL_BEAR,
-                 "Trend persistence score (0-100%). Measures what fraction of recent bars closed "
-                 "above their respective moving averages and in the trend direction. "
-                 "High quality (>60%) strongly supports BULL signal."),
-            _row("Annual vol",       f'{s["annual_vol"]:.1f}%  {vol_label}', vol_colour,
-                 "Annualised 30-day rolling volatility of daily returns (std × √365). "
-                 "HIGH = volatile regime, threshold raised, harder to stay long. "
-                 "LOW = calm market, threshold lowered, continuation favoured."),
-            _row("Efficiency Ratio",
-                 f'{s["er"]:.2f}  {"TREND" if s["er_ok"] else "CHOP"}',
-                 COL_BULL if s["er_ok"] else COL_BEAR,
-                 "Kaufman Efficiency Ratio over 10 bars. "
-                 "Formula: |close − close[10]| / sum(|daily changes|, 10). "
-                 "TREND (≥ 0.30) = directional move, entries allowed. "
-                 "CHOP (< 0.30) = sideways noise, entries blocked (when filter ON)."),
+        conv_val = float(last["conviction"])
+        thr_val = float(last["dynamic_threshold"])
+        er_val = float(last["er"]) if pd.notna(last["er"]) else 0.0
+        entry_gates = [
+            ("Above trackline + buffer",
+             bool(last["above_tl"]),
+             "Price must be above the Kijun trackline plus the buffer zone."),
+            (f"Conviction >= threshold ({conv_val:.0f} / {thr_val:.0f})",
+             conv_val >= thr_val,
+             f"Conviction ({conv_val:.1f}) must exceed threshold ({thr_val:.0f})."),
+            ("ADX above mean (trend strength)",
+             bool(last["adx_ok"]),
+             "ADX must be above its 100-bar average, confirming trending conditions."),
+            ("Market structure bullish (HH > LL)",
+             bool(last["structure_bull"]),
+             "Recent higher highs must be more recent than lower lows."),
+            ("HTF bull (weekly > EMA 20)",
+             bool(last["htf_bull"]),
+             "Weekly close must be above the 20-week EMA for macro confirmation."),
+            ("No bear market (200 MA)",
+             not bool(last["bear_market"]),
+             "200 MA must not be falling with price below — blocks entries in downtrends."),
+            (f"ER {er_val:.2f}  {'TREND' if s['er_ok'] else 'CHOP'}",
+             bool(last["er_ok"]),
+             f"Efficiency Ratio must be above {cfg.er_thresh:.2f} (trending)."),
         ]
         if use_btc_filter:
-            detail_rows.append(_row("BTC filter",
-                                    "BTC BULL" if s["btc_bull"] else "BTC BEAR",
-                                    COL_BULL if s["btc_bull"] else COL_BEAR,
-                                    "BTC cross-asset regime filter. BULL = BTC above its trackline (entries allowed). "
-                                    "BEAR = BTC in downtrend; entries are blocked to avoid broad crypto market risk."))
+            entry_gates.append((
+                "BTC bull (cross-asset)",
+                bool(last["btc_filter_ok"]),
+                "BTC must be in a bull regime for altcoin entries."))
+        gate_html = "".join(
+            f'<div title="{tip}">{_gate_row(lbl, ok)}</div>'
+            for lbl, ok, tip in entry_gates
+        )
         st.markdown(
             f'<div style="background:{COL_PANEL};border:1px solid {COL_BORDER};'
-            f'border-radius:4px;padding:4px 16px">{"".join(detail_rows)}</div>',
-            unsafe_allow_html=True,
-        )
-        wrn = []
-        if s["blowoff"]:   wrn.append("BLOW-OFF top")
-        if s["vol_shock"]: wrn.append("Volatility shock")
-        if wrn:
-            st.markdown(
-                f'<div style="background:{COL_PANEL};border:1px solid {COL_BEAR};'
-                f'border-radius:4px;padding:9px 14px;margin-top:8px;'
-                f'color:{COL_BEAR};font-size:12px;font-weight:700;'
-                f'letter-spacing:0.5px;text-transform:uppercase">{"  ·  ".join(wrn)}</div>',
-                unsafe_allow_html=True,
-            )
-        st.markdown(
-            f'<div style="color:{COL_VERY_DIM};font-size:10px;margin-top:8px;'
-            f'font-family:monospace">Last bar · {s["time"]:%Y-%m-%d %H:%M UTC}</div>',
+            f'border-radius:4px;overflow:hidden">{gate_html}</div>',
             unsafe_allow_html=True,
         )
     with mid:
@@ -910,13 +892,9 @@ def main() -> None:
     with right:
         st.plotly_chart(_build_breakdown_chart(df), use_container_width=True)
 
-    # ── performance: metrics table + equity curve ─────────────────────────────
+    # ── performance: equity curve (full width) ──────────────────────────────────
     st.markdown(_section_label("Performance · strategy vs buy & hold"), unsafe_allow_html=True)
-    m_col, eq_col = st.columns([35, 65], gap="medium")
-    with m_col:
-        st.markdown(_render_metrics_panel(metrics, trades), unsafe_allow_html=True)
-    with eq_col:
-        st.plotly_chart(_build_equity_chart(metrics), use_container_width=True)
+    st.plotly_chart(_build_equity_chart(metrics), use_container_width=True)
 
     # ── trade ledger ──────────────────────────────────────────────────────────
     n_trades = len(trades)
