@@ -84,7 +84,7 @@ def _compute_metrics(df: pd.DataFrame) -> dict:
     close = df["close"]
     ret   = close.pct_change().fillna(0.0)
     sig   = df["signal_state"]
-    strat_ret = ret * (sig == S_BULL).astype(float)
+    strat_ret = ret * (sig.shift(1) == S_BULL).astype(float)
     bh_ret    = ret.copy()
 
     def _stats(r: pd.Series) -> dict:
@@ -154,6 +154,21 @@ def _section_label(txt: str) -> str:
     return (
         f'<div style="color:{COL_DIM};font-size:10px;text-transform:uppercase;'
         f'letter-spacing:1.5px;margin:18px 0 8px 0">{txt}</div>'
+    )
+
+
+def _gate_row(label: str, passed: bool) -> str:
+    icon = "PASS" if passed else "FAIL"
+    col  = COL_BULL if passed else COL_BEAR
+    bg   = f"{COL_BULL}11" if passed else f"{COL_BEAR}11"
+    return (
+        f'<div style="display:flex;justify-content:space-between;align-items:center;'
+        f'padding:8px 12px;border-bottom:1px solid {COL_BORDER};background:{bg}">'
+        f'<span style="color:{COL_TEXT};font-size:11px">{label}</span>'
+        f'<span style="background:{col}22;color:{col};padding:2px 10px;'
+        f'border-radius:3px;font-size:10px;font-weight:700;'
+        f'letter-spacing:0.5px;font-family:monospace">{icon}</span>'
+        f'</div>'
     )
 
 
@@ -319,26 +334,26 @@ def _build_price_chart(df: pd.DataFrame, symbol: str) -> go.Figure:
     bears   = changes[changes["signal_state"] == S_BEAR]
     if len(bulls):
         fig.add_trace(go.Scatter(
-            x=bulls.index, y=bulls["low"] * 0.957,
+            x=bulls.index, y=bulls["low"] * 0.940,
             mode="markers+text",
-            marker=dict(color=COL_BULL, size=14, symbol="triangle-up",
-                        line=dict(color=COL_BG, width=1)),
-            text=["B"] * len(bulls), textposition="bottom center",
-            textfont=dict(color=COL_BG, size=8, family="monospace"),
+            marker=dict(color=COL_BULL, size=22, symbol="triangle-up",
+                        line=dict(color="white", width=2)),
+            text=["BUY"] * len(bulls), textposition="bottom center",
+            textfont=dict(color=COL_BULL, size=11, family="monospace"),
             name="BULL signal", showlegend=False,
-            hovertemplate="▲ BULL  %{x|%Y-%m-%d}  $%{customdata:,.0f}<extra></extra>",
+            hovertemplate="▲ BUY  %{x|%Y-%m-%d}  $%{customdata:,.0f}<extra></extra>",
             customdata=bulls["close"],
         ), row=1, col=1)
     if len(bears):
         fig.add_trace(go.Scatter(
-            x=bears.index, y=bears["high"] * 1.043,
+            x=bears.index, y=bears["high"] * 1.060,
             mode="markers+text",
-            marker=dict(color=COL_BEAR, size=14, symbol="triangle-down",
-                        line=dict(color=COL_BG, width=1)),
-            text=["S"] * len(bears), textposition="top center",
-            textfont=dict(color=COL_BG, size=8, family="monospace"),
+            marker=dict(color=COL_BEAR, size=22, symbol="triangle-down",
+                        line=dict(color="white", width=2)),
+            text=["SELL"] * len(bears), textposition="top center",
+            textfont=dict(color=COL_BEAR, size=11, family="monospace"),
             name="BEAR signal", showlegend=False,
-            hovertemplate="▼ BEAR  %{x|%Y-%m-%d}  $%{customdata:,.0f}<extra></extra>",
+            hovertemplate="▼ SELL  %{x|%Y-%m-%d}  $%{customdata:,.0f}<extra></extra>",
             customdata=bears["close"],
         ), row=1, col=1)
 
@@ -593,7 +608,7 @@ def _build_trade_ledger(df: pd.DataFrame) -> list[dict]:
 def _trades_to_csv(trades: list[dict]) -> bytes:
     if not trades:
         cols = ["entry_date", "exit_date", "entry_px", "exit_px",
-                "duration_days", "pnl_pct", "exit_reason", "open"]
+                "duration_days", "pnl_pct", "open"]
         return pd.DataFrame(columns=cols).to_csv(index=False).encode("utf-8")
     rows = [
         {
@@ -603,7 +618,6 @@ def _trades_to_csv(trades: list[dict]) -> bytes:
             "exit_px":       round(t["exit_px"], 2),
             "duration_days": t["duration_days"],
             "pnl_pct":       round(t["pnl_pct"], 2),
-            "exit_reason":   t["exit_reason"],
             "open":          t["open"],
         }
         for t in trades

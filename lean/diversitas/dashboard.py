@@ -84,7 +84,7 @@ def _compute_metrics(df: pd.DataFrame) -> dict:
     close     = df["close"]
     ret       = close.pct_change().fillna(0.0)
     sig       = df["signal_state"]
-    strat_ret = ret * (sig == S_BULL).astype(float)
+    strat_ret = ret * (sig.shift(1) == S_BULL).astype(float)
     bh_ret    = ret.copy()
 
     def _stats(r: pd.Series) -> dict:
@@ -349,26 +349,26 @@ def _build_price_chart(df: pd.DataFrame, symbol: str) -> go.Figure:
     bears   = changes[changes["signal_state"] == S_BEAR]
     if len(bulls):
         fig.add_trace(go.Scatter(
-            x=bulls.index, y=bulls["low"] * 0.957,
+            x=bulls.index, y=bulls["low"] * 0.940,
             mode="markers+text",
-            marker=dict(color=COL_BULL, size=14, symbol="triangle-up",
-                        line=dict(color=COL_BG, width=1)),
-            text=["B"] * len(bulls), textposition="bottom center",
-            textfont=dict(color=COL_BG, size=8, family="monospace"),
+            marker=dict(color=COL_BULL, size=22, symbol="triangle-up",
+                        line=dict(color="white", width=2)),
+            text=["BUY"] * len(bulls), textposition="bottom center",
+            textfont=dict(color=COL_BULL, size=11, family="monospace"),
             name="BULL signal", showlegend=False,
-            hovertemplate="▲ BULL  %{x|%Y-%m-%d}  $%{customdata:,.0f}<extra></extra>",
+            hovertemplate="▲ BUY  %{x|%Y-%m-%d}  $%{customdata:,.0f}<extra></extra>",
             customdata=bulls["close"],
         ), row=1, col=1)
     if len(bears):
         fig.add_trace(go.Scatter(
-            x=bears.index, y=bears["high"] * 1.043,
+            x=bears.index, y=bears["high"] * 1.060,
             mode="markers+text",
-            marker=dict(color=COL_BEAR, size=14, symbol="triangle-down",
-                        line=dict(color=COL_BG, width=1)),
-            text=["S"] * len(bears), textposition="top center",
-            textfont=dict(color=COL_BG, size=8, family="monospace"),
+            marker=dict(color=COL_BEAR, size=22, symbol="triangle-down",
+                        line=dict(color="white", width=2)),
+            text=["SELL"] * len(bears), textposition="top center",
+            textfont=dict(color=COL_BEAR, size=11, family="monospace"),
             name="BEAR signal", showlegend=False,
-            hovertemplate="▼ BEAR  %{x|%Y-%m-%d}  $%{customdata:,.0f}<extra></extra>",
+            hovertemplate="▼ SELL  %{x|%Y-%m-%d}  $%{customdata:,.0f}<extra></extra>",
             customdata=bears["close"],
         ), row=1, col=1)
 
