@@ -217,7 +217,7 @@ def _chart_layout(fig: go.Figure, height: int) -> None:
     )
     fig.update_xaxes(
         gridcolor=COL_GRID, zerolinecolor=COL_GRID,
-        tickfont=dict(color=COL_DIM, size=10),
+        tickfont=dict(color=COL_TEXT, size=14),
         showspikes=True, spikecolor=COL_DIM, spikethickness=1, spikedash="dot",
     )
 
@@ -506,15 +506,167 @@ def _build_equity_chart(metrics: dict) -> go.Figure:
     ), row=2, col=1)
 
     _chart_layout(fig, height=420)
-    fig.update_layout(title=dict(
-        text=f'<span style="color:{COL_DIM};font-size:11px;text-transform:uppercase;letter-spacing:1px">Equity curve · strategy vs buy & hold (indexed to 100)</span>',
-        x=0.01, y=0.99))
+    fig.update_layout(margin=dict(t=56), title=dict(
+        text=f'<span style="color:{COL_TEXT};font-size:12px;text-transform:uppercase;letter-spacing:1px">Equity curve · strategy vs buy & hold (indexed to 100)</span>',
+        x=0.01, y=0.98, yanchor="top"))
+    fig.update_xaxes(dtick="M3", tickformat="%b\n%Y")
     fig.update_yaxes(gridcolor=COL_GRID, tickfont=dict(color=COL_DIM, size=10),
                      side="right", title_text="Equity",
                      title_font=dict(color=COL_DIM, size=10), row=1, col=1)
     fig.update_yaxes(gridcolor=COL_GRID, tickfont=dict(color=COL_DIM, size=10),
                      side="right", title_text="DD %",
                      title_font=dict(color=COL_BEAR, size=10), row=2, col=1)
+    return fig
+
+
+# ── analytics charts ──────────────────────────────────────────────────────────
+
+def _build_monthly_heatmap(df: pd.DataFrame) -> go.Figure:
+    ret = df["close"].pct_change().fillna(0.0)
+    strat_ret = ret * (df["signal_state"].shift(1) == S_BULL).astype(float)
+    monthly = strat_ret.resample("M").apply(lambda x: (1 + x).prod() - 1) * 100
+    years = sorted(monthly.index.year.unique())
+    mlabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+               "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    z, txt = [], []
+    for y in years:
+        rz, rt = [], []
+        for m in range(1, 13):
+            vals = monthly[(monthly.index.year == y) & (monthly.index.month == m)]
+            if len(vals):
+                v = float(vals.iloc[0])
+                rz.append(v); rt.append(f"{v:+.1f}%")
+            else:
+                rz.append(None); rt.append("")
+        z.append(rz); txt.append(rt)
+    flat = [v for row in z for v in row if v is not None]
+    zmax = max(abs(v) for v in flat) if flat else 10
+    fig = go.Figure(data=go.Heatmap(
+        z=z, x=mlabels, y=[str(y) for y in years],
+        text=txt, texttemplate="%{text}",
+        textfont=dict(size=10, color=COL_TEXT),
+        colorscale=[[0, COL_BEAR], [0.5, COL_BG], [1, COL_BULL]],
+        zmin=-zmax, zmax=zmax, showscale=False,
+        hovertemplate="%{y} %{x}: %{text}<extra></extra>",
+    ))
+    _chart_layout(fig, height=max(200, len(years) * 34 + 80))
+    fig.update_layout(
+        margin=dict(t=56),
+        title=dict(
+            text=f'<span style="color:{COL_TEXT};font-size:12px;text-transform:uppercase;'
+                 f'letter-spacing:1px">Monthly returns · strategy (%)</span>',
+            x=0.01, y=0.98, yanchor="top"),
+        yaxis=dict(autorange="reversed"),
+    )
+    fig.update_xaxes(side="top", tickfont=dict(color=COL_DIM, size=9))
+    fig.update_yaxes(tickfont=dict(color=COL_DIM, size=10))
+    return fig
+
+
+def _build_signal_timeline(df: pd.DataFrame) -> go.Figure:
+    fig = go.Figure()
+    sig = df["signal_state"]
+    grp = (sig != sig.shift(1)).cumsum()
+    shown: set = set()
+    for _, seg in df.groupby(grp):
+        state = int(seg["signal_state"].iloc[0])
+        col = COL_BULL if state == S_BULL else COL_BEAR
+        label = "BULL" if state == S_BULL else "BEAR"
+        fig.add_trace(go.Scatter(
+            x=[seg.index[0], seg.index[-1]], y=[1, 1],
+            mode="lines", line=dict(color=col, width=28),
+            name=label, showlegend=(state not in shown),
+            legendgroup=label,
+            hovertemplate=f"{label}  %{{x|%Y-%m-%d}}<extra></extra>",
+        ))
+        shown.add(state)
+    _chart_layout(fig, height=130)
+    fig.update_yaxes(visible=False, range=[0.5, 1.5])
+    fig.update_xaxes(dtick="M3", tickformat="%b\n%Y", tickfont=dict(color=COL_TEXT, size=12))
+    fig.update_layout(margin=dict(l=0, r=70, t=10, b=30), showlegend=False)
+    return fig
+
+
+def _build_rolling_sharpe(df: pd.DataFrame) -> go.Figure:
+    ret = df["close"].pct_change().fillna(0.0)
+    strat_ret = ret * (df["signal_state"].shift(1) == S_BULL).astype(float)
+    window = 90
+    rm = strat_ret.rolling(window, min_periods=window).mean() * TRADING_DAYS
+    rs = strat_ret.rolling(window, min_periods=window).std() * np.sqrt(TRADING_DAYS)
+    sharpe = (rm / rs).replace([np.inf, -np.inf], np.nan).dropna()
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=sharpe.index, y=sharpe, mode="lines",
+        line=dict(color=COL_BLUE, width=1.5),
+        fill="tozeroy", fillcolor="rgba(41,98,255,0.08)",
+        name="Rolling 90d Sharpe",
+        hovertemplate="Sharpe %{y:.2f}<extra></extra>",
+    ))
+    fig.add_hline(y=0, line_dash="dash", line_color=COL_DIM, line_width=0.5)
+    fig.add_hline(y=1, line_dash="dot", line_color=COL_BULL, line_width=0.5)
+    _chart_layout(fig, height=280)
+    fig.update_layout(margin=dict(t=56), title=dict(
+        text=f'<span style="color:{COL_TEXT};font-size:12px;text-transform:uppercase;'
+             f'letter-spacing:1px">Rolling 90-day Sharpe ratio</span>',
+        x=0.01, y=0.98, yanchor="top"))
+    fig.update_xaxes(dtick="M3", tickformat="%b\n%Y")
+    fig.update_yaxes(gridcolor=COL_GRID, tickfont=dict(color=COL_DIM, size=10), side="right")
+    return fig
+
+
+def _build_trade_distribution(trades: list[dict]) -> go.Figure:
+    closed = [t for t in trades if not t["open"]]
+    fig = go.Figure()
+    if closed:
+        losses = [t["pnl_pct"] for t in closed if t["pnl_pct"] <= 0]
+        wins = [t["pnl_pct"] for t in closed if t["pnl_pct"] > 0]
+        if losses:
+            fig.add_trace(go.Histogram(
+                x=losses, name="Losses", marker_color=COL_BEAR, opacity=0.8,
+                hovertemplate="P&L: %{x:.1f}%<br>Count: %{y}<extra></extra>"))
+        if wins:
+            fig.add_trace(go.Histogram(
+                x=wins, name="Wins", marker_color=COL_BULL, opacity=0.8,
+                hovertemplate="P&L: %{x:.1f}%<br>Count: %{y}<extra></extra>"))
+    fig.update_layout(barmode="stack")
+    _chart_layout(fig, height=300)
+    fig.update_layout(margin=dict(t=56), title=dict(
+        text=f'<span style="color:{COL_TEXT};font-size:12px;text-transform:uppercase;'
+             f'letter-spacing:1px">Trade P&L distribution</span>',
+        x=0.01, y=0.98, yanchor="top"))
+    fig.update_xaxes(title_text="P&L %", title_font=dict(color=COL_DIM, size=10))
+    fig.update_yaxes(gridcolor=COL_GRID, tickfont=dict(color=COL_DIM, size=10),
+                     side="right", title_text="Count",
+                     title_font=dict(color=COL_DIM, size=10))
+    return fig
+
+
+def _build_trade_scatter(trades: list[dict]) -> go.Figure:
+    closed = [t for t in trades if not t["open"]]
+    fig = go.Figure()
+    if closed:
+        fig.add_trace(go.Scatter(
+            x=[t["duration_days"] for t in closed],
+            y=[t["pnl_pct"] for t in closed],
+            mode="markers",
+            marker=dict(
+                color=[COL_BULL if t["pnl_pct"] > 0 else COL_BEAR for t in closed],
+                size=10, line=dict(color=COL_BORDER, width=1)),
+            text=[t["entry_date"].strftime("%Y-%m-%d") for t in closed],
+            hovertemplate="Entry: %{text}<br>Duration: %{x}d<br>"
+                          "P&L: %{y:+.1f}%<extra></extra>",
+            showlegend=False,
+        ))
+    fig.add_hline(y=0, line_dash="dash", line_color=COL_DIM, line_width=0.5)
+    _chart_layout(fig, height=300)
+    fig.update_layout(margin=dict(t=56), title=dict(
+        text=f'<span style="color:{COL_TEXT};font-size:12px;text-transform:uppercase;'
+             f'letter-spacing:1px">Trade scatter · duration vs P&L</span>',
+        x=0.01, y=0.98, yanchor="top"))
+    fig.update_xaxes(title_text="Duration (days)", title_font=dict(color=COL_DIM, size=10))
+    fig.update_yaxes(gridcolor=COL_GRID, tickfont=dict(color=COL_DIM, size=10),
+                     side="right", title_text="P&L %",
+                     title_font=dict(color=COL_DIM, size=10))
     return fig
 
 
@@ -662,8 +814,8 @@ def main() -> None:
         h1,h2,h3,h4 {{color:{COL_TEXT};font-weight:600}}
         section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {{color:{COL_TEXT} !important;font-size:11px}}
         section[data-testid="stSidebar"] div[data-baseweb="select"]>div:first-child {{background:{COL_PANEL} !important;border-color:{COL_BORDER} !important}}
-        section[data-testid="stSidebar"] div[data-baseweb="select"] span {{color:{COL_TEXT} !important}}
-        section[data-testid="stSidebar"] div[data-baseweb="select"] svg {{fill:{COL_DIM} !important}}
+        section[data-testid="stSidebar"] div[data-baseweb="select"] span {{color:#4fc3f7 !important;font-weight:600 !important}}
+        section[data-testid="stSidebar"] div[data-baseweb="select"] svg {{fill:#4fc3f7 !important}}
         div[data-baseweb="popover"] ul {{background:{COL_PANEL} !important}}
         div[data-baseweb="popover"] li {{color:{COL_TEXT} !important}}
         div[data-baseweb="popover"] li:hover {{background:{COL_BORDER} !important}}
@@ -705,8 +857,8 @@ def main() -> None:
         )
         _today = datetime.date.today()
         _period = st.selectbox(
-            "Period", ["All time", "2 years", "1 year", "Year to date",
-                       "6 months", "3 months", "Custom"],
+            "Period", ["Custom", "All time", "2 years", "1 year",
+                       "Year to date", "6 months", "3 months"],
             index=0, label_visibility="collapsed",
             help="Quick period selector. Choose 'Custom' to set exact Od/Do dates.",
         )
@@ -720,14 +872,25 @@ def main() -> None:
                 "Do", value=_today, max_value=_today, format="YYYY-MM-DD",
                 help="End date of the analysis window.",
             )
-        elif _period == "All time":
-            date_from, date_to = None, _today
-        elif _period == "Year to date":
-            date_from = datetime.date(_today.year, 1, 1)
-            date_to = _today
         else:
-            date_from = _today - datetime.timedelta(days=_period_days[_period])
-            date_to = _today
+            if _period == "All time":
+                date_from, date_to = None, _today
+            elif _period == "Year to date":
+                date_from = datetime.date(_today.year, 1, 1)
+                date_to = _today
+            else:
+                date_from = _today - datetime.timedelta(days=_period_days[_period])
+                date_to = _today
+            _from_txt = str(date_from) if date_from else "all"
+            st.markdown(
+                f"<div style='color:{COL_TEXT};font-family:monospace;font-size:12px;"
+                f"background:{COL_BG};border:1px solid {COL_BORDER};border-radius:4px;"
+                f"padding:6px 10px;margin:4px 0'>"
+                f"<span style='color:{COL_DIM};font-size:10px'>Od</span> {_from_txt}"
+                f"<span style='color:{COL_DIM};font-size:10px;margin-left:14px'>Do</span> {date_to}"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
         st.divider()
         st.checkbox("Dark theme", value=True, key="lean_dark_theme",
                     help="Toggle between dark (TradingView-style) and light background.")
@@ -946,9 +1109,20 @@ def main() -> None:
             unsafe_allow_html=True,
         )
 
-    # ── performance: equity curve (full width) ──────────────────────────────────
+    # ── signal timeline ───────────────────────────────────────────────────────
+    st.markdown(_section_label("Signal timeline"), unsafe_allow_html=True)
+    st.plotly_chart(_build_signal_timeline(df), use_container_width=True)
+
+    # ── equity curve (full width) ─────────────────────────────────────────────
     st.markdown(_section_label("Performance · strategy vs buy & hold"), unsafe_allow_html=True)
     st.plotly_chart(_build_equity_chart(metrics), use_container_width=True)
+
+    # ── rolling sharpe + monthly heatmap ──────────────────────────────────────
+    a_left, a_right = st.columns(2, gap="medium")
+    with a_left:
+        st.plotly_chart(_build_rolling_sharpe(df), use_container_width=True)
+    with a_right:
+        st.plotly_chart(_build_monthly_heatmap(df), use_container_width=True)
 
     # ── trade ledger ──────────────────────────────────────────────────────────
     n_trades = len(trades)
@@ -960,11 +1134,18 @@ def main() -> None:
         )
     with dl_col:
         st.download_button(
-            "⬇  Export CSV", data=_trades_to_csv(trades),
+            "Export CSV", data=_trades_to_csv(trades),
             file_name=f"trades_{symbol}_{pd.Timestamp.now():%Y%m%d}.csv",
             mime="text/csv", use_container_width=True,
         )
     st.markdown(_render_trade_ledger(trades, n=n_trades), unsafe_allow_html=True)
+
+    # ── trade analytics ───────────────────────────────────────────────────────
+    t_left, t_right = st.columns(2, gap="medium")
+    with t_left:
+        st.plotly_chart(_build_trade_distribution(trades), use_container_width=True)
+    with t_right:
+        st.plotly_chart(_build_trade_scatter(trades), use_container_width=True)
     st.markdown(
         f'<div style="color:{COL_VERY_DIM};font-size:10px;margin-top:8px;'
         f'font-family:monospace;text-align:right">'
