@@ -524,7 +524,7 @@ def _build_equity_chart(metrics: dict) -> go.Figure:
 def _build_monthly_heatmap(df: pd.DataFrame) -> go.Figure:
     ret = df["close"].pct_change().fillna(0.0)
     strat_ret = ret * (df["signal_state"].shift(1) == S_BULL).astype(float)
-    monthly = strat_ret.resample("M").apply(lambda x: (1 + x).prod() - 1) * 100
+    monthly = strat_ret.resample("ME").apply(lambda x: (1 + x).prod() - 1) * 100
     years = sorted(monthly.index.year.unique())
     mlabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
