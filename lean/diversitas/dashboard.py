@@ -80,11 +80,13 @@ def _run(symbol: str, bars: int, use_btc_filter: bool, use_er: bool):
 
 # ── performance metrics ───────────────────────────────────────────────────────
 
-def _compute_metrics(df: pd.DataFrame) -> dict:
+def _compute_metrics(df: pd.DataFrame, bear_alloc_pct: float = 0.0) -> dict:
     close     = df["close"]
     ret       = close.pct_change().fillna(0.0)
     sig       = df["signal_state"]
-    strat_ret = ret * (sig.shift(1) == S_BULL).astype(float)
+    is_bull   = (sig.shift(1) == S_BULL).astype(float)
+    pos       = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
+    strat_ret = ret * pos
     bh_ret    = ret.copy()
 
     def _stats(r: pd.Series) -> dict:
@@ -521,9 +523,11 @@ def _build_equity_chart(metrics: dict) -> go.Figure:
 
 # ── analytics charts ──────────────────────────────────────────────────────────
 
-def _build_monthly_heatmap(df: pd.DataFrame) -> go.Figure:
+def _build_monthly_heatmap(df: pd.DataFrame, bear_alloc_pct: float = 0.0) -> go.Figure:
     ret = df["close"].pct_change().fillna(0.0)
-    strat_ret = ret * (df["signal_state"].shift(1) == S_BULL).astype(float)
+    is_bull = (df["signal_state"].shift(1) == S_BULL).astype(float)
+    pos = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
+    strat_ret = ret * pos
     monthly = strat_ret.resample("ME").apply(lambda x: (1 + x).prod() - 1) * 100
     years = sorted(monthly.index.year.unique())
     mlabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -587,9 +591,11 @@ def _build_signal_timeline(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def _build_rolling_sharpe(df: pd.DataFrame) -> go.Figure:
+def _build_rolling_sharpe(df: pd.DataFrame, bear_alloc_pct: float = 0.0) -> go.Figure:
     ret = df["close"].pct_change().fillna(0.0)
-    strat_ret = ret * (df["signal_state"].shift(1) == S_BULL).astype(float)
+    is_bull = (df["signal_state"].shift(1) == S_BULL).astype(float)
+    pos = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
+    strat_ret = ret * pos
     window = 90
     rm = strat_ret.rolling(window, min_periods=window).mean() * TRADING_DAYS
     rs = strat_ret.rolling(window, min_periods=window).std() * np.sqrt(TRADING_DAYS)
@@ -849,6 +855,11 @@ def main() -> None:
                  "Near 1 = clean trend, near 0 = sideways chop. "
                  "When ON, entries are blocked during choppy markets (ER < 0.30).",
         )
+        bear_alloc = st.slider(
+            "Min BEAR allocation %", min_value=0, max_value=50, value=0, step=5,
+            help="Minimum % of capital that stays in crypto during BEAR signal. "
+                 "0% = fully out (default). E.g. 20% = always keep 20% invested even in BEAR.",
+        )
         st.divider()
         st.markdown(
             f"<div style='color:{COL_DIM};font-size:10px;text-transform:uppercase;"
@@ -933,14 +944,27 @@ def main() -> None:
         st.stop()
     s = build_summary(df)
     trades   = _build_trade_ledger(df)
-    metrics  = _compute_metrics(df)
-    exposure = (df["signal_state"].shift(1) == S_BULL).mean() * 100
+    metrics  = _compute_metrics(df, bear_alloc_pct=bear_alloc)
+    is_bull  = (df["signal_state"].shift(1) == S_BULL).astype(float)
+    exposure = (is_bull * 100 + (1 - is_bull) * bear_alloc).mean()
 
     # ── status bar ────────────────────────────────────────────────────────────
     st.markdown(_status_bar(s, symbol, cfg), unsafe_allow_html=True)
 
     # ── KPI hero cards ────────────────────────────────────────────────────────
     st.markdown(_render_kpi_cards(metrics, trades, exposure), unsafe_allow_html=True)
+
+    # ── info bar ──────────────────────────────────────────────────────────────
+    _n_bars = len(df)
+    _first = df.index[0].strftime("%Y-%m-%d")
+    _last = df.index[-1].strftime("%Y-%m-%d")
+    _bear_txt = f"  ·  BEAR alloc {bear_alloc}%" if bear_alloc > 0 else ""
+    st.markdown(
+        f'<div style="color:{COL_DIM};font-size:11px;font-family:monospace;'
+        f'text-align:right;margin:-6px 0 6px 0">'
+        f'{_n_bars} bars  ·  {_first}  →  {_last}{_bear_txt}</div>',
+        unsafe_allow_html=True,
+    )
 
     # ── price chart (full width) ──────────────────────────────────────────────
     st.plotly_chart(_build_price_chart(df, symbol), use_container_width=True)
@@ -1120,9 +1144,9 @@ def main() -> None:
     # ── rolling sharpe + monthly heatmap ──────────────────────────────────────
     a_left, a_right = st.columns(2, gap="medium")
     with a_left:
-        st.plotly_chart(_build_rolling_sharpe(df), use_container_width=True)
+        st.plotly_chart(_build_rolling_sharpe(df, bear_alloc), use_container_width=True)
     with a_right:
-        st.plotly_chart(_build_monthly_heatmap(df), use_container_width=True)
+        st.plotly_chart(_build_monthly_heatmap(df, bear_alloc), use_container_width=True)
 
     # ── trade ledger ──────────────────────────────────────────────────────────
     n_trades = len(trades)
