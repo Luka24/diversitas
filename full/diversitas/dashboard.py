@@ -30,6 +30,7 @@ COL_BEAR    = "#f23645"   # TV red
 COL_NEUTRAL = "#ffb74d"   # amber — hedged
 COL_BLUE    = "#2962ff"   # TV blue — conviction / allocation
 COL_MA200   = "#ff9800"   # orange — long MA
+COL_SPX     = "#f59e0b"   # gold — S&P 500 benchmark
 
 # ── theme colors (reassigned by _set_theme on every render) ──────────────────
 COL_BG = COL_PANEL = COL_BORDER = COL_GRID = ""
@@ -82,6 +83,22 @@ def _run_b(symbol: str, bars: int, use_er: bool):
     cfg   = Config(use_btc_filter=False, use_er=use_er)
     daily = _load_candles(symbol, bars)
     return run_strategy(daily, config=cfg)
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _load_spx(bars: int) -> pd.Series:
+    """S&P 500 daily close prices via yfinance (^GSPC). Returns timezone-naive series."""
+    import yfinance as yf
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        df = yf.Ticker("^GSPC").history(period="max", auto_adjust=True)
+    if df.empty:
+        return pd.Series(dtype=float)
+    s = df["Close"].copy()
+    s.index = pd.to_datetime(s.index).tz_localize(None)
+    s.name = "spx"
+    return s.tail(bars)
 
 
 # ── performance metrics ───────────────────────────────────────────────────────
@@ -142,7 +159,8 @@ def _compute_portfolio_metrics(df_a: pd.DataFrame, df_b: pd.DataFrame,
     return m_a, m_b, m_port, a, b, port_strat
 
 
-def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float) -> str:
+def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
+                      spx_m: "dict | None" = None) -> str:
     strat = metrics["strategy"]
     bh = metrics["bh"]
     closed = [t for t in trades if not t["open"]]
@@ -158,13 +176,20 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float) -> str
     pf = gross_profit / gross_loss if gross_loss > 1e-9 else None
 
     def _card(label: str, value: str, colour: str,
-              bh_val: str = "", bh_col: str = "", tip: str = "") -> str:
-        bh_html = ""
+              bh_val: str = "", bh_col: str = "",
+              spx_val: str = "", tip: str = "") -> str:
+        sub = ""
         if bh_val:
-            bh_html = (
+            sub += (
                 f'<div style="margin-top:5px;font-size:11px;font-family:monospace">'
                 f'<span style="color:{COL_DIM}">B&H </span>'
                 f'<span style="color:{bh_col}">{bh_val}</span></div>'
+            )
+        if spx_val:
+            sub += (
+                f'<div style="margin-top:2px;font-size:11px;font-family:monospace">'
+                f'<span style="color:{COL_SPX}">SPX </span>'
+                f'<span style="color:{COL_SPX}">{spx_val}</span></div>'
             )
         return (
             f'<div style="flex:1;background:{COL_PANEL};border:1px solid {COL_BORDER};'
@@ -174,25 +199,31 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float) -> str
             f'letter-spacing:1.2px;margin-bottom:8px">{label}</div>'
             f'<div style="color:{colour};font-size:24px;font-weight:700;'
             f'font-family:monospace;line-height:1.1">{value}</div>'
-            f'{bh_html}</div>'
+            f'{sub}</div>'
         )
 
+    _s = spx_m or {}
     row1 = [
         _card("CAGR", _fmt_pct(strat["cagr"]), _val_col(strat["cagr"]),
               _fmt_pct(bh["cagr"]), _val_col(bh["cagr"]),
+              _fmt_pct(_s.get("cagr")) if _s else "",
               "Compound Annual Growth Rate"),
         _card("Sharpe", _fmt_ratio(strat["sharpe"]), _val_col(strat["sharpe"]),
               _fmt_ratio(bh["sharpe"]), _val_col(bh["sharpe"]),
+              _fmt_ratio(_s.get("sharpe")) if _s else "",
               "Risk-adjusted return (return / volatility)"),
         _card("Sortino", _fmt_ratio(strat["sortino"]), _val_col(strat["sortino"]),
               _fmt_ratio(bh["sortino"]), _val_col(bh["sortino"]),
+              _fmt_ratio(_s.get("sortino")) if _s else "",
               "Return / downside volatility only"),
         _card("Max Drawdown", _fmt_pct(strat["max_dd"]),
               _val_col(strat["max_dd"], positive_good=False),
               _fmt_pct(bh["max_dd"]), _val_col(bh["max_dd"], positive_good=False),
+              _fmt_pct(_s.get("max_dd")) if _s else "",
               "Largest peak-to-trough equity decline"),
         _card("Calmar", _fmt_ratio(strat["calmar"]), _val_col(strat["calmar"]),
               _fmt_ratio(bh["calmar"]), _val_col(bh["calmar"]),
+              _fmt_ratio(_s.get("calmar")) if _s else "",
               "CAGR / |Max Drawdown|"),
         _card("Win Rate",
               f"{wr:.0f}%" if wr is not None else "—",
@@ -547,7 +578,7 @@ def _build_breakdown_chart(df: pd.DataFrame, symbol: str = "") -> go.Figure:
     return fig
 
 
-def _build_equity_chart(metrics: dict) -> go.Figure:
+def _build_equity_chart(metrics: dict, spx_eq: "pd.Series | None" = None) -> go.Figure:
     strat = metrics["strategy"]
     bh    = metrics["bh"]
     s_eq  = strat["eq"] * 100
@@ -561,8 +592,14 @@ def _build_equity_chart(metrics: dict) -> go.Figure:
     fig.add_trace(go.Scatter(
         x=b_eq.index, y=b_eq, mode="lines",
         line=dict(color=COL_DIM, width=1.5),
-        name="Buy & Hold", hovertemplate="B&H %{y:.1f}<extra></extra>",
+        name="B&H crypto", hovertemplate="B&H %{y:.1f}<extra></extra>",
     ), row=1, col=1)
+    if spx_eq is not None and not spx_eq.empty:
+        fig.add_trace(go.Scatter(
+            x=spx_eq.index, y=spx_eq, mode="lines",
+            line=dict(color=COL_SPX, width=1.5, dash="dot"),
+            name="S&P 500 B&H", hovertemplate="SPX %{y:.1f}<extra></extra>",
+        ), row=1, col=1)
     fig.add_trace(go.Scatter(
         x=s_eq.index, y=s_eq, mode="lines",
         line=dict(color=COL_BULL, width=2),
@@ -764,19 +801,25 @@ def _build_trade_scatter(trades: list[dict]) -> go.Figure:
 
 def _render_kpi_cards_portfolio(sym_a: str, sym_b: str, w_a: int, w_b: int,
                                  m_a: dict, m_b: dict, m_port: dict,
-                                 exp_a: float, exp_b: float) -> str:
+                                 exp_a: float, exp_b: float,
+                                 spx_m: "dict | None" = None) -> str:
     sa, sb, sp = m_a["strategy"], m_b["strategy"], m_port["strategy"]
     ba, bb, bp = m_a["bh"],      m_b["bh"],      m_port["bh"]
 
-    def _cell(val: str, col: str, bh: str = "", bh_col: str = "") -> str:
-        bh_html = ""
+    def _cell(val: str, col: str, bh: str = "", bh_col: str = "",
+              spx: str = "") -> str:
+        sub = ""
         if bh:
-            bh_html = (f'<div style="margin-top:3px;font-size:10px;font-family:monospace">'
-                       f'<span style="color:{COL_DIM}">B&amp;H </span>'
-                       f'<span style="color:{bh_col}">{bh}</span></div>')
+            sub += (f'<div style="margin-top:3px;font-size:10px;font-family:monospace">'
+                    f'<span style="color:{COL_DIM}">B&amp;H </span>'
+                    f'<span style="color:{bh_col}">{bh}</span></div>')
+        if spx:
+            sub += (f'<div style="margin-top:1px;font-size:10px;font-family:monospace">'
+                    f'<span style="color:{COL_SPX}">SPX  </span>'
+                    f'<span style="color:{COL_SPX}">{spx}</span></div>')
         return (f'<td style="padding:12px 16px;border-bottom:1px solid {COL_BORDER};text-align:right">'
                 f'<span style="color:{col};font-size:20px;font-weight:700;font-family:monospace">{val}</span>'
-                f'{bh_html}</td>')
+                f'{sub}</td>')
 
     def _lbl(txt: str, tip: str = "") -> str:
         t = f' title="{tip}"' if tip else ""
@@ -795,12 +838,13 @@ def _render_kpi_cards_portfolio(sym_a: str, sym_b: str, w_a: int, w_b: int,
     rows = []
     for lbl, tip, key, pos_good, ftype in _METRIC_SPEC:
         fmt = (lambda v, _f=ftype: _fmt_pct(v) if _f == "pct" else _fmt_ratio(v))
+        spx_val = fmt(spx_m[key]) if spx_m else ""
         rows.append(
             f'<tr>'
             f'{_lbl(lbl, tip)}'
-            f'{_cell(fmt(sa[key]), _val_col(sa[key], pos_good), fmt(ba[key]), _val_col(ba[key], pos_good))}'
-            f'{_cell(fmt(sb[key]), _val_col(sb[key], pos_good), fmt(bb[key]), _val_col(bb[key], pos_good))}'
-            f'{_cell(fmt(sp[key]), _val_col(sp[key], pos_good), fmt(bp[key]), _val_col(bp[key], pos_good))}'
+            f'{_cell(fmt(sa[key]), _val_col(sa[key], pos_good), fmt(ba[key]), _val_col(ba[key], pos_good), spx_val)}'
+            f'{_cell(fmt(sb[key]), _val_col(sb[key], pos_good), fmt(bb[key]), _val_col(bb[key], pos_good), spx_val)}'
+            f'{_cell(fmt(sp[key]), _val_col(sp[key], pos_good), fmt(bp[key]), _val_col(bp[key], pos_good), spx_val)}'
             f'</tr>'
         )
 
@@ -841,7 +885,8 @@ def _render_kpi_cards_portfolio(sym_a: str, sym_b: str, w_a: int, w_b: int,
 
 
 def _build_equity_chart_portfolio(sym_a: str, sym_b: str,
-                                   m_a: dict, m_b: dict, m_port: dict) -> go.Figure:
+                                   m_a: dict, m_b: dict, m_port: dict,
+                                   spx_eq: "pd.Series | None" = None) -> go.Figure:
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
                         row_heights=[0.65, 0.35], vertical_spacing=0.03)
 
@@ -856,6 +901,12 @@ def _build_equity_chart_portfolio(sym_a: str, sym_b: str,
         line=dict(color=COL_VERY_DIM, width=1.2, dash="dot"),
         hovertemplate="B&H %{y:.1f}<extra></extra>",
     ), row=1, col=1)
+    if spx_eq is not None and not spx_eq.empty:
+        fig.add_trace(go.Scatter(
+            x=spx_eq.index, y=spx_eq, name="S&P 500 B&H",
+            line=dict(color=COL_SPX, width=1.5, dash="dot"),
+            hovertemplate="SPX %{y:.1f}<extra></extra>",
+        ), row=1, col=1)
     fig.add_trace(go.Scatter(
         x=eq_a.index, y=eq_a, name=sym_a,
         line=dict(color=COL_BULL, width=1.5),
@@ -1277,6 +1328,22 @@ def main() -> None:
         exp_b = (is_bull_b * 100 + (1 - is_bull_b) * bear_alloc).mean()
         trades_b = _build_trade_ledger(df_b)
 
+    # ── S&P 500 benchmark ──────────────────────────────────────────────────────
+    spx_eq = spx_m = None
+    try:
+        _spx_raw = _load_spx(bars)
+        if not _spx_raw.empty:
+            _df_dates = df.index.normalize()
+            if _df_dates.tz is not None:
+                _df_dates = _df_dates.tz_localize(None)
+            _spx_al = _spx_raw.reindex(_df_dates, method="ffill")
+            _spx_al.index = df.index
+            _spx_ret = _spx_al.pct_change().fillna(0.0)
+            spx_eq = (1 + _spx_ret).cumprod() * 100
+            spx_m  = _stats(_spx_ret)
+    except Exception:
+        pass  # SPX unavailable — continue without benchmark
+
     # ── status bar ────────────────────────────────────────────────────────────
     st.markdown(_status_bar(s, symbol, use_btc_filter), unsafe_allow_html=True)
 
@@ -1284,11 +1351,13 @@ def main() -> None:
     if portfolio_mode:
         st.markdown(
             _render_kpi_cards_portfolio(symbol, sym_b, w_a, w_b,
-                                        m_a, m_b, m_port, exposure, exp_b),
+                                        m_a, m_b, m_port, exposure, exp_b,
+                                        spx_m=spx_m),
             unsafe_allow_html=True,
         )
     else:
-        st.markdown(_render_kpi_cards(metrics, trades, exposure), unsafe_allow_html=True)
+        st.markdown(_render_kpi_cards(metrics, trades, exposure, spx_m=spx_m),
+                    unsafe_allow_html=True)
 
     # ── info bar ──────────────────────────────────────────────────────────────
     _n_bars = len(df)
@@ -1430,13 +1499,13 @@ def main() -> None:
             unsafe_allow_html=True,
         )
         st.plotly_chart(
-            _build_equity_chart_portfolio(symbol, sym_b, m_a, m_b, m_port),
+            _build_equity_chart_portfolio(symbol, sym_b, m_a, m_b, m_port, spx_eq=spx_eq),
             use_container_width=True,
         )
     else:
         st.markdown(_section_label(f"Performance · {symbol} strategy vs buy & hold"),
                     unsafe_allow_html=True)
-        st.plotly_chart(_build_equity_chart(metrics), use_container_width=True)
+        st.plotly_chart(_build_equity_chart(metrics, spx_eq=spx_eq), use_container_width=True)
 
     # ── rolling sharpe + monthly heatmap ──────────────────────────────────────
     if portfolio_mode:
