@@ -77,7 +77,34 @@ def _run(symbol: str, bars: int, use_btc_filter: bool, use_er: bool):
     return cfg, daily, run_strategy(daily, btc_daily=btc, config=cfg)
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def _run_b(symbol: str, bars: int, use_er: bool):
+    cfg   = Config(use_btc_filter=False, use_er=use_er)
+    daily = _load_candles(symbol, bars)
+    return run_strategy(daily, config=cfg)
+
+
 # ── performance metrics ───────────────────────────────────────────────────────
+
+def _stats(r: pd.Series) -> dict:
+    r = r.replace([np.inf, -np.inf], 0.0)
+    eq    = (1.0 + r).cumprod()
+    peak  = eq.cummax()
+    dd    = (eq / peak - 1.0)
+    max_dd = float(dd.min())
+    years  = max(len(r) / TRADING_DAYS, 1e-9)
+    final  = float(eq.iloc[-1]) if len(eq) else 1.0
+    cagr   = final ** (1.0 / years) - 1.0
+    ann_ret = r.mean() * TRADING_DAYS
+    ann_std = r.std() * np.sqrt(TRADING_DAYS)
+    neg     = r[r < 0]
+    down_std = neg.std() * np.sqrt(TRADING_DAYS) if len(neg) > 1 else np.nan
+    sharpe   = ann_ret / ann_std if ann_std > 1e-9 else np.nan
+    sortino  = ann_ret / down_std if (not np.isnan(down_std) and down_std > 1e-9) else np.nan
+    calmar   = cagr / abs(max_dd) if max_dd < -1e-6 else np.nan
+    return dict(cagr=cagr, sharpe=sharpe, sortino=sortino,
+                max_dd=max_dd, calmar=calmar, eq=eq, dd=dd)
+
 
 def _compute_metrics(df: pd.DataFrame, bear_alloc_pct: float = 0.0) -> dict:
     """Annualised risk/return metrics for the strategy and buy & hold."""
@@ -86,29 +113,33 @@ def _compute_metrics(df: pd.DataFrame, bear_alloc_pct: float = 0.0) -> dict:
     sig   = df["signal_state"]
     is_bull = (sig.shift(1) == S_BULL).astype(float)
     pos = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
-    strat_ret = ret * pos
-    bh_ret    = ret.copy()
+    strat_ret = pd.Series(ret.values * pos, index=ret.index)
+    return {"strategy": _stats(strat_ret), "bh": _stats(ret)}
 
-    def _stats(r: pd.Series) -> dict:
-        r = r.replace([np.inf, -np.inf], 0.0)
-        eq    = (1.0 + r).cumprod()
-        peak  = eq.cummax()
-        dd    = (eq / peak - 1.0)
-        max_dd = float(dd.min())
-        years  = max(len(r) / TRADING_DAYS, 1e-9)
-        final  = float(eq.iloc[-1]) if len(eq) else 1.0
-        cagr   = final ** (1.0 / years) - 1.0
-        ann_ret = r.mean() * TRADING_DAYS
-        ann_std = r.std() * np.sqrt(TRADING_DAYS)
-        neg     = r[r < 0]
-        down_std = neg.std() * np.sqrt(TRADING_DAYS) if len(neg) > 1 else np.nan
-        sharpe   = ann_ret / ann_std if ann_std > 1e-9 else np.nan
-        sortino  = ann_ret / down_std if (not np.isnan(down_std) and down_std > 1e-9) else np.nan
-        calmar   = cagr / abs(max_dd) if max_dd < -1e-6 else np.nan
-        return dict(cagr=cagr, sharpe=sharpe, sortino=sortino,
-                    max_dd=max_dd, calmar=calmar, eq=eq, dd=dd)
 
-    return {"strategy": _stats(strat_ret), "bh": _stats(bh_ret)}
+def _compute_portfolio_metrics(df_a: pd.DataFrame, df_b: pd.DataFrame,
+                                w_a: int, w_b: int,
+                                bear_alloc_pct: float = 0.0):
+    """Floating-weight portfolio metrics for A, B, and combined."""
+    idx  = df_a.index.intersection(df_b.index)
+    a, b = df_a.loc[idx], df_b.loc[idx]
+
+    r_a   = a["close"].pct_change().fillna(0.0)
+    pos_a = np.where((a["signal_state"].shift(1) == S_BULL), 1.0, bear_alloc_pct / 100.0)
+    sr_a  = pd.Series(r_a.values * pos_a, index=idx)
+
+    r_b   = b["close"].pct_change().fillna(0.0)
+    pos_b = np.where((b["signal_state"].shift(1) == S_BULL), 1.0, bear_alloc_pct / 100.0)
+    sr_b  = pd.Series(r_b.values * pos_b, index=idx)
+
+    wa, wb     = w_a / 100.0, w_b / 100.0
+    port_strat = wa * sr_a + wb * sr_b
+    port_bh    = wa * r_a  + wb * r_b
+
+    m_a    = {"strategy": _stats(sr_a), "bh": _stats(r_a)}
+    m_b    = {"strategy": _stats(sr_b), "bh": _stats(r_b)}
+    m_port = {"strategy": _stats(port_strat), "bh": _stats(port_bh)}
+    return m_a, m_b, m_port, a, b, port_strat
 
 
 def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float) -> str:
@@ -481,7 +512,7 @@ def _build_price_chart(df: pd.DataFrame, symbol: str,
     return fig
 
 
-def _build_breakdown_chart(df: pd.DataFrame) -> go.Figure:
+def _build_breakdown_chart(df: pd.DataFrame, symbol: str = "") -> go.Figure:
     win  = df.tail(120)
     fig  = go.Figure()
     parts = [
@@ -506,9 +537,10 @@ def _build_breakdown_chart(df: pd.DataFrame) -> go.Figure:
     fig.update_yaxes(gridcolor=COL_GRID, tickfont=dict(color=COL_DIM, size=10),
                      range=[0, 100], side="right",
                      title_text="Score", title_font=dict(color=COL_DIM, size=10))
+    _sym_lbl = f" · {symbol}" if symbol else ""
     fig.update_layout(
         title=dict(
-            text=f'<span style="color:{COL_TEXT};font-size:12px;text-transform:uppercase;letter-spacing:1px">Conviction breakdown · last 120 bars</span>',
+            text=f'<span style="color:{COL_TEXT};font-size:12px;text-transform:uppercase;letter-spacing:1px">Conviction breakdown{_sym_lbl} · last 120 bars</span>',
             x=0.01, y=0.995, yanchor="top"),
         legend=dict(y=1.18, font=dict(size=11)),
     )
@@ -559,11 +591,16 @@ def _build_equity_chart(metrics: dict) -> go.Figure:
 
 # ── analytics charts ──────────────────────────────────────────────────────────
 
-def _build_monthly_heatmap(df: pd.DataFrame, bear_alloc_pct: float = 0.0) -> go.Figure:
-    ret = df["close"].pct_change().fillna(0.0)
-    is_bull = (df["signal_state"].shift(1) == S_BULL).astype(float)
-    pos = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
-    strat_ret = ret * pos
+def _build_monthly_heatmap(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
+                            port_ret: "pd.Series | None" = None,
+                            title: str = "Monthly returns · strategy (%)") -> go.Figure:
+    if port_ret is not None:
+        strat_ret = port_ret
+    else:
+        ret = df["close"].pct_change().fillna(0.0)
+        is_bull = (df["signal_state"].shift(1) == S_BULL).astype(float)
+        pos = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
+        strat_ret = pd.Series(ret.values * pos, index=ret.index)
     monthly = strat_ret.resample("ME").apply(lambda x: (1 + x).prod() - 1) * 100
     years = sorted(monthly.index.year.unique())
     mlabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -594,7 +631,7 @@ def _build_monthly_heatmap(df: pd.DataFrame, bear_alloc_pct: float = 0.0) -> go.
         margin=dict(t=56),
         title=dict(
             text=f'<span style="color:{COL_TEXT};font-size:12px;text-transform:uppercase;'
-                 f'letter-spacing:1px">Monthly returns · strategy (%)</span>',
+                 f'letter-spacing:1px">{title}</span>',
             x=0.01, y=0.98, yanchor="top"),
         yaxis=dict(autorange="reversed"),
     )
@@ -633,11 +670,16 @@ def _build_signal_timeline(df: pd.DataFrame) -> go.Figure:
     return fig
 
 
-def _build_rolling_sharpe(df: pd.DataFrame, bear_alloc_pct: float = 0.0) -> go.Figure:
-    ret = df["close"].pct_change().fillna(0.0)
-    is_bull = (df["signal_state"].shift(1) == S_BULL).astype(float)
-    pos = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
-    strat_ret = ret * pos
+def _build_rolling_sharpe(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
+                           port_ret: "pd.Series | None" = None,
+                           title: str = "Rolling 90-day Sharpe ratio") -> go.Figure:
+    if port_ret is not None:
+        strat_ret = port_ret
+    else:
+        ret = df["close"].pct_change().fillna(0.0)
+        is_bull = (df["signal_state"].shift(1) == S_BULL).astype(float)
+        pos = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
+        strat_ret = pd.Series(ret.values * pos, index=ret.index)
     window = 90
     rm = strat_ret.rolling(window, min_periods=window).mean() * TRADING_DAYS
     rs = strat_ret.rolling(window, min_periods=window).std() * np.sqrt(TRADING_DAYS)
@@ -655,7 +697,7 @@ def _build_rolling_sharpe(df: pd.DataFrame, bear_alloc_pct: float = 0.0) -> go.F
     _chart_layout(fig, height=280)
     fig.update_layout(margin=dict(t=56), title=dict(
         text=f'<span style="color:{COL_TEXT};font-size:12px;text-transform:uppercase;'
-             f'letter-spacing:1px">Rolling 90-day Sharpe ratio</span>',
+             f'letter-spacing:1px">{title}</span>',
         x=0.01, y=0.98, yanchor="top"))
     fig.update_xaxes(dtick="M3", tickformat="%b\n%Y")
     fig.update_yaxes(gridcolor=COL_GRID, tickfont=dict(color=COL_DIM, size=10), side="right")
@@ -715,6 +757,180 @@ def _build_trade_scatter(trades: list[dict]) -> go.Figure:
     fig.update_yaxes(gridcolor=COL_GRID, tickfont=dict(color=COL_DIM, size=10),
                      side="right", title_text="P&L %",
                      title_font=dict(color=COL_DIM, size=10))
+    return fig
+
+
+# ── portfolio / multi-asset display ──────────────────────────────────────────
+
+def _render_kpi_cards_portfolio(sym_a: str, sym_b: str, w_a: int, w_b: int,
+                                 m_a: dict, m_b: dict, m_port: dict,
+                                 exp_a: float, exp_b: float) -> str:
+    sa, sb, sp = m_a["strategy"], m_b["strategy"], m_port["strategy"]
+    ba, bb, bp = m_a["bh"],      m_b["bh"],      m_port["bh"]
+
+    def _cell(val: str, col: str, bh: str = "", bh_col: str = "") -> str:
+        bh_html = ""
+        if bh:
+            bh_html = (f'<div style="margin-top:3px;font-size:10px;font-family:monospace">'
+                       f'<span style="color:{COL_DIM}">B&amp;H </span>'
+                       f'<span style="color:{bh_col}">{bh}</span></div>')
+        return (f'<td style="padding:12px 16px;border-bottom:1px solid {COL_BORDER};text-align:right">'
+                f'<span style="color:{col};font-size:20px;font-weight:700;font-family:monospace">{val}</span>'
+                f'{bh_html}</td>')
+
+    def _lbl(txt: str, tip: str = "") -> str:
+        t = f' title="{tip}"' if tip else ""
+        return (f'<td style="padding:12px 16px;border-bottom:1px solid {COL_BORDER};'
+                f'color:{COL_DIM};font-size:10px;text-transform:uppercase;letter-spacing:1px;'
+                f'white-space:nowrap;border-right:2px solid {COL_BORDER};cursor:help"{t}>{txt}</td>')
+
+    # formatters resolved at call-time (defined later in module, but called after full load)
+    _METRIC_SPEC = [
+        ("CAGR",    "Compound Annual Growth Rate",    "cagr",    True,  "pct"),
+        ("Sharpe",  "Return / volatility",            "sharpe",  True,  "ratio"),
+        ("Sortino", "Return / downside volatility",   "sortino", True,  "ratio"),
+        ("Max DD",  "Largest peak-to-trough decline", "max_dd",  False, "pct"),
+        ("Calmar",  "CAGR / |Max DD|",               "calmar",  True,  "ratio"),
+    ]
+    rows = []
+    for lbl, tip, key, pos_good, ftype in _METRIC_SPEC:
+        fmt = (lambda v, _f=ftype: _fmt_pct(v) if _f == "pct" else _fmt_ratio(v))
+        rows.append(
+            f'<tr>'
+            f'{_lbl(lbl, tip)}'
+            f'{_cell(fmt(sa[key]), _val_col(sa[key], pos_good), fmt(ba[key]), _val_col(ba[key], pos_good))}'
+            f'{_cell(fmt(sb[key]), _val_col(sb[key], pos_good), fmt(bb[key]), _val_col(bb[key], pos_good))}'
+            f'{_cell(fmt(sp[key]), _val_col(sp[key], pos_good), fmt(bp[key]), _val_col(bp[key], pos_good))}'
+            f'</tr>'
+        )
+
+    exp_port = (w_a * exp_a + w_b * exp_b) / 100
+    rows.append(
+        f'<tr>'
+        f'{_lbl("Exposure", "% time invested in crypto")}'
+        f'{_cell(f"{exp_a:.0f}%", COL_BLUE)}'
+        f'{_cell(f"{exp_b:.0f}%", COL_BLUE)}'
+        f'{_cell(f"{exp_port:.0f}%", COL_BLUE)}'
+        f'</tr>'
+    )
+
+    def _hdr(sym: str, weight: str, col: str) -> str:
+        return (f'<th style="padding:10px 16px;background:{COL_PANEL};'
+                f'border-bottom:2px solid {COL_BORDER};text-align:right;font-weight:normal">'
+                f'<span style="color:{col};font-size:13px;font-weight:700;font-family:monospace">{sym}</span>'
+                f'<span style="color:{COL_DIM};font-size:11px;margin-left:6px">{weight}</span>'
+                f'</th>')
+
+    header = (
+        f'<tr>'
+        f'<th style="padding:10px 16px;background:{COL_PANEL};'
+        f'border-bottom:2px solid {COL_BORDER};border-right:2px solid {COL_BORDER}"></th>'
+        f'{_hdr(f"{sym_a}/USD", f"{w_a}%", COL_BULL)}'
+        f'{_hdr(f"{sym_b}/USD", f"{w_b}%", COL_BLUE)}'
+        f'{_hdr("Portfolio", "", COL_NEUTRAL)}'
+        f'</tr>'
+    )
+    return (
+        f'<div style="margin:8px 0 14px 0;background:{COL_PANEL};border:1px solid {COL_BORDER};'
+        f'border-radius:4px;overflow:hidden">'
+        f'<table style="width:100%;border-collapse:collapse">'
+        f'<thead>{header}</thead>'
+        f'<tbody>{"".join(rows)}</tbody>'
+        f'</table></div>'
+    )
+
+
+def _build_equity_chart_portfolio(sym_a: str, sym_b: str,
+                                   m_a: dict, m_b: dict, m_port: dict) -> go.Figure:
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                        row_heights=[0.65, 0.35], vertical_spacing=0.03)
+
+    bh_port = m_port["bh"]["eq"] * 100
+    eq_a    = m_a["strategy"]["eq"] * 100
+    eq_b    = m_b["strategy"]["eq"] * 100
+    eq_port = m_port["strategy"]["eq"] * 100
+    dd_port = m_port["strategy"]["dd"] * 100
+
+    fig.add_trace(go.Scatter(
+        x=bh_port.index, y=bh_port, name="B&H Portfolio",
+        line=dict(color=COL_VERY_DIM, width=1.2, dash="dot"),
+        hovertemplate="B&H %{y:.1f}<extra></extra>",
+    ), row=1, col=1)
+    fig.add_trace(go.Scatter(
+        x=eq_a.index, y=eq_a, name=sym_a,
+        line=dict(color=COL_BULL, width=1.5),
+        hovertemplate=f"{sym_a} %{{y:.1f}}<extra></extra>",
+    ), row=1, col=1)
+    fig.add_trace(go.Scatter(
+        x=eq_b.index, y=eq_b, name=sym_b,
+        line=dict(color=COL_BLUE, width=1.5),
+        hovertemplate=f"{sym_b} %{{y:.1f}}<extra></extra>",
+    ), row=1, col=1)
+    fig.add_trace(go.Scatter(
+        x=eq_port.index, y=eq_port, name="Portfolio",
+        line=dict(color=COL_NEUTRAL, width=2.5),
+        hovertemplate="Portfolio %{y:.1f}<extra></extra>",
+    ), row=1, col=1)
+    fig.add_trace(go.Scatter(
+        x=dd_port.index, y=dd_port, fill="tozeroy",
+        line=dict(color=COL_BEAR, width=1),
+        fillcolor="rgba(242,54,69,0.18)",
+        name="Portfolio DD",
+        hovertemplate="DD %{y:.1f}%<extra></extra>",
+    ), row=2, col=1)
+
+    _chart_layout(fig, height=420)
+    fig.update_layout(margin=dict(t=56), title=dict(
+        text=(f'<span style="color:{COL_TEXT};font-size:12px;text-transform:uppercase;'
+              f'letter-spacing:1px">Portfolio equity · {sym_a} + {sym_b} vs buy &amp; hold'
+              f' (indexed to 100)</span>'),
+        x=0.01, y=0.98, yanchor="top"))
+    fig.update_xaxes(dtick="M3", tickformat="%b\n%Y")
+    fig.update_yaxes(gridcolor=COL_GRID, tickfont=dict(color=COL_DIM, size=10),
+                     side="right", title_text="Equity",
+                     title_font=dict(color=COL_DIM, size=10), row=1, col=1)
+    fig.update_yaxes(gridcolor=COL_GRID, tickfont=dict(color=COL_DIM, size=10),
+                     side="right", title_text="DD %",
+                     title_font=dict(color=COL_BEAR, size=10), row=2, col=1)
+    return fig
+
+
+def _build_signal_timeline_dual(df_a: pd.DataFrame, df_b: pd.DataFrame,
+                                  sym_a: str, sym_b: str) -> go.Figure:
+    fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                        row_heights=[0.5, 0.5], vertical_spacing=0.08)
+
+    def _add_row(df: pd.DataFrame, row: int) -> None:
+        sig = df["signal_state"]
+        grp = (sig != sig.shift(1)).cumsum()
+        shown: set = set()
+        for _, seg in df.groupby(grp):
+            state = int(seg["signal_state"].iloc[0])
+            col   = COL_BULL if state == S_BULL else COL_BEAR
+            label = "BULL" if state == S_BULL else "BEAR"
+            fig.add_trace(go.Scatter(
+                x=[seg.index[0], seg.index[-1]], y=[1, 1],
+                mode="lines", line=dict(color=col, width=22),
+                name=label, showlegend=False,
+                hovertemplate=f"{label}  %{{x|%Y-%m-%d}}<extra></extra>",
+            ), row=row, col=1)
+            shown.add(state)
+
+    _add_row(df_a, 1)
+    _add_row(df_b, 2)
+
+    _chart_layout(fig, height=180)
+    fig.update_yaxes(visible=False, range=[0.5, 1.5])
+    fig.update_xaxes(dtick="M3", tickformat="%b\n%Y",
+                     tickfont=dict(color=COL_TEXT, size=12))
+    fig.update_layout(margin=dict(l=0, r=70, t=10, b=30), showlegend=False)
+    for sym, yref in [(sym_a, "y"), (sym_b, "y2")]:
+        fig.add_annotation(
+            xref="paper", yref=yref, x=0.0, y=1.35,
+            text=f"<b>{sym}</b>",
+            showarrow=False, font=dict(color=COL_DIM, size=10),
+            xanchor="left",
+        )
     return fig
 
 
@@ -885,6 +1101,13 @@ def main() -> None:
             "Symbol", list(DEFAULT_CONFIG.symbol_map.keys()), index=0,
             help="Asset to analyze. Data fetched from Binance (primary) or yfinance (fallback).",
         )
+        st.markdown(
+            f'<div style="background:{COL_BULL}1a;border-left:3px solid {COL_BULL};'
+            f'border-radius:3px;padding:6px 12px;margin:2px 0 10px 0;'
+            f'font-family:monospace;font-size:15px;font-weight:700;letter-spacing:1.5px;'
+            f'color:{COL_BULL}">{symbol} / USD</div>',
+            unsafe_allow_html=True,
+        )
         use_btc_filter = st.checkbox(
             "BTC cross-asset filter", value=(symbol != "BTC"),
             help="When ON the strategy only signals BULL if BTC is also in a bull regime. "
@@ -901,6 +1124,45 @@ def main() -> None:
             help="Minimum % of capital that stays in crypto during BEAR signal. "
                  "0% = fully out (default). E.g. 20% = always keep 20% invested even in BEAR.",
         )
+        st.divider()
+        st.markdown(
+            f"<div style='color:{COL_DIM};font-size:10px;text-transform:uppercase;"
+            f"letter-spacing:1.2px;margin-bottom:6px'>Portfolio (optional)</div>",
+            unsafe_allow_html=True,
+        )
+        _sym_b_options = ["—"] + list(DEFAULT_CONFIG.symbol_map.keys())
+        sym_b = st.selectbox(
+            "Asset B", _sym_b_options, index=0,
+            help="Add a second asset for portfolio mode. '—' = single-asset mode. "
+                 "Each asset is traded independently; weights are fixed at start (floating, no daily rebalancing).",
+        )
+        portfolio_mode = sym_b != "—"
+        if portfolio_mode:
+            st.markdown(
+                f'<div style="background:#4fc3f71a;border-left:3px solid #4fc3f7;'
+                f'border-radius:3px;padding:6px 12px;margin:2px 0 8px 0;'
+                f'font-family:monospace;font-size:15px;font-weight:700;letter-spacing:1.5px;'
+                f'color:#4fc3f7">{sym_b} / USD</div>',
+                unsafe_allow_html=True,
+            )
+            w_a = st.slider(
+                "Asset A weight %", min_value=5, max_value=95, value=60, step=5,
+                help=f"% of starting capital in {symbol}. {sym_b} receives the remainder.",
+            )
+            w_b = 100 - w_a
+            st.markdown(
+                f'<div style="display:flex;gap:8px;margin:4px 0 2px 0">'
+                f'<div style="flex:1;background:{COL_BULL}1a;border-radius:3px;padding:5px 8px;'
+                f'text-align:center;font-family:monospace;font-size:12px;font-weight:700;color:{COL_BULL}">'
+                f'{symbol}  {w_a}%</div>'
+                f'<div style="flex:1;background:#4fc3f71a;border-radius:3px;padding:5px 8px;'
+                f'text-align:center;font-family:monospace;font-size:12px;font-weight:700;color:#4fc3f7">'
+                f'{sym_b}  {w_b}%</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            w_a, w_b = 100, 0
         st.divider()
         st.markdown(
             f"<div style='color:{COL_DIM};font-size:10px;text-transform:uppercase;"
@@ -953,6 +1215,7 @@ def main() -> None:
             _load_candles.clear()
             _load_btc.clear()
             _run.clear()
+            _run_b.clear()
         st.divider()
         st.markdown(
             f"<div style='color:{COL_VERY_DIM};font-size:10px;line-height:1.6'>"
@@ -989,37 +1252,85 @@ def main() -> None:
     is_bull  = (df["signal_state"].shift(1) == S_BULL).astype(float)
     exposure = (is_bull * 100 + (1 - is_bull) * bear_alloc).mean()
 
+    # ── portfolio mode: load & compute Asset B ────────────────────────────────
+    m_a = m_b = m_port = None
+    df_b = df_a_al = df_b_al = port_ret = None
+    exp_b = 0.0
+    trades_b: list[dict] = []
+    if portfolio_mode:
+        try:
+            result_b = _run_b(sym_b, bars, use_er)
+        except Exception as e:
+            st.error(f"Data load failed for {sym_b}: {e}")
+            st.stop()
+        df_b = result_b.df
+        if date_from is not None:
+            df_b = df_b.loc[str(date_from):]
+        if date_to is not None:
+            df_b = df_b.loc[:str(date_to)]
+        if df_b.empty:
+            st.warning(f"No data for {sym_b} in the selected date range.")
+            st.stop()
+        m_a, m_b, m_port, df_a_al, df_b_al, port_ret = _compute_portfolio_metrics(
+            df, df_b, w_a, w_b, bear_alloc)
+        is_bull_b = (df_b_al["signal_state"].shift(1) == S_BULL).astype(float)
+        exp_b = (is_bull_b * 100 + (1 - is_bull_b) * bear_alloc).mean()
+        trades_b = _build_trade_ledger(df_b)
+
     # ── status bar ────────────────────────────────────────────────────────────
     st.markdown(_status_bar(s, symbol, use_btc_filter), unsafe_allow_html=True)
 
-    # ── KPI hero cards ────────────────────────────────────────────────────────
-    st.markdown(_render_kpi_cards(metrics, trades, exposure), unsafe_allow_html=True)
+    # ── KPI cards ─────────────────────────────────────────────────────────────
+    if portfolio_mode:
+        st.markdown(
+            _render_kpi_cards_portfolio(symbol, sym_b, w_a, w_b,
+                                        m_a, m_b, m_port, exposure, exp_b),
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(_render_kpi_cards(metrics, trades, exposure), unsafe_allow_html=True)
 
     # ── info bar ──────────────────────────────────────────────────────────────
     _n_bars = len(df)
     _first = df.index[0].strftime("%Y-%m-%d")
     _last = df.index[-1].strftime("%Y-%m-%d")
     _bear_txt = f"  ·  BEAR alloc {bear_alloc}%" if bear_alloc > 0 else ""
-    st.markdown(
-        f'<div style="color:{COL_DIM};font-size:11px;font-family:monospace;'
-        f'text-align:right;margin:-6px 0 6px 0">'
-        f'{_n_bars} bars  ·  {_first}  →  {_last}{_bear_txt}</div>',
-        unsafe_allow_html=True,
-    )
+    if portfolio_mode:
+        st.markdown(
+            f'<div style="color:{COL_DIM};font-size:11px;font-family:monospace;'
+            f'text-align:right;margin:-6px 0 6px 0">'
+            f'{_n_bars} bars  ·  {_first}  →  {_last}  ·  '
+            f'<span style="color:{COL_BULL}">{symbol}</span> {w_a}%'
+            f' + <span style="color:#4fc3f7">{sym_b}</span> {w_b}%'
+            f'{_bear_txt}</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f'<div style="color:{COL_DIM};font-size:11px;font-family:monospace;'
+            f'text-align:right;margin:-6px 0 6px 0">'
+            f'{_n_bars} bars  ·  {_first}  →  {_last}{_bear_txt}</div>',
+            unsafe_allow_html=True,
+        )
 
     last = df.iloc[-1]
 
-    # ── price chart (full width) ──────────────────────────────────────────────
+    # ── price chart — always Asset A (primary) ────────────────────────────────
+    _pc_label = (f"Price chart · {symbol}/USD · Asset A (primary)"
+                 if portfolio_mode else f"Price chart · {symbol}/USD")
+    st.markdown(_section_label(_pc_label), unsafe_allow_html=True)
     st.plotly_chart(_build_price_chart(df, symbol, bear_alloc), use_container_width=True)
 
     # ── detail row: entry gates + exit gates + conviction breakdown ───────────
     left, mid, right = st.columns([3, 3, 6], gap="medium")
     with left:
+        _gates_lbl = (f"Entry gates · {symbol} · all must PASS for BULL"
+                      if portfolio_mode else "Entry gates · all must PASS for BULL")
         st.markdown(
             f'<div style="color:{COL_DIM};font-size:10px;text-transform:uppercase;'
             f'letter-spacing:1.5px;margin:0 0 8px 0" '
             f'title="All entry conditions must be PASS simultaneously for a BULL signal.">'
-            f'Entry gates · all must PASS for BULL</div>',
+            f'{_gates_lbl}</div>',
             unsafe_allow_html=True,
         )
         conv_val = float(last["conviction"])
@@ -1096,45 +1407,122 @@ def main() -> None:
             unsafe_allow_html=True,
         )
     with right:
-        st.plotly_chart(_build_breakdown_chart(df), use_container_width=True)
+        st.plotly_chart(_build_breakdown_chart(df, symbol), use_container_width=True)
 
     # ── signal timeline ───────────────────────────────────────────────────────
-    st.markdown(_section_label("Signal timeline"), unsafe_allow_html=True)
-    st.plotly_chart(_build_signal_timeline(df), use_container_width=True)
-
-    # ── equity curve (full width) ─────────────────────────────────────────────
-    st.markdown(_section_label("Performance · strategy vs buy & hold"), unsafe_allow_html=True)
-    st.plotly_chart(_build_equity_chart(metrics), use_container_width=True)
-
-    # ── rolling sharpe + monthly heatmap ──────────────────────────────────────
-    a_left, a_right = st.columns(2, gap="medium")
-    with a_left:
-        st.plotly_chart(_build_rolling_sharpe(df, bear_alloc), use_container_width=True)
-    with a_right:
-        st.plotly_chart(_build_monthly_heatmap(df, bear_alloc), use_container_width=True)
-
-    # ── trade ledger ──────────────────────────────────────────────────────────
-    n_trades = len(trades)
-    hdr_col, dl_col = st.columns([8, 2])
-    with hdr_col:
+    if portfolio_mode:
         st.markdown(
-            _section_label(f"Trade ledger · {n_trades} trade{'s' if n_trades != 1 else ''}"),
+            _section_label(f"Signal timeline · {symbol} (A, {w_a}%) + {sym_b} (B, {w_b}%)"),
             unsafe_allow_html=True,
         )
-    with dl_col:
-        st.download_button(
-            "Export CSV", data=_trades_to_csv(trades),
-            file_name=f"trades_{symbol}_{pd.Timestamp.now():%Y%m%d}.csv",
-            mime="text/csv", use_container_width=True,
+        st.plotly_chart(
+            _build_signal_timeline_dual(df_a_al, df_b_al, symbol, sym_b),
+            use_container_width=True,
         )
-    st.markdown(_render_trade_ledger(trades, n=n_trades), unsafe_allow_html=True)
+    else:
+        st.markdown(_section_label(f"Signal timeline · {symbol}"), unsafe_allow_html=True)
+        st.plotly_chart(_build_signal_timeline(df), use_container_width=True)
 
-    # ── trade analytics ───────────────────────────────────────────────────────
-    t_left, t_right = st.columns(2, gap="medium")
-    with t_left:
-        st.plotly_chart(_build_trade_distribution(trades), use_container_width=True)
-    with t_right:
-        st.plotly_chart(_build_trade_scatter(trades), use_container_width=True)
+    # ── equity curve ──────────────────────────────────────────────────────────
+    if portfolio_mode:
+        st.markdown(
+            _section_label(f"Portfolio equity · {symbol} {w_a}% + {sym_b} {w_b}% vs buy & hold"),
+            unsafe_allow_html=True,
+        )
+        st.plotly_chart(
+            _build_equity_chart_portfolio(symbol, sym_b, m_a, m_b, m_port),
+            use_container_width=True,
+        )
+    else:
+        st.markdown(_section_label(f"Performance · {symbol} strategy vs buy & hold"),
+                    unsafe_allow_html=True)
+        st.plotly_chart(_build_equity_chart(metrics), use_container_width=True)
+
+    # ── rolling sharpe + monthly heatmap ──────────────────────────────────────
+    if portfolio_mode:
+        _sharpe_title = f"Rolling 90-day Sharpe · {symbol} {w_a}% + {sym_b} {w_b}% portfolio"
+        _heat_title   = f"Monthly returns · {symbol} {w_a}% + {sym_b} {w_b}% portfolio (%)"
+    else:
+        _sharpe_title = f"Rolling 90-day Sharpe · {symbol}"
+        _heat_title   = f"Monthly returns · {symbol} (%)"
+    a_left, a_right = st.columns(2, gap="medium")
+    with a_left:
+        st.plotly_chart(
+            _build_rolling_sharpe(df, bear_alloc, port_ret=port_ret, title=_sharpe_title),
+            use_container_width=True,
+        )
+    with a_right:
+        st.plotly_chart(
+            _build_monthly_heatmap(df, bear_alloc, port_ret=port_ret, title=_heat_title),
+            use_container_width=True,
+        )
+
+    # ── trade ledger ──────────────────────────────────────────────────────────
+    if portfolio_mode:
+        tab_a, tab_b = st.tabs([f"{symbol} trades", f"{sym_b} trades"])
+        with tab_a:
+            n_a = len(trades)
+            hc_a, dc_a = st.columns([8, 2])
+            with hc_a:
+                st.markdown(
+                    _section_label(f"Trade ledger · {n_a} trade{'s' if n_a != 1 else ''}"),
+                    unsafe_allow_html=True,
+                )
+            with dc_a:
+                st.download_button(
+                    "Export CSV", data=_trades_to_csv(trades),
+                    file_name=f"trades_{symbol}_{pd.Timestamp.now():%Y%m%d}.csv",
+                    mime="text/csv", use_container_width=True, key="dl_a",
+                )
+            st.markdown(_render_trade_ledger(trades, n=n_a), unsafe_allow_html=True)
+            tl, tr = st.columns(2, gap="medium")
+            with tl:
+                st.plotly_chart(_build_trade_distribution(trades), use_container_width=True)
+            with tr:
+                st.plotly_chart(_build_trade_scatter(trades), use_container_width=True)
+        with tab_b:
+            n_b = len(trades_b)
+            hc_b, dc_b = st.columns([8, 2])
+            with hc_b:
+                st.markdown(
+                    _section_label(f"Trade ledger · {n_b} trade{'s' if n_b != 1 else ''}"),
+                    unsafe_allow_html=True,
+                )
+            with dc_b:
+                st.download_button(
+                    "Export CSV", data=_trades_to_csv(trades_b),
+                    file_name=f"trades_{sym_b}_{pd.Timestamp.now():%Y%m%d}.csv",
+                    mime="text/csv", use_container_width=True, key="dl_b",
+                )
+            st.markdown(_render_trade_ledger(trades_b, n=n_b), unsafe_allow_html=True)
+            tl2, tr2 = st.columns(2, gap="medium")
+            with tl2:
+                st.plotly_chart(_build_trade_distribution(trades_b), use_container_width=True)
+            with tr2:
+                st.plotly_chart(_build_trade_scatter(trades_b), use_container_width=True)
+    else:
+        n_trades = len(trades)
+        hdr_col, dl_col = st.columns([8, 2])
+        with hdr_col:
+            st.markdown(
+                _section_label(f"Trade ledger · {n_trades} trade{'s' if n_trades != 1 else ''}"),
+                unsafe_allow_html=True,
+            )
+        with dl_col:
+            st.download_button(
+                "Export CSV", data=_trades_to_csv(trades),
+                file_name=f"trades_{symbol}_{pd.Timestamp.now():%Y%m%d}.csv",
+                mime="text/csv", use_container_width=True,
+            )
+        st.markdown(_render_trade_ledger(trades, n=n_trades), unsafe_allow_html=True)
+
+        # ── trade analytics ───────────────────────────────────────────────────
+        t_left, t_right = st.columns(2, gap="medium")
+        with t_left:
+            st.plotly_chart(_build_trade_distribution(trades), use_container_width=True)
+        with t_right:
+            st.plotly_chart(_build_trade_scatter(trades), use_container_width=True)
+
     st.markdown(
         f'<div style="color:{COL_VERY_DIM};font-size:10px;margin-top:8px;'
         f'font-family:monospace;text-align:right">'
