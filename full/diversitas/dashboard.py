@@ -22,7 +22,8 @@ from diversitas.config import Config, DEFAULT_CONFIG
 from diversitas.strategy import run_strategy, build_summary, S_BULL, S_NEUTRAL, S_BEAR
 
 
-TRADING_DAYS = 365  # crypto trades 365 d/yr
+TRADING_DAYS = 365  # crypto default
+STOCK_SYMBOLS = frozenset({"SPY", "QQQ", "GLD"})  # 252 trading days/yr
 
 # ── accent colors (theme-independent) ────────────────────────────────────────
 COL_BULL    = "#089981"   # TV teal-green
@@ -103,19 +104,19 @@ def _load_spx(bars: int) -> pd.Series:
 
 # ── performance metrics ───────────────────────────────────────────────────────
 
-def _stats(r: pd.Series) -> dict:
+def _stats(r: pd.Series, td: int = TRADING_DAYS) -> dict:
     r = r.replace([np.inf, -np.inf], 0.0)
     eq    = (1.0 + r).cumprod()
     peak  = eq.cummax()
     dd    = (eq / peak - 1.0)
     max_dd = float(dd.min())
-    years  = max(len(r) / TRADING_DAYS, 1e-9)
+    years  = max(len(r) / td, 1e-9)
     final  = float(eq.iloc[-1]) if len(eq) else 1.0
     cagr   = final ** (1.0 / years) - 1.0
-    ann_ret = r.mean() * TRADING_DAYS
-    ann_std = r.std() * np.sqrt(TRADING_DAYS)
+    ann_ret = r.mean() * td
+    ann_std = r.std() * np.sqrt(td)
     neg     = r[r < 0]
-    down_std = neg.std() * np.sqrt(TRADING_DAYS) if len(neg) > 1 else np.nan
+    down_std = neg.std() * np.sqrt(td) if len(neg) > 1 else np.nan
     sharpe   = ann_ret / ann_std if ann_std > 1e-9 else np.nan
     sortino  = ann_ret / down_std if (not np.isnan(down_std) and down_std > 1e-9) else np.nan
     calmar   = cagr / abs(max_dd) if max_dd < -1e-6 else np.nan
@@ -123,7 +124,8 @@ def _stats(r: pd.Series) -> dict:
                 max_dd=max_dd, calmar=calmar, eq=eq, dd=dd)
 
 
-def _compute_metrics(df: pd.DataFrame, bear_alloc_pct: float = 0.0) -> dict:
+def _compute_metrics(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
+                     td: int = TRADING_DAYS) -> dict:
     """Annualised risk/return metrics for the strategy and buy & hold."""
     close = df["close"]
     ret   = close.pct_change().fillna(0.0)
@@ -131,12 +133,14 @@ def _compute_metrics(df: pd.DataFrame, bear_alloc_pct: float = 0.0) -> dict:
     is_bull = (sig.shift(1) == S_BULL).astype(float)
     pos = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
     strat_ret = pd.Series(ret.values * pos, index=ret.index)
-    return {"strategy": _stats(strat_ret), "bh": _stats(ret)}
+    return {"strategy": _stats(strat_ret, td), "bh": _stats(ret, td)}
 
 
 def _compute_portfolio_metrics(df_a: pd.DataFrame, df_b: pd.DataFrame,
                                 w_a: int, w_b: int,
-                                bear_alloc_pct: float = 0.0):
+                                bear_alloc_pct: float = 0.0,
+                                td_a: int = TRADING_DAYS,
+                                td_b: int = TRADING_DAYS):
     """Floating-weight portfolio metrics for A, B, and combined."""
     idx  = df_a.index.intersection(df_b.index)
     a, b = df_a.loc[idx], df_b.loc[idx]
@@ -152,10 +156,11 @@ def _compute_portfolio_metrics(df_a: pd.DataFrame, df_b: pd.DataFrame,
     wa, wb     = w_a / 100.0, w_b / 100.0
     port_strat = wa * sr_a + wb * sr_b
     port_bh    = wa * r_a  + wb * r_b
+    td_port    = td_a  # primary asset determines portfolio annualization
 
-    m_a    = {"strategy": _stats(sr_a), "bh": _stats(r_a)}
-    m_b    = {"strategy": _stats(sr_b), "bh": _stats(r_b)}
-    m_port = {"strategy": _stats(port_strat), "bh": _stats(port_bh)}
+    m_a    = {"strategy": _stats(sr_a, td_a), "bh": _stats(r_a, td_a)}
+    m_b    = {"strategy": _stats(sr_b, td_b), "bh": _stats(r_b, td_b)}
+    m_port = {"strategy": _stats(port_strat, td_port), "bh": _stats(port_bh, td_port)}
     return m_a, m_b, m_port, a, b, port_strat
 
 
@@ -709,7 +714,8 @@ def _build_signal_timeline(df: pd.DataFrame) -> go.Figure:
 
 def _build_rolling_sharpe(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
                            port_ret: "pd.Series | None" = None,
-                           title: str = "Rolling 90-day Sharpe ratio") -> go.Figure:
+                           title: str = "Rolling 90-day Sharpe ratio",
+                           td: int = TRADING_DAYS) -> go.Figure:
     if port_ret is not None:
         strat_ret = port_ret
     else:
@@ -718,8 +724,8 @@ def _build_rolling_sharpe(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
         pos = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
         strat_ret = pd.Series(ret.values * pos, index=ret.index)
     window = 90
-    rm = strat_ret.rolling(window, min_periods=window).mean() * TRADING_DAYS
-    rs = strat_ret.rolling(window, min_periods=window).std() * np.sqrt(TRADING_DAYS)
+    rm = strat_ret.rolling(window, min_periods=window).mean() * td
+    rs = strat_ret.rolling(window, min_periods=window).std() * np.sqrt(td)
     sharpe = (rm / rs).replace([np.inf, -np.inf], np.nan).dropna()
     fig = go.Figure()
     fig.add_trace(go.Scatter(
@@ -1297,9 +1303,13 @@ def main() -> None:
     if df.empty:
         st.warning("No data in the selected date range — widen the window.")
         st.stop()
+    # ── trading-day calendar ──────────────────────────────────────────────────
+    td   = 252 if symbol in STOCK_SYMBOLS else 365
+    td_b_val = 0  # set after sym_b is known
+
     s = build_summary(df)
     trades   = _build_trade_ledger(df)
-    metrics  = _compute_metrics(df, bear_alloc_pct=bear_alloc)
+    metrics  = _compute_metrics(df, bear_alloc_pct=bear_alloc, td=td)
     is_bull  = (df["signal_state"].shift(1) == S_BULL).astype(float)
     exposure = (is_bull * 100 + (1 - is_bull) * bear_alloc).mean()
 
@@ -1322,8 +1332,9 @@ def main() -> None:
         if df_b.empty:
             st.warning(f"No data for {sym_b} in the selected date range.")
             st.stop()
+        td_b_val = 252 if sym_b in STOCK_SYMBOLS else 365
         m_a, m_b, m_port, df_a_al, df_b_al, port_ret = _compute_portfolio_metrics(
-            df, df_b, w_a, w_b, bear_alloc)
+            df, df_b, w_a, w_b, bear_alloc, td_a=td, td_b=td_b_val)
         is_bull_b = (df_b_al["signal_state"].shift(1) == S_BULL).astype(float)
         exp_b = (is_bull_b * 100 + (1 - is_bull_b) * bear_alloc).mean()
         trades_b = _build_trade_ledger(df_b)
@@ -1364,6 +1375,10 @@ def main() -> None:
     _first = df.index[0].strftime("%Y-%m-%d")
     _last = df.index[-1].strftime("%Y-%m-%d")
     _bear_txt = f"  ·  BEAR alloc {bear_alloc}%" if bear_alloc > 0 else ""
+    _stock_badge = (
+        f'  ·  <span style="color:{COL_SPX};font-weight:600">⚠ Stock mode · {td}d/yr · params not tuned for equities</span>'
+        if td == 252 else ""
+    )
     if portfolio_mode:
         st.markdown(
             f'<div style="color:{COL_DIM};font-size:11px;font-family:monospace;'
@@ -1371,14 +1386,14 @@ def main() -> None:
             f'{_n_bars} bars  ·  {_first}  →  {_last}  ·  '
             f'<span style="color:{COL_BULL}">{symbol}</span> {w_a}%'
             f' + <span style="color:#4fc3f7">{sym_b}</span> {w_b}%'
-            f'{_bear_txt}</div>',
+            f'{_bear_txt}{_stock_badge}</div>',
             unsafe_allow_html=True,
         )
     else:
         st.markdown(
             f'<div style="color:{COL_DIM};font-size:11px;font-family:monospace;'
             f'text-align:right;margin:-6px 0 6px 0">'
-            f'{_n_bars} bars  ·  {_first}  →  {_last}{_bear_txt}</div>',
+            f'{_n_bars} bars  ·  {_first}  →  {_last}{_bear_txt}{_stock_badge}</div>',
             unsafe_allow_html=True,
         )
 
@@ -1517,7 +1532,8 @@ def main() -> None:
     a_left, a_right = st.columns(2, gap="medium")
     with a_left:
         st.plotly_chart(
-            _build_rolling_sharpe(df, bear_alloc, port_ret=port_ret, title=_sharpe_title),
+            _build_rolling_sharpe(df, bear_alloc, port_ret=port_ret,
+                                  title=_sharpe_title, td=td),
             use_container_width=True,
         )
     with a_right:
