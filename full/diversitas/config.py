@@ -52,14 +52,19 @@ class Config:
     # Asset symbol mapping (logical -> per-source identifier)
     # Used by data_source.py
     symbol_map: Dict[str, Dict[str, str]] = field(default_factory=lambda: {
-        "BTC": {"binance": "BTCUSDT", "yahoo": "BTC-USD", "coingecko": "bitcoin"},
-        "ETH": {"binance": "ETHUSDT", "yahoo": "ETH-USD", "coingecko": "ethereum"},
-        "SOL": {"binance": "SOLUSDT", "yahoo": "SOL-USD", "coingecko": "solana"},
-        "BNB": {"binance": "BNBUSDT", "yahoo": "BNB-USD", "coingecko": "binancecoin"},
-        "XRP": {"binance": "XRPUSDT", "yahoo": "XRP-USD", "coingecko": "ripple"},
-        "ADA": {"binance": "ADAUSDT", "yahoo": "ADA-USD", "coingecko": "cardano"},
-        "AVAX": {"binance": "AVAXUSDT", "yahoo": "AVAX-USD", "coingecko": "avalanche-2"},
-        "LINK": {"binance": "LINKUSDT", "yahoo": "LINK-USD", "coingecko": "chainlink"},
+        # ── crypto (Binance primary, yfinance fallback) ───────────────────────
+        "BTC":  {"binance": "BTCUSDT", "yahoo": "BTC-USD",  "coingecko": "bitcoin"},
+        "ETH":  {"binance": "ETHUSDT", "yahoo": "ETH-USD",  "coingecko": "ethereum"},
+        "SOL":  {"binance": "SOLUSDT", "yahoo": "SOL-USD",  "coingecko": "solana"},
+        "BNB":  {"binance": "BNBUSDT", "yahoo": "BNB-USD",  "coingecko": "binancecoin"},
+        "XRP":  {"binance": "XRPUSDT", "yahoo": "XRP-USD",  "coingecko": "ripple"},
+        "ADA":  {"binance": "ADAUSDT", "yahoo": "ADA-USD",  "coingecko": "cardano"},
+        "AVAX": {"binance": "AVAXUSDT","yahoo": "AVAX-USD", "coingecko": "avalanche-2"},
+        "LINK": {"binance": "LINKUSDT","yahoo": "LINK-USD", "coingecko": "chainlink"},
+        # ── equities / ETFs (yfinance only, 252 trading days/yr) ─────────────
+        "SPY":  {"yahoo": "SPY"},    # S&P 500 ETF
+        "QQQ":  {"yahoo": "QQQ"},    # Nasdaq-100 ETF
+        "GLD":  {"yahoo": "GLD"},    # Gold ETF
     })
 
 
