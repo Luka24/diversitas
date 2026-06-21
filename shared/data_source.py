@@ -216,16 +216,59 @@ def _coinbase_parse(raw: list[list]) -> pd.DataFrame:
     return df
 
 
+def _yahoo_direct_fetch(symbol_yf: str, bars: int) -> pd.DataFrame:
+    """Yahoo Finance v8 chart API via plain requests — no websockets needed."""
+    import time as _time
+
+    period2 = int(_time.time())
+    period1 = period2 - max(bars * 2, 400) * 86400  # 2× buffer for weekends/holidays
+
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol_yf}"
+    params = {
+        "interval": "1d",
+        "period1": period1,
+        "period2": period2,
+        "events": "div,splits",
+    }
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+        "Accept": "application/json",
+    }
+    r = requests.get(url, params=params, headers=headers, timeout=15)
+    if r.status_code != 200:
+        raise DataSourceError(f"Yahoo Finance HTTP {r.status_code}: {r.text[:200]}")
+
+    data = r.json()
+    result = (data.get("chart") or {}).get("result")
+    if not result:
+        err = (data.get("chart") or {}).get("error") or "empty response"
+        raise DataSourceError(f"Yahoo Finance returned no data for {symbol_yf}: {err}")
+
+    chart = result[0]
+    timestamps = chart.get("timestamp") or []
+    quotes = (chart.get("indicators") or {}).get("quote", [{}])[0]
+
+    if not timestamps:
+        raise DataSourceError(f"Yahoo Finance: no timestamps for {symbol_yf}")
+
+    df = pd.DataFrame({
+        "open":   quotes.get("open",   [None] * len(timestamps)),
+        "high":   quotes.get("high",   [None] * len(timestamps)),
+        "low":    quotes.get("low",    [None] * len(timestamps)),
+        "close":  quotes.get("close",  [None] * len(timestamps)),
+        "volume": quotes.get("volume", [0]    * len(timestamps)),
+    }, index=pd.to_datetime(timestamps, unit="s", utc=True))
+    df.index.name = "time"
+    df = df.dropna(subset=["open", "high", "low", "close"])
+    return df.tail(bars)
+
+
 def _yf_fetch(symbol_yf: str, interval: str, bars: int) -> pd.DataFrame:
-    """yfinance fallback. Daily candles only — for weekly we resample after."""
+    """yfinance fallback (requires compatible websockets). Prefer _yahoo_direct_fetch."""
     import yfinance as yf
 
-    # Need enough history for `bars` daily candles + buffer
     period_days = max(bars + 30, 60)
-    if period_days > 730:
-        period = "max"
-    else:
-        period = f"{period_days}d"
+    period = "max" if period_days > 730 else f"{period_days}d"
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -311,11 +354,12 @@ def fetch_candles(
             if src == "yahoo":
                 if "yahoo" not in symbol_map[symbol]:
                     raise DataSourceError(f"No Yahoo ticker for {symbol}")
-                return _yf_fetch(
-                    symbol_map[symbol]["yahoo"],
-                    interval,
-                    bars,
-                )
+                ticker_yf = symbol_map[symbol]["yahoo"]
+                # Try direct HTTP first (no websockets dependency), then yfinance.
+                try:
+                    return _yahoo_direct_fetch(ticker_yf, bars)
+                except Exception as _e_direct:
+                    return _yf_fetch(ticker_yf, interval, bars)
         except Exception as e:  # noqa: BLE001
             last_err = e
             continue
