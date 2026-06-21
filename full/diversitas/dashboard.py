@@ -63,12 +63,12 @@ def _set_theme(dark: bool) -> None:
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_candles(symbol: str, bars: int) -> pd.DataFrame:
-    return fetch_candles(symbol, "1d", bars=bars)
+    return fetch_candles(symbol, "1d", bars=bars, config=DEFAULT_CONFIG)
 
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_btc(bars: int) -> pd.DataFrame:
-    return fetch_btc_daily(bars=bars)
+    return fetch_btc_daily(bars=bars, config=DEFAULT_CONFIG)
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -1316,6 +1316,7 @@ def main() -> None:
     # ── portfolio mode: load & compute Asset B ────────────────────────────────
     m_a = m_b = m_port = None
     df_b = df_a_al = df_b_al = port_ret = None
+    s_b = None
     exp_b = 0.0
     trades_b: list[dict] = []
     if portfolio_mode:
@@ -1335,6 +1336,7 @@ def main() -> None:
         td_b_val = 252 if sym_b in STOCK_SYMBOLS else 365
         m_a, m_b, m_port, df_a_al, df_b_al, port_ret = _compute_portfolio_metrics(
             df, df_b, w_a, w_b, bear_alloc, td_a=td, td_b=td_b_val)
+        s_b = build_summary(df_b_al)
         is_bull_b = (df_b_al["signal_state"].shift(1) == S_BULL).astype(float)
         exp_b = (is_bull_b * 100 + (1 - is_bull_b) * bear_alloc).mean()
         trades_b = _build_trade_ledger(df_b)
@@ -1399,99 +1401,112 @@ def main() -> None:
 
     last = df.iloc[-1]
 
-    # ── price chart — always Asset A (primary) ────────────────────────────────
-    _pc_label = (f"Price chart · {symbol}/USD · Asset A (primary)"
-                 if portfolio_mode else f"Price chart · {symbol}/USD")
-    st.markdown(_section_label(_pc_label), unsafe_allow_html=True)
-    st.plotly_chart(_build_price_chart(df, symbol, bear_alloc), use_container_width=True)
+    # ── price charts (tabs in portfolio mode) ────────────────────────────────
+    if portfolio_mode and df_b is not None:
+        st.markdown(_section_label(f"Price chart · {symbol} (A, {w_a}%) + {sym_b} (B, {w_b}%)"),
+                    unsafe_allow_html=True)
+        _tab_pc_a, _tab_pc_b = st.tabs([f"▲ {symbol} / USD  ·  Asset A ({w_a}%)",
+                                         f"▲ {sym_b} / USD  ·  Asset B ({w_b}%)"])
+        with _tab_pc_a:
+            st.plotly_chart(_build_price_chart(df, symbol, bear_alloc),
+                            use_container_width=True)
+        with _tab_pc_b:
+            st.plotly_chart(_build_price_chart(df_b_al, sym_b, bear_alloc),
+                            use_container_width=True)
+    else:
+        st.markdown(_section_label(f"Price chart · {symbol}/USD"), unsafe_allow_html=True)
+        st.plotly_chart(_build_price_chart(df, symbol, bear_alloc), use_container_width=True)
+
+    # ── gates helper ─────────────────────────────────────────────────────────
+    def _render_full_gates(df_g: pd.DataFrame, s_g: dict, sym_g: str,
+                            btc_filt: bool) -> None:
+        last_g = df_g.iloc[-1]
+        left, mid, right = st.columns([3, 3, 6], gap="medium")
+        with left:
+            st.markdown(
+                f'<div style="color:{COL_DIM};font-size:10px;text-transform:uppercase;'
+                f'letter-spacing:1.5px;margin:0 0 8px 0" '
+                f'title="All entry conditions must be PASS simultaneously for a BULL signal.">'
+                f'Entry gates · {sym_g} · all must PASS for BULL</div>',
+                unsafe_allow_html=True,
+            )
+            conv_v = float(last_g["conviction"])
+            thr_v  = float(last_g["dynamic_threshold"])
+            er_v   = float(last_g["er"]) if pd.notna(last_g["er"]) else 0.0
+            entry_gates = [
+                ("Above trackline + buffer",
+                 bool(last_g["above_tl"]),
+                 "Price must be above the Kijun trackline plus the buffer zone."),
+                (f"Conviction >= threshold ({conv_v:.0f} / {thr_v:.0f})",
+                 conv_v >= thr_v,
+                 f"Conviction ({conv_v:.1f}) must exceed threshold ({thr_v:.0f})."),
+                ("ADX above mean (trend strength)",
+                 bool(last_g["adx_ok"]),
+                 "ADX must be above its 100-bar average, confirming trending conditions."),
+                ("Market structure bullish (HH > LL)",
+                 bool(last_g["structure_bull"]),
+                 "Recent higher highs must be more recent than lower lows."),
+                ("HTF bull (weekly > EMA 20)",
+                 bool(last_g["htf_bull"]),
+                 "Weekly close must be above the 20-week EMA for macro confirmation."),
+                ("No bear market (200 MA)",
+                 not bool(last_g["bear_market"]),
+                 "200 MA must not be falling with price below — blocks entries in downtrends."),
+                (f"ER {er_v:.2f}  {'TREND' if s_g['er_ok'] else 'CHOP'}",
+                 bool(last_g["er_ok"]),
+                 f"Efficiency Ratio must be above {cfg.er_thresh:.2f} (trending)."),
+            ]
+            if btc_filt:
+                entry_gates.append(("BTC bull (cross-asset)",
+                                    bool(last_g["btc_filter_ok"]),
+                                    "BTC must be in a bull regime for altcoin entries."))
+            gate_html = "".join(
+                f'<div title="{tip}">{_gate_row(lbl, ok)}</div>'
+                for lbl, ok, tip in entry_gates
+            )
+            st.markdown(
+                f'<div style="background:{COL_PANEL};border:1px solid {COL_BORDER};'
+                f'border-radius:4px;overflow:hidden">{gate_html}</div>',
+                unsafe_allow_html=True,
+            )
+        with mid:
+            st.markdown(
+                f'<div style="color:{COL_DIM};font-size:10px;text-transform:uppercase;'
+                f'letter-spacing:1.5px;margin:0 0 8px 0">'
+                f'Exit gates · any FAIL triggers exit</div>',
+                unsafe_allow_html=True,
+            )
+            thr_e = s_g["threshold"]; conv_e = s_g["conviction"]
+            exit_gates = [
+                ("Conviction above threshold", conv_e >= thr_e,
+                 f"Conviction ({conv_e:.1f}) must stay above threshold ({thr_e:.0f})."),
+                ("No bear market (200 MA)", not s_g["bear_market"],
+                 "A confirmed bear market forces an exit regardless of conviction."),
+                ("No blow-off top",    not s_g["blowoff"],    "A parabolic blow-off top triggers an exit."),
+                ("No volatility shock", not s_g["vol_shock"], "A sudden volatility spike triggers an exit."),
+            ]
+            exit_html = "".join(
+                f'<div title="{tip}">{_gate_row(lbl, ok)}</div>'
+                for lbl, ok, tip in exit_gates
+            )
+            st.markdown(
+                f'<div style="background:{COL_PANEL};border:1px solid {COL_BORDER};'
+                f'border-radius:4px;overflow:hidden">{exit_html}</div>',
+                unsafe_allow_html=True,
+            )
+        with right:
+            st.plotly_chart(_build_breakdown_chart(df_g, sym_g), use_container_width=True)
 
     # ── detail row: entry gates + exit gates + conviction breakdown ───────────
-    left, mid, right = st.columns([3, 3, 6], gap="medium")
-    with left:
-        _gates_lbl = (f"Entry gates · {symbol} · all must PASS for BULL"
-                      if portfolio_mode else "Entry gates · all must PASS for BULL")
-        st.markdown(
-            f'<div style="color:{COL_DIM};font-size:10px;text-transform:uppercase;'
-            f'letter-spacing:1.5px;margin:0 0 8px 0" '
-            f'title="All entry conditions must be PASS simultaneously for a BULL signal.">'
-            f'{_gates_lbl}</div>',
-            unsafe_allow_html=True,
-        )
-        conv_val = float(last["conviction"])
-        thr_val = float(last["dynamic_threshold"])
-        er_val = float(last["er"]) if pd.notna(last["er"]) else 0.0
-        entry_gates = [
-            ("Above trackline + buffer",
-             bool(last["above_tl"]),
-             "Price must be above the Kijun trackline plus the buffer zone."),
-            (f"Conviction >= threshold ({conv_val:.0f} / {thr_val:.0f})",
-             conv_val >= thr_val,
-             f"Conviction ({conv_val:.1f}) must exceed threshold ({thr_val:.0f})."),
-            ("ADX above mean (trend strength)",
-             bool(last["adx_ok"]),
-             "ADX must be above its 100-bar average, confirming trending conditions."),
-            ("Market structure bullish (HH > LL)",
-             bool(last["structure_bull"]),
-             "Recent higher highs must be more recent than lower lows."),
-            ("HTF bull (weekly > EMA 20)",
-             bool(last["htf_bull"]),
-             "Weekly close must be above the 20-week EMA for macro confirmation."),
-            ("No bear market (200 MA)",
-             not bool(last["bear_market"]),
-             "200 MA must not be falling with price below — blocks entries in downtrends."),
-            (f"ER {er_val:.2f}  {'TREND' if s['er_ok'] else 'CHOP'}",
-             bool(last["er_ok"]),
-             f"Efficiency Ratio must be above {cfg.er_thresh:.2f} (trending)."),
-        ]
-        if use_btc_filter:
-            entry_gates.append((
-                "BTC bull (cross-asset)",
-                bool(last["btc_filter_ok"]),
-                "BTC must be in a bull regime for altcoin entries."))
-        gate_html = "".join(
-            f'<div title="{tip}">{_gate_row(lbl, ok)}</div>'
-            for lbl, ok, tip in entry_gates
-        )
-        st.markdown(
-            f'<div style="background:{COL_PANEL};border:1px solid {COL_BORDER};'
-            f'border-radius:4px;overflow:hidden">{gate_html}</div>',
-            unsafe_allow_html=True,
-        )
-    with mid:
-        st.markdown(
-            f'<div style="color:{COL_DIM};font-size:10px;text-transform:uppercase;'
-            f'letter-spacing:1.5px;margin:0 0 8px 0" '
-            f'title="If any exit gate becomes FAIL the strategy exits to cash.">'
-            f'Exit gates · any FAIL triggers exit</div>',
-            unsafe_allow_html=True,
-        )
-        thr = s["threshold"]
-        conv = s["conviction"]
-        exit_gates = [
-            ("Conviction above threshold",
-             conv >= thr,
-             f"Conviction ({conv:.1f}) must stay above the dynamic threshold ({thr:.0f})."),
-            ("No bear market (200 MA)",
-             not s["bear_market"],
-             "A confirmed bear market forces an exit regardless of conviction."),
-            ("No blow-off top",
-             not s["blowoff"],
-             "A parabolic blow-off top triggers an exit."),
-            ("No volatility shock",
-             not s["vol_shock"],
-             "A sudden volatility spike triggers an exit."),
-        ]
-        exit_html = "".join(
-            f'<div title="{tip}">{_gate_row(lbl, ok)}</div>'
-            for lbl, ok, tip in exit_gates
-        )
-        st.markdown(
-            f'<div style="background:{COL_PANEL};border:1px solid {COL_BORDER};'
-            f'border-radius:4px;overflow:hidden">{exit_html}</div>',
-            unsafe_allow_html=True,
-        )
-    with right:
-        st.plotly_chart(_build_breakdown_chart(df, symbol), use_container_width=True)
+    if portfolio_mode and s_b is not None:
+        _tab_g_a, _tab_g_b = st.tabs([f"Entry / Exit gates · {symbol}",
+                                        f"Entry / Exit gates · {sym_b}"])
+        with _tab_g_a:
+            _render_full_gates(df, s, symbol, use_btc_filter)
+        with _tab_g_b:
+            _render_full_gates(df_b_al, s_b, sym_b, False)
+    else:
+        _render_full_gates(df, s, symbol, use_btc_filter)
 
     # ── signal timeline ───────────────────────────────────────────────────────
     if portfolio_mode:

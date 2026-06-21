@@ -38,6 +38,10 @@ DEFAULT_SYMBOL_MAP: Mapping[str, Mapping[str, str]] = {
     "ADA": {"binance": "ADAUSDT", "coinbase": "ADA-USD", "yahoo": "ADA-USD", "coingecko": "cardano"},
     "AVAX": {"binance": "AVAXUSDT", "coinbase": "AVAX-USD", "yahoo": "AVAX-USD", "coingecko": "avalanche-2"},
     "LINK": {"binance": "LINKUSDT", "coinbase": "LINK-USD", "yahoo": "LINK-USD", "coingecko": "chainlink"},
+    # ── equities / ETFs (yfinance only, 252 trading days/yr) ─────────────────
+    "SPY": {"yahoo": "SPY"},   # S&P 500 ETF
+    "QQQ": {"yahoo": "QQQ"},   # Nasdaq-100 ETF
+    "GLD": {"yahoo": "GLD"},   # Gold ETF
 }
 
 
