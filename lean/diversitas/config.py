@@ -56,6 +56,10 @@ class LeanConfig:
         "ADA": {"binance": "ADAUSDT", "yahoo": "ADA-USD", "coingecko": "cardano"},
         "AVAX": {"binance": "AVAXUSDT", "yahoo": "AVAX-USD", "coingecko": "avalanche-2"},
         "LINK": {"binance": "LINKUSDT", "yahoo": "LINK-USD", "coingecko": "chainlink"},
+        # ── equities / ETFs (yfinance only, 252 trading days/yr) ─────────────
+        "SPY":  {"yahoo": "SPY"},    # S&P 500 ETF
+        "QQQ":  {"yahoo": "QQQ"},    # Nasdaq-100 ETF
+        "GLD":  {"yahoo": "GLD"},    # Gold ETF
     })
 
 
