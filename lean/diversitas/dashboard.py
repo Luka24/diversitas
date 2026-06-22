@@ -17,7 +17,7 @@ from plotly.subplots import make_subplots
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
-from shared.data_source import fetch_candles, fetch_btc_daily
+from shared.data_source import fetch_candles, fetch_btc_daily, fetch_spx_daily
 from diversitas.config import LeanConfig, DEFAULT_CONFIG
 from diversitas.strategy import run_strategy, build_summary, S_BULL, S_NEUTRAL, S_BEAR
 
@@ -89,18 +89,8 @@ def _run_b(symbol: str, bars: int, use_er: bool):
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _load_spx(bars: int) -> pd.Series:
-    """S&P 500 daily close prices via yfinance (^GSPC). Returns timezone-naive series."""
-    import yfinance as yf
-    import warnings
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        df = yf.Ticker("^GSPC").history(period="max", auto_adjust=True)
-    if df.empty:
-        return pd.Series(dtype=float)
-    s = df["Close"].copy()
-    s.index = pd.to_datetime(s.index).tz_localize(None)
-    s.name = "spx"
-    return s.tail(bars)
+    """S&P 500 daily close prices via direct Yahoo Finance API. Timezone-naive."""
+    return fetch_spx_daily(bars)
 
 
 # ── performance metrics ───────────────────────────────────────────────────────
@@ -630,6 +620,66 @@ def _build_price_chart(df: pd.DataFrame, symbol: str,
                      title_text="Alloc %", title_font=dict(color=COL_DIM, size=10),
                      range=[0, 110], row=2, col=1)
     return fig
+
+
+def _build_spx_chart(spx_eq: pd.Series) -> go.Figure:
+    """Standalone S&P 500 B&H equity curve + drawdown."""
+    dd = (spx_eq / spx_eq.cummax() - 1) * 100
+    fig = make_subplots(
+        rows=2, cols=1, shared_xaxes=True,
+        row_heights=[0.68, 0.32], vertical_spacing=0.03,
+    )
+    fig.add_trace(go.Scatter(
+        x=spx_eq.index, y=spx_eq,
+        mode="lines", line=dict(color=COL_SPX, width=2),
+        name="S&P 500 B&H",
+        fill="tozeroy", fillcolor="rgba(245,158,11,0.08)",
+        hovertemplate="SPX %{y:.2f}<extra></extra>",
+    ), row=1, col=1)
+    fig.add_trace(go.Scatter(
+        x=dd.index, y=dd,
+        mode="lines", line=dict(color=COL_BEAR, width=1),
+        name="Drawdown", fill="tozeroy", fillcolor="rgba(242,54,69,0.15)",
+        hovertemplate="DD %{y:.1f}%<extra></extra>",
+    ), row=2, col=1)
+    _chart_layout(fig, height=480)
+    fig.update_yaxes(gridcolor=COL_GRID, zerolinecolor=COL_GRID,
+                     tickfont=dict(color=COL_DIM, size=10), side="right", row=1, col=1)
+    fig.update_yaxes(gridcolor=COL_GRID, zerolinecolor=COL_GRID,
+                     tickfont=dict(color=COL_DIM, size=10), side="right",
+                     title_text="DD %", title_font=dict(color=COL_DIM, size=10),
+                     row=2, col=1)
+    return fig
+
+
+def _render_spx_bar(spx_m: dict) -> str:
+    """One-line metrics summary bar for the S&P 500 tab."""
+    items = [
+        ("CAGR",    _fmt_pct(spx_m["cagr"])),
+        ("Sharpe",  _fmt_ratio(spx_m["sharpe"])),
+        ("Sortino", _fmt_ratio(spx_m["sortino"])),
+        ("Max DD",  _fmt_pct(spx_m["max_dd"])),
+        ("Calmar",  _fmt_ratio(spx_m["calmar"])),
+    ]
+    chips = "".join(
+        f'<span style="margin-right:20px;font-family:monospace">'
+        f'<span style="color:{COL_DIM};font-size:10px;text-transform:uppercase;'
+        f'letter-spacing:1px">{lbl} </span>'
+        f'<span style="color:{COL_SPX};font-size:14px;font-weight:700">{val}</span>'
+        f'</span>'
+        for lbl, val in items
+    )
+    return (
+        f'<div style="background:{COL_PANEL};border:1px solid {COL_BORDER};'
+        f'border-left:3px solid {COL_SPX};border-radius:3px;'
+        f'padding:10px 16px;margin-bottom:8px;display:flex;align-items:center;flex-wrap:wrap;gap:4px">'
+        f'<span style="color:{COL_SPX};font-size:15px;font-weight:700;'
+        f'margin-right:20px;font-family:monospace">S&amp;P 500</span>'
+        f'{chips}'
+        f'<span style="color:{COL_VERY_DIM};font-size:10px;margin-left:auto;font-family:monospace">'
+        f'Buy &amp; Hold · no trading · 100% invested</span>'
+        f'</div>'
+    )
 
 
 def _build_equity_chart(metrics: dict, symbol: str = "",
@@ -1492,21 +1542,42 @@ def main() -> None:
             unsafe_allow_html=True,
         )
 
-    # ── price charts (tabs in portfolio mode) ────────────────────────────────
+    # ── price charts (tabs; SPX always added as last tab when available) ────────
+    _spx_tab_label = "S&P 500" if (spx_eq is not None and spx_m is not None) else None
     if portfolio_mode and df_b is not None:
         st.markdown(_section_label(f"Price chart · {symbol} (A, {w_a}%) + {sym_b} (B, {w_b}%)"),
                     unsafe_allow_html=True)
-        _tab_pc_a, _tab_pc_b = st.tabs([f"▲ {symbol} / USD  ·  Asset A ({w_a}%)",
-                                         f"▲ {sym_b} / USD  ·  Asset B ({w_b}%)"])
-        with _tab_pc_a:
+        _pc_labels = [f"▲ {symbol} / USD  ·  Asset A ({w_a}%)",
+                      f"▲ {sym_b} / USD  ·  Asset B ({w_b}%)"]
+        if _spx_tab_label:
+            _pc_labels.append(_spx_tab_label)
+        _pc_tabs = st.tabs(_pc_labels)
+        with _pc_tabs[0]:
             st.plotly_chart(_build_price_chart(df, symbol, bear_alloc),
-                            use_container_width=True)
-        with _tab_pc_b:
+                            use_container_width=True, key="pc_a")
+        with _pc_tabs[1]:
             st.plotly_chart(_build_price_chart(df_b_al, sym_b, bear_alloc),
-                            use_container_width=True)
+                            use_container_width=True, key="pc_b")
+        if _spx_tab_label:
+            with _pc_tabs[2]:
+                st.markdown(_render_spx_bar(spx_m), unsafe_allow_html=True)
+                st.plotly_chart(_build_spx_chart(spx_eq), use_container_width=True, key="pc_spx_port")
     else:
         st.markdown(_section_label(f"Price chart · {symbol}/USD"), unsafe_allow_html=True)
-        st.plotly_chart(_build_price_chart(df, symbol, bear_alloc), use_container_width=True)
+        _pc_labels = [f"▲ {symbol} / USD"]
+        if _spx_tab_label:
+            _pc_labels.append(_spx_tab_label)
+        if len(_pc_labels) > 1:
+            _pc_tabs = st.tabs(_pc_labels)
+            with _pc_tabs[0]:
+                st.plotly_chart(_build_price_chart(df, symbol, bear_alloc),
+                                use_container_width=True, key="pc_single")
+            with _pc_tabs[1]:
+                st.markdown(_render_spx_bar(spx_m), unsafe_allow_html=True)
+                st.plotly_chart(_build_spx_chart(spx_eq), use_container_width=True, key="pc_spx_single")
+        else:
+            st.plotly_chart(_build_price_chart(df, symbol, bear_alloc),
+                            use_container_width=True, key="pc_only")
 
     # ── gates + status (tabs in portfolio mode) ───────────────────────────────
     if portfolio_mode and s_b is not None:
@@ -1527,11 +1598,11 @@ def main() -> None:
         )
         st.plotly_chart(
             _build_signal_timeline_dual(df_a_al, df_b_al, symbol, sym_b),
-            use_container_width=True,
+            use_container_width=True, key="timeline_port",
         )
     else:
         st.markdown(_section_label(f"Signal timeline · {symbol}"), unsafe_allow_html=True)
-        st.plotly_chart(_build_signal_timeline(df), use_container_width=True)
+        st.plotly_chart(_build_signal_timeline(df), use_container_width=True, key="timeline_single")
 
     # ── equity curve ──────────────────────────────────────────────────────────
     if portfolio_mode:
@@ -1541,13 +1612,13 @@ def main() -> None:
         )
         st.plotly_chart(
             _build_equity_chart_portfolio(symbol, sym_b, m_a, m_b, m_port, spx_eq=spx_eq),
-            use_container_width=True,
+            use_container_width=True, key="equity_port",
         )
     else:
         st.markdown(_section_label(f"Performance · {symbol} strategy vs buy & hold"),
                     unsafe_allow_html=True)
         st.plotly_chart(_build_equity_chart(metrics, symbol=symbol, spx_eq=spx_eq),
-                        use_container_width=True)
+                        use_container_width=True, key="equity_single")
 
     # ── rolling sharpe + monthly heatmap ──────────────────────────────────────
     if portfolio_mode:
@@ -1561,12 +1632,12 @@ def main() -> None:
         st.plotly_chart(
             _build_rolling_sharpe(df, bear_alloc, port_ret=port_ret,
                                   title=_sharpe_title, td=td),
-            use_container_width=True,
+            use_container_width=True, key="sharpe",
         )
     with a_right:
         st.plotly_chart(
             _build_monthly_heatmap(df, bear_alloc, port_ret=port_ret, title=_heat_title),
-            use_container_width=True,
+            use_container_width=True, key="heatmap",
         )
 
     # ── trade ledger ──────────────────────────────────────────────────────────
@@ -1589,9 +1660,11 @@ def main() -> None:
             st.markdown(_render_trade_ledger(trades, n=n_a), unsafe_allow_html=True)
             tl, tr = st.columns(2, gap="medium")
             with tl:
-                st.plotly_chart(_build_trade_distribution(trades), use_container_width=True)
+                st.plotly_chart(_build_trade_distribution(trades),
+                                use_container_width=True, key="tdist_a")
             with tr:
-                st.plotly_chart(_build_trade_scatter(trades), use_container_width=True)
+                st.plotly_chart(_build_trade_scatter(trades),
+                                use_container_width=True, key="tscat_a")
         with tab_b:
             n_b = len(trades_b)
             hc_b, dc_b = st.columns([8, 2])
@@ -1609,9 +1682,11 @@ def main() -> None:
             st.markdown(_render_trade_ledger(trades_b, n=n_b), unsafe_allow_html=True)
             tl2, tr2 = st.columns(2, gap="medium")
             with tl2:
-                st.plotly_chart(_build_trade_distribution(trades_b), use_container_width=True)
+                st.plotly_chart(_build_trade_distribution(trades_b),
+                                use_container_width=True, key="tdist_b")
             with tr2:
-                st.plotly_chart(_build_trade_scatter(trades_b), use_container_width=True)
+                st.plotly_chart(_build_trade_scatter(trades_b),
+                                use_container_width=True, key="tscat_b")
     else:
         n_trades = len(trades)
         hdr_col, dl_col = st.columns([8, 2])
@@ -1630,9 +1705,11 @@ def main() -> None:
 
         t_left, t_right = st.columns(2, gap="medium")
         with t_left:
-            st.plotly_chart(_build_trade_distribution(trades), use_container_width=True)
+            st.plotly_chart(_build_trade_distribution(trades),
+                            use_container_width=True, key="tdist_single")
         with t_right:
-            st.plotly_chart(_build_trade_scatter(trades), use_container_width=True)
+            st.plotly_chart(_build_trade_scatter(trades),
+                            use_container_width=True, key="tscat_single")
 
     st.markdown(
         f'<div style="color:{COL_VERY_DIM};font-size:10px;margin-top:8px;'
