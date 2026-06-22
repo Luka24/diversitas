@@ -154,8 +154,102 @@ def _compute_portfolio_metrics(df_a: pd.DataFrame, df_b: pd.DataFrame,
     return m_a, m_b, m_port, a, b, port_strat
 
 
+def _worst_windows_from_sr(sr: pd.Series, td: int, window: int = 365) -> dict:
+    """Worst rolling `window`-bar period for each metric.
+
+    Returns dict with keys: {metric}, {metric}_start, {metric}_end, _roll_cagr.
+    All dates are Python date objects.
+    """
+    if len(sr) < window + 10:
+        return {}
+
+    sr = sr.replace([np.inf, -np.inf], 0.0)
+
+    # ── rolling CAGR (annualised) ─────────────────────────────────────────────
+    log_r     = np.log1p(sr.clip(lower=-0.999))
+    roll_log  = log_r.rolling(window).sum()
+    roll_cagr = np.exp(roll_log * (td / window)) - 1
+
+    # ── rolling Sharpe ────────────────────────────────────────────────────────
+    roll_mean   = sr.rolling(window).mean() * td
+    roll_std    = sr.rolling(window).std()  * np.sqrt(td)
+    roll_sharpe = pd.Series(
+        np.where(roll_std > 1e-9, roll_mean / roll_std, np.nan),
+        index=sr.index,
+    )
+
+    # ── rolling Sortino (semi-deviation) ─────────────────────────────────────
+    roll_down_var = (sr.clip(upper=0) ** 2).rolling(window).mean()
+    roll_down_std = np.sqrt(roll_down_var) * np.sqrt(td)
+    roll_sortino  = pd.Series(
+        np.where(roll_down_std > 1e-9, roll_mean / roll_down_std, np.nan),
+        index=sr.index,
+    )
+
+    # ── rolling Max DD (O(n × window) loop — ~0.2 s for 1500 bars) ───────────
+    arr     = sr.values
+    n       = len(arr)
+    mdd_arr = np.full(n, np.nan)
+    for i in range(window - 1, n):
+        w   = arr[i - window + 1 : i + 1]
+        eq  = np.cumprod(1.0 + np.clip(w, -0.999, None))
+        pk  = np.maximum.accumulate(eq)
+        mdd_arr[i] = float((eq / pk - 1.0).min())
+    roll_mdd = pd.Series(mdd_arr, index=sr.index)
+
+    # ── rolling Calmar ────────────────────────────────────────────────────────
+    roll_calmar = pd.Series(
+        np.where(roll_mdd < -1e-6, roll_cagr / roll_mdd.abs(), np.nan),
+        index=sr.index,
+    )
+
+    def _worst(series: pd.Series):
+        valid = series.dropna()
+        if valid.empty:
+            return None, None, None
+        end_idx = valid.idxmin()
+        val     = float(valid.loc[end_idx])
+        pos     = sr.index.get_loc(end_idx)
+        start   = sr.index[max(0, pos - window + 1)]
+        return val, start.date(), end_idx.date()
+
+    result = {}
+    for key, series in [
+        ("cagr",    roll_cagr),
+        ("sharpe",  roll_sharpe),
+        ("sortino", roll_sortino),
+        ("max_dd",  roll_mdd),
+        ("calmar",  roll_calmar),
+    ]:
+        v, s, e = _worst(series)
+        result[key]                = v
+        result[f"{key}_start"]     = s
+        result[f"{key}_end"]       = e
+    result["_roll_cagr"] = roll_cagr
+    return result
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _compute_worst_window(symbol: str, bars: int, use_btc_filter: bool,
+                           use_er: bool, bear_alloc_pct: float,
+                           td: int, window: int = 365) -> dict:
+    """Cached entry point — derives sr from a fresh strategy run."""
+    cfg    = LeanConfig(use_btc_filter=use_btc_filter, use_er=use_er)
+    daily  = _load_candles(symbol, bars)
+    btc    = _load_btc(bars) if use_btc_filter else None
+    result = run_strategy(daily, btc_daily=btc, config=cfg)
+    df     = result.df
+    ret    = df["close"].pct_change().fillna(0.0)
+    pos    = np.where(
+        (df["signal_state"].shift(1) == S_BULL), 1.0, bear_alloc_pct / 100.0
+    )
+    sr = pd.Series(ret.values * pos, index=ret.index)
+    return _worst_windows_from_sr(sr, td, window)
+
+
 def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
-                      spx_m: "dict | None" = None) -> str:
+                      spx_m: "dict | None" = None,
+                      worst_w: "dict | None" = None) -> str:
     strat = metrics["strategy"]
     bh = metrics["bh"]
     closed = [t for t in trades if not t["open"]]
@@ -172,7 +266,8 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
 
     def _card(label: str, value: str, colour: str,
               bh_val: str = "", bh_col: str = "",
-              spx_val: str = "", tip: str = "") -> str:
+              spx_val: str = "", tip: str = "",
+              worst_val: str = "", worst_tip: str = "") -> str:
         sub = ""
         if bh_val:
             sub += (
@@ -186,6 +281,13 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
                 f'<span style="color:{COL_SPX}">SPX </span>'
                 f'<span style="color:{COL_SPX}">{spx_val}</span></div>'
             )
+        if worst_val:
+            sub += (
+                f'<div style="margin-top:2px;font-size:11px;font-family:monospace;cursor:help"'
+                f' title="{worst_tip}">'
+                f'<span style="color:{COL_DIM}">Worst yr </span>'
+                f'<span style="color:{COL_BEAR}">{worst_val}</span></div>'
+            )
         return (
             f'<div style="flex:1;background:{COL_PANEL};border:1px solid {COL_BORDER};'
             f'border-radius:4px;padding:16px 10px;text-align:center;min-width:130px;cursor:help"'
@@ -197,12 +299,23 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
             f'{sub}</div>'
         )
 
-    _s = spx_m or {}
+    _s  = spx_m  or {}
+    _ww = worst_w or {}
+
+    def _wv(key: str, fmt_fn) -> str:
+        v = _ww.get(key)
+        return fmt_fn(v) if v is not None else ""
+
+    def _wt(key: str) -> str:
+        s, e = _ww.get(f"{key}_start"), _ww.get(f"{key}_end")
+        return f"Worst 365-day window: {s} — {e}" if s and e else ""
+
     row1 = [
         _card("CAGR", _fmt_pct(strat["cagr"]), _val_col(strat["cagr"]),
               _fmt_pct(bh["cagr"]), _val_col(bh["cagr"]),
               _fmt_pct(_s.get("cagr")) if _s else "",
-              "Compound Annual Growth Rate"),
+              "Compound Annual Growth Rate",
+              worst_val=_wv("cagr", _fmt_pct), worst_tip=_wt("cagr")),
         _card("Sharpe", _fmt_ratio(strat["sharpe"]), _val_col(strat["sharpe"]),
               _fmt_ratio(bh["sharpe"]), _val_col(bh["sharpe"]),
               _fmt_ratio(_s.get("sharpe")) if _s else "",
@@ -215,7 +328,8 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
               _val_col(strat["max_dd"], positive_good=False),
               _fmt_pct(bh["max_dd"]), _val_col(bh["max_dd"], positive_good=False),
               _fmt_pct(_s.get("max_dd")) if _s else "",
-              "Largest peak-to-trough equity decline"),
+              "Largest peak-to-trough equity decline",
+              worst_val=_wv("max_dd", _fmt_pct), worst_tip=_wt("max_dd")),
         _card("Calmar", _fmt_ratio(strat["calmar"]), _val_col(strat["calmar"]),
               _fmt_ratio(bh["calmar"]), _val_col(bh["calmar"]),
               _fmt_ratio(_s.get("calmar")) if _s else "",
@@ -258,12 +372,14 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
 def _render_kpi_cards_portfolio(sym_a: str, sym_b: str, w_a: int, w_b: int,
                                  m_a: dict, m_b: dict, m_port: dict,
                                  exp_a: float, exp_b: float,
-                                 spx_m: "dict | None" = None) -> str:
+                                 spx_m: "dict | None" = None,
+                                 worst_w_a: "dict | None" = None,
+                                 worst_w_b: "dict | None" = None) -> str:
     sa, sb, sp = m_a["strategy"], m_b["strategy"], m_port["strategy"]
     ba, bb, bp = m_a["bh"],      m_b["bh"],      m_port["bh"]
 
     def _cell(val: str, col: str, bh: str = "", bh_col: str = "",
-              spx: str = "") -> str:
+              spx: str = "", worst: str = "", worst_tip: str = "") -> str:
         sub = ""
         if bh:
             sub += (f'<div style="margin-top:3px;font-size:10px;font-family:monospace">'
@@ -273,6 +389,11 @@ def _render_kpi_cards_portfolio(sym_a: str, sym_b: str, w_a: int, w_b: int,
             sub += (f'<div style="margin-top:1px;font-size:10px;font-family:monospace">'
                     f'<span style="color:{COL_SPX}">SPX  </span>'
                     f'<span style="color:{COL_SPX}">{spx}</span></div>')
+        if worst:
+            sub += (f'<div style="margin-top:1px;font-size:10px;font-family:monospace;cursor:help"'
+                    f' title="{worst_tip}">'
+                    f'<span style="color:{COL_DIM}">Worst yr </span>'
+                    f'<span style="color:{COL_BEAR}">{worst}</span></div>')
         return (f'<td style="padding:12px 16px;border-bottom:1px solid {COL_BORDER};text-align:right">'
                 f'<span style="color:{col};font-size:20px;font-weight:700;font-family:monospace">{val}</span>'
                 f'{sub}</td>')
@@ -283,6 +404,15 @@ def _render_kpi_cards_portfolio(sym_a: str, sym_b: str, w_a: int, w_b: int,
                 f'color:{COL_DIM};font-size:10px;text-transform:uppercase;letter-spacing:1px;'
                 f'white-space:nowrap;border-right:2px solid {COL_BORDER};cursor:help"{t}>{txt}</td>')
 
+    def _get_worst(ww, key, fmt_fn):
+        if not ww:
+            return "", ""
+        v = ww.get(key)
+        s, e = ww.get(f"{key}_start"), ww.get(f"{key}_end")
+        val_str = fmt_fn(v) if v is not None else ""
+        tip     = f"Worst 365-day window: {s} — {e}" if s and e else ""
+        return val_str, tip
+
     _METRIC_SPEC = [
         ("CAGR",    "Compound Annual Growth Rate",    "cagr",    True,  "pct"),
         ("Sharpe",  "Return / volatility",            "sharpe",  True,  "ratio"),
@@ -290,15 +420,21 @@ def _render_kpi_cards_portfolio(sym_a: str, sym_b: str, w_a: int, w_b: int,
         ("Max DD",  "Largest peak-to-trough decline", "max_dd",  False, "pct"),
         ("Calmar",  "CAGR / |Max DD|",               "calmar",  True,  "ratio"),
     ]
+    _WORST_KEYS = {"cagr", "max_dd"}   # only these two get Worst yr sub-row
     rows = []
     for lbl, tip, key, pos_good, ftype in _METRIC_SPEC:
         fmt = (lambda v, _f=ftype: _fmt_pct(v) if _f == "pct" else _fmt_ratio(v))
         spx_val = fmt(spx_m[key]) if spx_m else ""
+        if key in _WORST_KEYS:
+            wa_str, wa_tip = _get_worst(worst_w_a, key, fmt)
+            wb_str, wb_tip = _get_worst(worst_w_b, key, fmt)
+        else:
+            wa_str = wb_str = wa_tip = wb_tip = ""
         rows.append(
             f'<tr>'
             f'{_lbl(lbl, tip)}'
-            f'{_cell(fmt(sa[key]), _val_col(sa[key], pos_good), fmt(ba[key]), _val_col(ba[key], pos_good), spx_val)}'
-            f'{_cell(fmt(sb[key]), _val_col(sb[key], pos_good), fmt(bb[key]), _val_col(bb[key], pos_good), spx_val)}'
+            f'{_cell(fmt(sa[key]), _val_col(sa[key], pos_good), fmt(ba[key]), _val_col(ba[key], pos_good), spx_val, wa_str, wa_tip)}'
+            f'{_cell(fmt(sb[key]), _val_col(sb[key], pos_good), fmt(bb[key]), _val_col(bb[key], pos_good), spx_val, wb_str, wb_tip)}'
             f'{_cell(fmt(sp[key]), _val_col(sp[key], pos_good), fmt(bp[key]), _val_col(bp[key], pos_good), spx_val)}'
             f'</tr>'
         )
@@ -941,6 +1077,133 @@ def _build_rolling_sharpe(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
     return fig
 
 
+def _build_stress_test_chart(roll_cagr: pd.Series,
+                              worst_start, worst_end,
+                              symbol: str) -> go.Figure:
+    """Rolling 365-day CAGR line with the worst window highlighted."""
+    rc_pct = roll_cagr * 100
+
+    fig = go.Figure()
+
+    # Split into positive / negative fill
+    pos = rc_pct.clip(lower=0)
+    neg = rc_pct.clip(upper=0)
+    fig.add_trace(go.Scatter(
+        x=rc_pct.index, y=pos, mode="lines",
+        line=dict(color=COL_BULL, width=0), showlegend=False,
+        fill="tozeroy", fillcolor="rgba(8,153,129,0.12)",
+        hoverinfo="skip",
+    ))
+    fig.add_trace(go.Scatter(
+        x=rc_pct.index, y=neg, mode="lines",
+        line=dict(color=COL_BEAR, width=0), showlegend=False,
+        fill="tozeroy", fillcolor="rgba(242,54,69,0.12)",
+        hoverinfo="skip",
+    ))
+    fig.add_trace(go.Scatter(
+        x=rc_pct.index, y=rc_pct,
+        mode="lines", line=dict(color=COL_TEXT, width=1.6),
+        name="Rolling 365d CAGR",
+        hovertemplate="CAGR %{y:.1f}%<extra></extra>",
+    ))
+
+    if worst_start and worst_end:
+        fig.add_vrect(
+            x0=pd.Timestamp(worst_start), x1=pd.Timestamp(worst_end),
+            fillcolor="rgba(242,54,69,0.10)", line_width=1,
+            line_color=COL_BEAR, line_dash="dot",
+            annotation_text=f"Worst · {worst_start} — {worst_end}",
+            annotation_position="top left",
+            annotation_font=dict(color=COL_BEAR, size=10),
+        )
+
+    fig.add_hline(y=0, line_color=COL_DIM, line_width=1, line_dash="dot")
+
+    _chart_layout(fig, height=300)
+    fig.update_layout(
+        title=dict(
+            text=f'<span style="color:{COL_TEXT};font-size:12px;text-transform:uppercase;'
+                 f'letter-spacing:1px">Rolling 365-day CAGR · {symbol}</span>',
+            x=0.01, y=0.98, yanchor="top",
+        ),
+        margin=dict(t=56),
+    )
+    fig.update_yaxes(gridcolor=COL_GRID, tickformat=".0f", ticksuffix="%",
+                     side="right", tickfont=dict(color=COL_DIM, size=10))
+    return fig
+
+
+def _render_stress_test_table(worst_w: dict, symbol: str) -> str:
+    """HTML table: worst 365-day value + period for each metric."""
+    if not worst_w:
+        return ""
+
+    _METRIC_SPEC = [
+        ("CAGR",    "cagr",    "pct",   True,  "Compound Annual Growth Rate"),
+        ("Sharpe",  "sharpe",  "ratio", True,  "Return / volatility"),
+        ("Sortino", "sortino", "ratio", True,  "Return / downside volatility"),
+        ("Max DD",  "max_dd",  "pct",   False, "Largest peak-to-trough decline"),
+        ("Calmar",  "calmar",  "ratio", True,  "CAGR / |Max DD|"),
+    ]
+
+    def _fmt(v, ftype):
+        if v is None:
+            return "—"
+        return _fmt_pct(v) if ftype == "pct" else _fmt_ratio(v)
+
+    th = (f'<th style="padding:10px 14px;background:{COL_PANEL};'
+          f'border-bottom:2px solid {COL_BORDER};text-align:right;'
+          f'font-weight:normal;color:{COL_DIM};font-size:10px;'
+          f'text-transform:uppercase;letter-spacing:1px">')
+
+    header = (
+        f'<tr>'
+        f'<th style="padding:10px 14px;background:{COL_PANEL};'
+        f'border-bottom:2px solid {COL_BORDER};border-right:2px solid {COL_BORDER}"></th>'
+        f'{th}Worst value</th>'
+        f'{th}Window start</th>'
+        f'{th}Window end</th>'
+        f'{th}Length</th>'
+        f'</tr>'
+    )
+
+    rows = []
+    for lbl, key, ftype, pos_good, tip in _METRIC_SPEC:
+        v  = worst_w.get(key)
+        s  = worst_w.get(f"{key}_start")
+        e  = worst_w.get(f"{key}_end")
+        vstr = _fmt(v, ftype)
+        vcol = _val_col(v, pos_good) if v is not None else COL_DIM
+        length = f"{(pd.Timestamp(e) - pd.Timestamp(s)).days}d" if s and e else "—"
+        td_lbl = (
+            f'<td style="padding:10px 14px;border-bottom:1px solid {COL_BORDER};'
+            f'border-right:2px solid {COL_BORDER};color:{COL_DIM};font-size:10px;'
+            f'text-transform:uppercase;letter-spacing:1px;cursor:help" title="{tip}">{lbl}</td>'
+        )
+        def _td(content, color=COL_TEXT, mono=False):
+            fs = "font-family:monospace;" if mono else ""
+            return (f'<td style="padding:10px 14px;border-bottom:1px solid {COL_BORDER};'
+                    f'text-align:right;{fs}color:{color};font-size:13px">{content}</td>')
+        rows.append(
+            f'<tr>'
+            f'{td_lbl}'
+            f'{_td(vstr, vcol, mono=True)}'
+            f'{_td(str(s) if s else "—", COL_DIM)}'
+            f'{_td(str(e) if e else "—", COL_DIM)}'
+            f'{_td(length, COL_DIM)}'
+            f'</tr>'
+        )
+
+    return (
+        f'<div style="background:{COL_PANEL};border:1px solid {COL_BORDER};'
+        f'border-radius:4px;overflow:hidden;margin-bottom:10px">'
+        f'<table style="width:100%;border-collapse:collapse">'
+        f'<thead>{header}</thead>'
+        f'<tbody>{"".join(rows)}</tbody>'
+        f'</table></div>'
+    )
+
+
 def _build_trade_distribution(trades: list[dict]) -> go.Figure:
     closed = [t for t in trades if not t["open"]]
     fig = go.Figure()
@@ -1500,6 +1763,21 @@ def main() -> None:
     except Exception:
         pass  # SPX unavailable — continue without benchmark
 
+    # ── worst 365-day windows ─────────────────────────────────────────────────
+    worst_w = worst_w_b = {}
+    try:
+        worst_w = _compute_worst_window(
+            symbol, bars, use_btc_filter, use_er, float(bear_alloc), td)
+    except Exception:
+        pass
+    if portfolio_mode and sym_b:
+        try:
+            td_b_worst = 252 if sym_b in STOCK_SYMBOLS else TRADING_DAYS
+            worst_w_b = _compute_worst_window(
+                sym_b, bars, False, use_er, float(bear_alloc), td_b_worst)
+        except Exception:
+            pass
+
     # ── status bar ────────────────────────────────────────────────────────────
     st.markdown(_status_bar(s, symbol, cfg), unsafe_allow_html=True)
 
@@ -1508,11 +1786,13 @@ def main() -> None:
         st.markdown(
             _render_kpi_cards_portfolio(symbol, sym_b, w_a, w_b,
                                         m_a, m_b, m_port, exposure, exp_b,
-                                        spx_m=spx_m),
+                                        spx_m=spx_m,
+                                        worst_w_a=worst_w, worst_w_b=worst_w_b),
             unsafe_allow_html=True,
         )
     else:
-        st.markdown(_render_kpi_cards(metrics, trades, exposure, spx_m=spx_m),
+        st.markdown(_render_kpi_cards(metrics, trades, exposure,
+                                      spx_m=spx_m, worst_w=worst_w),
                     unsafe_allow_html=True)
 
     # ── info bar ──────────────────────────────────────────────────────────────
@@ -1619,6 +1899,43 @@ def main() -> None:
                     unsafe_allow_html=True)
         st.plotly_chart(_build_equity_chart(metrics, symbol=symbol, spx_eq=spx_eq),
                         use_container_width=True, key="equity_single")
+
+    # ── stress test expander ─────────────────────────────────────────────────
+    if worst_w:
+        with st.expander("📊 Stress test · worst 365-day window", expanded=False):
+            st.markdown(
+                f'<div style="color:{COL_DIM};font-size:11px;margin-bottom:10px">'
+                f'Rolling analysis across all available history — the worst consecutive '
+                f'365-calendar-day window for each risk metric, strategy returns only '
+                f'(no fees / slippage). Hover metric names for tooltip.'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            if portfolio_mode and worst_w_b:
+                _st_a, _st_b = st.tabs([f"{symbol} · Asset A", f"{sym_b} · Asset B"])
+            else:
+                _st_a = None
+
+            def _render_stress_panel(ww, sym, td_val, tab_ctx=None):
+                ctx = tab_ctx if tab_ctx is not None else st
+                rc = ww.get("_roll_cagr")
+                with ctx:
+                    st.markdown(_render_stress_test_table(ww, sym),
+                                unsafe_allow_html=True)
+                    if rc is not None and not rc.dropna().empty:
+                        st.plotly_chart(
+                            _build_stress_test_chart(
+                                rc, ww.get("cagr_start"), ww.get("cagr_end"), sym
+                            ),
+                            use_container_width=True,
+                            key=f"stress_{sym}",
+                        )
+
+            if _st_a is not None:
+                _render_stress_panel(worst_w,   symbol, td,           _st_a)
+                _render_stress_panel(worst_w_b, sym_b,  td_b_val if portfolio_mode else td, _st_b)
+            else:
+                _render_stress_panel(worst_w, symbol, td)
 
     # ── rolling sharpe + monthly heatmap ──────────────────────────────────────
     if portfolio_mode:
