@@ -217,24 +217,59 @@ def _coinbase_parse(raw: list[list]) -> pd.DataFrame:
 
 
 def _yahoo_direct_fetch(symbol_yf: str, bars: int) -> pd.DataFrame:
-    """Yahoo Finance v8 chart API via plain requests — no websockets needed."""
+    """Yahoo Finance v8 chart API via plain requests — no websockets needed.
+
+    Yahoo has required a crumb cookie since 2023. We seed a session by
+    visiting finance.yahoo.com, fetch the crumb, then query the chart API.
+    """
     import time as _time
+    from urllib.parse import quote as _quote
 
     period2 = int(_time.time())
-    period1 = period2 - max(bars * 2, 400) * 86400  # 2× buffer for weekends/holidays
+    period1 = period2 - max(bars * 2, 400) * 86400
 
-    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol_yf}"
-    params = {
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/json,text/html,*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+    })
+
+    # Step 1: seed session cookie
+    try:
+        session.get("https://finance.yahoo.com", timeout=8)
+    except Exception:
+        pass
+
+    # Step 2: obtain crumb (required for authenticated API calls)
+    crumb = ""
+    for crumb_url in (
+        "https://query1.finance.yahoo.com/v1/test/getcrumb",
+        "https://query2.finance.yahoo.com/v1/test/getcrumb",
+    ):
+        try:
+            rc = session.get(crumb_url, timeout=8)
+            if rc.status_code == 200 and rc.text.strip():
+                crumb = rc.text.strip()
+                break
+        except Exception:
+            continue
+
+    # Step 3: fetch chart data (^ must be URL-encoded in the path)
+    url = f"https://query1.finance.yahoo.com/v8/finance/chart/{_quote(symbol_yf)}"
+    params: dict = {
         "interval": "1d",
         "period1": period1,
         "period2": period2,
         "events": "div,splits",
     }
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-        "Accept": "application/json",
-    }
-    r = requests.get(url, params=params, headers=headers, timeout=15)
+    if crumb:
+        params["crumb"] = crumb
+
+    r = session.get(url, params=params, timeout=15)
     if r.status_code != 200:
         raise DataSourceError(f"Yahoo Finance HTTP {r.status_code}: {r.text[:200]}")
 
@@ -242,7 +277,7 @@ def _yahoo_direct_fetch(symbol_yf: str, bars: int) -> pd.DataFrame:
     result = (data.get("chart") or {}).get("result")
     if not result:
         err = (data.get("chart") or {}).get("error") or "empty response"
-        raise DataSourceError(f"Yahoo Finance returned no data for {symbol_yf}: {err}")
+        raise DataSourceError(f"Yahoo Finance no data for {symbol_yf}: {err}")
 
     chart = result[0]
     timestamps = chart.get("timestamp") or []
@@ -264,19 +299,22 @@ def _yahoo_direct_fetch(symbol_yf: str, bars: int) -> pd.DataFrame:
 
 
 def _yf_fetch(symbol_yf: str, interval: str, bars: int) -> pd.DataFrame:
-    """yfinance fallback (requires compatible websockets). Prefer _yahoo_direct_fetch."""
+    """yfinance fallback using yf.download() — avoids the websockets code path."""
     import yfinance as yf
 
     period_days = max(bars + 30, 60)
     period = "max" if period_days > 730 else f"{period_days}d"
+    yf_interval = _INTERVAL_MAP.get(interval, _INTERVAL_MAP["1d"])["yf"]
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        ticker = yf.Ticker(symbol_yf)
-        df = ticker.history(
+        df = yf.download(
+            symbol_yf,
             period=period,
-            interval=_INTERVAL_MAP.get(interval, _INTERVAL_MAP["1d"])["yf"],
+            interval=yf_interval,
             auto_adjust=False,
+            progress=False,
+            multi_level_index=False,
         )
 
     if df.empty:
@@ -285,7 +323,8 @@ def _yf_fetch(symbol_yf: str, interval: str, bars: int) -> pd.DataFrame:
     df = df.rename(columns={
         "Open": "open", "High": "high", "Low": "low",
         "Close": "close", "Volume": "volume",
-    })[["open", "high", "low", "close", "volume"]]
+    })
+    df = df[["open", "high", "low", "close", "volume"]]
     df.index = pd.to_datetime(df.index, utc=True)
     df.index.name = "time"
     return df.tail(bars)
@@ -371,6 +410,40 @@ def fetch_candles(
 def fetch_btc_daily(bars: int = 500, config: Any = None) -> pd.DataFrame:
     """Convenience: BTC daily for the cross-asset filter."""
     return fetch_candles("BTC", "1d", bars=bars, config=config)
+
+
+def fetch_spx_daily(bars: int = 500) -> pd.Series:
+    """S&P 500 (^GSPC) daily close prices, timezone-naive index.
+
+    Tries yf.download first (no websockets code path), then the direct
+    HTTP API as a fallback.  Returns a Series named 'spx'.
+    """
+    import yfinance as yf
+
+    period_days = max(bars + 30, 60)
+    period = "max" if period_days > 730 else f"{period_days}d"
+
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            df = yf.download("^GSPC", period=period, interval="1d",
+                             auto_adjust=True, progress=False,
+                             multi_level_index=False)
+        if not df.empty:
+            s = df["Close"].tail(bars).copy()
+            s.index = pd.to_datetime(s.index).tz_localize(None)
+            s.name = "spx"
+            return s
+    except Exception:
+        pass
+
+    # Fallback: direct HTTP (may need crumb)
+    df = _yahoo_direct_fetch("^GSPC", bars)
+    s = df["close"].copy()
+    if s.index.tz is not None:
+        s.index = s.index.tz_localize(None)
+    s.name = "spx"
+    return s
 
 
 def to_weekly(daily: pd.DataFrame) -> pd.DataFrame:
