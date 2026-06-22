@@ -170,32 +170,37 @@ def _worst_windows_from_sr(sr: pd.Series, td: int, window: int = 365) -> dict:
     roll_log  = log_r.rolling(window).sum()
     roll_cagr = np.exp(roll_log * (td / window)) - 1
 
-    # ── rolling Sharpe ────────────────────────────────────────────────────────
-    roll_mean   = sr.rolling(window).mean() * td
-    roll_std    = sr.rolling(window).std()  * np.sqrt(td)
-    roll_sharpe = pd.Series(
-        np.where(roll_std > 1e-9, roll_mean / roll_std, np.nan),
-        index=sr.index,
-    )
+    # ── rolling loop: Sharpe / Sortino / Max DD / Calmar ────────────────────
+    # All use exactly the same formula as _stats() so "Worst yr" values match
+    # the KPI cards when the user selects that date range.
+    #   Sharpe  = ann_ret / std(all_returns, ddof=1)       [pandas default]
+    #   Sortino = ann_ret / std(negative_returns, ddof=1)  [_stats formula]
+    #   Max DD  = min(equity/cummax - 1)
+    #   Calmar  = CAGR / |Max DD|
+    arr         = sr.values
+    n           = len(arr)
+    sharpe_arr  = np.full(n, np.nan)
+    sortino_arr = np.full(n, np.nan)
+    mdd_arr     = np.full(n, np.nan)
 
-    # ── rolling Sortino (semi-deviation) ─────────────────────────────────────
-    roll_down_var = (sr.clip(upper=0) ** 2).rolling(window).mean()
-    roll_down_std = np.sqrt(roll_down_var) * np.sqrt(td)
-    roll_sortino  = pd.Series(
-        np.where(roll_down_std > 1e-9, roll_mean / roll_down_std, np.nan),
-        index=sr.index,
-    )
-
-    # ── rolling Max DD (O(n × window) loop — ~0.2 s for 1500 bars) ───────────
-    arr     = sr.values
-    n       = len(arr)
-    mdd_arr = np.full(n, np.nan)
     for i in range(window - 1, n):
-        w   = arr[i - window + 1 : i + 1]
+        w    = arr[i - window + 1 : i + 1]
+        ar   = w.mean() * td
+        s    = w.std(ddof=1) * np.sqrt(td)
+        if s > 1e-9:
+            sharpe_arr[i] = ar / s
+        neg  = w[w < 0]
+        if len(neg) > 1:
+            ds = neg.std(ddof=1) * np.sqrt(td)
+            if ds > 1e-9:
+                sortino_arr[i] = ar / ds
         eq  = np.cumprod(1.0 + np.clip(w, -0.999, None))
         pk  = np.maximum.accumulate(eq)
         mdd_arr[i] = float((eq / pk - 1.0).min())
-    roll_mdd = pd.Series(mdd_arr, index=sr.index)
+
+    roll_sharpe  = pd.Series(sharpe_arr,  index=sr.index)
+    roll_sortino = pd.Series(sortino_arr, index=sr.index)
+    roll_mdd     = pd.Series(mdd_arr,     index=sr.index)
 
     # ── rolling Calmar ────────────────────────────────────────────────────────
     roll_calmar = pd.Series(
