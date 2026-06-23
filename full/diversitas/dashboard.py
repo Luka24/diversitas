@@ -17,7 +17,7 @@ from plotly.subplots import make_subplots
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
-from shared.data_source import fetch_candles, fetch_btc_daily
+from shared.data_source import fetch_candles, fetch_btc_daily, fetch_spx_daily
 from diversitas.config import Config, DEFAULT_CONFIG
 from diversitas.strategy import run_strategy, build_summary, S_BULL, S_NEUTRAL, S_BEAR
 
@@ -88,18 +88,11 @@ def _run_b(symbol: str, bars: int, use_er: bool):
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def _load_spx(bars: int) -> pd.Series:
-    """S&P 500 daily close prices via yfinance (^GSPC). Returns timezone-naive series."""
-    import yfinance as yf
-    import warnings
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        df = yf.Ticker("^GSPC").history(period="max", auto_adjust=True)
-    if df.empty:
+    from shared.data_source import fetch_spx_daily
+    try:
+        return fetch_spx_daily(bars)
+    except Exception:
         return pd.Series(dtype=float)
-    s = df["Close"].copy()
-    s.index = pd.to_datetime(s.index).tz_localize(None)
-    s.name = "spx"
-    return s.tail(bars)
 
 
 # ── performance metrics ───────────────────────────────────────────────────────
@@ -125,13 +118,14 @@ def _stats(r: pd.Series, td: int = TRADING_DAYS) -> dict:
 
 
 def _compute_metrics(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
-                     td: int = TRADING_DAYS) -> dict:
-    """Annualised risk/return metrics for the strategy and buy & hold."""
-    close = df["close"]
-    ret   = close.pct_change().fillna(0.0)
-    sig   = df["signal_state"]
-    is_bull = (sig.shift(1) == S_BULL).astype(float)
-    pos = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
+                     td: int = TRADING_DAYS,
+                     df_full: "pd.DataFrame | None" = None) -> dict:
+    src       = df_full if df_full is not None else df
+    ret_full  = src["close"].pct_change().fillna(0.0)
+    ib_full   = (src["signal_state"].shift(1) == S_BULL).astype(float)
+    ret       = ret_full.reindex(df.index).fillna(0.0)
+    is_bull   = ib_full.reindex(df.index).fillna(0.0)
+    pos       = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
     strat_ret = pd.Series(ret.values * pos, index=ret.index)
     return {"strategy": _stats(strat_ret, td), "bh": _stats(ret, td)}
 
@@ -140,23 +134,34 @@ def _compute_portfolio_metrics(df_a: pd.DataFrame, df_b: pd.DataFrame,
                                 w_a: int, w_b: int,
                                 bear_alloc_pct: float = 0.0,
                                 td_a: int = TRADING_DAYS,
-                                td_b: int = TRADING_DAYS):
+                                td_b: int = TRADING_DAYS,
+                                df_a_full: "pd.DataFrame | None" = None,
+                                df_b_full: "pd.DataFrame | None" = None):
     """Floating-weight portfolio metrics for A, B, and combined."""
     idx  = df_a.index.intersection(df_b.index)
     a, b = df_a.loc[idx], df_b.loc[idx]
 
-    r_a   = a["close"].pct_change().fillna(0.0)
-    pos_a = np.where((a["signal_state"].shift(1) == S_BULL), 1.0, bear_alloc_pct / 100.0)
+    src_a = df_a_full if df_a_full is not None else df_a
+    src_b = df_b_full if df_b_full is not None else df_b
+    r_a_full   = src_a["close"].pct_change().fillna(0.0)
+    pos_a_full = (src_a["signal_state"].shift(1) == S_BULL).astype(float)
+    r_b_full   = src_b["close"].pct_change().fillna(0.0)
+    pos_b_full = (src_b["signal_state"].shift(1) == S_BULL).astype(float)
+
+    r_a   = r_a_full.reindex(idx).fillna(0.0)
+    ib_a  = pos_a_full.reindex(idx).fillna(0.0)
+    pos_a = np.where(ib_a, 1.0, bear_alloc_pct / 100.0)
     sr_a  = pd.Series(r_a.values * pos_a, index=idx)
 
-    r_b   = b["close"].pct_change().fillna(0.0)
-    pos_b = np.where((b["signal_state"].shift(1) == S_BULL), 1.0, bear_alloc_pct / 100.0)
+    r_b   = r_b_full.reindex(idx).fillna(0.0)
+    ib_b  = pos_b_full.reindex(idx).fillna(0.0)
+    pos_b = np.where(ib_b, 1.0, bear_alloc_pct / 100.0)
     sr_b  = pd.Series(r_b.values * pos_b, index=idx)
 
     wa, wb     = w_a / 100.0, w_b / 100.0
     port_strat = wa * sr_a + wb * sr_b
     port_bh    = wa * r_a  + wb * r_b
-    td_port    = td_a  # primary asset determines portfolio annualization
+    td_port    = td_a
 
     m_a    = {"strategy": _stats(sr_a, td_a), "bh": _stats(r_a, td_a)}
     m_b    = {"strategy": _stats(sr_b, td_b), "bh": _stats(r_b, td_b)}
@@ -164,8 +169,92 @@ def _compute_portfolio_metrics(df_a: pd.DataFrame, df_b: pd.DataFrame,
     return m_a, m_b, m_port, a, b, port_strat
 
 
+def _worst_windows_from_sr(sr: pd.Series, td: int, window: int = 365) -> dict:
+    """Worst rolling `window`-bar period for each metric."""
+    if len(sr) < window + 10:
+        return {}
+
+    sr = sr.replace([np.inf, -np.inf], 0.0)
+
+    log_r     = np.log1p(sr.clip(lower=-0.999))
+    roll_log  = log_r.rolling(window).sum()
+    roll_cagr = np.exp(roll_log * (td / window)) - 1
+
+    arr         = sr.values
+    n           = len(arr)
+    sharpe_arr  = np.full(n, np.nan)
+    sortino_arr = np.full(n, np.nan)
+    mdd_arr     = np.full(n, np.nan)
+
+    for i in range(window - 1, n):
+        w    = arr[i - window + 1 : i + 1]
+        ar   = w.mean() * td
+        s    = w.std(ddof=1) * np.sqrt(td)
+        if s > 1e-9:
+            sharpe_arr[i] = ar / s
+        neg  = w[w < 0]
+        if len(neg) > 1:
+            ds = neg.std(ddof=1) * np.sqrt(td)
+            if ds > 1e-9:
+                sortino_arr[i] = ar / ds
+        eq  = np.cumprod(1.0 + np.clip(w, -0.999, None))
+        pk  = np.maximum.accumulate(eq)
+        mdd_arr[i] = float((eq / pk - 1.0).min())
+
+    roll_sharpe  = pd.Series(sharpe_arr,  index=sr.index)
+    roll_sortino = pd.Series(sortino_arr, index=sr.index)
+    roll_mdd     = pd.Series(mdd_arr,     index=sr.index)
+    roll_calmar  = pd.Series(
+        np.where(roll_mdd < -1e-6, roll_cagr / roll_mdd.abs(), np.nan),
+        index=sr.index,
+    )
+
+    def _worst(series: pd.Series):
+        valid = series.dropna()
+        if valid.empty:
+            return None, None, None
+        end_idx = valid.idxmin()
+        val     = float(valid.loc[end_idx])
+        pos     = sr.index.get_loc(end_idx)
+        start   = sr.index[max(0, pos - window + 1)]
+        return val, start.date(), end_idx.date()
+
+    result = {}
+    for key, series in [
+        ("cagr",    roll_cagr),
+        ("sharpe",  roll_sharpe),
+        ("sortino", roll_sortino),
+        ("max_dd",  roll_mdd),
+        ("calmar",  roll_calmar),
+    ]:
+        v, s, e = _worst(series)
+        result[key]            = v
+        result[f"{key}_start"] = s
+        result[f"{key}_end"]   = e
+    result["_roll_cagr"] = roll_cagr
+    return result
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _compute_worst_window(symbol: str, bars: int, use_btc_filter: bool,
+                           use_er: bool, bear_alloc_pct: float,
+                           td: int, window: int = 365) -> dict:
+    cfg   = Config(use_btc_filter=use_btc_filter, use_er=use_er)
+    daily = _load_candles(symbol, bars)
+    btc   = _load_btc(bars) if use_btc_filter else None
+    result = run_strategy(daily, btc_daily=btc, config=cfg)
+    df     = result.df
+    ret    = df["close"].pct_change().fillna(0.0)
+    pos    = np.where(
+        (df["signal_state"].shift(1) == S_BULL), 1.0, bear_alloc_pct / 100.0
+    )
+    sr = pd.Series(ret.values * pos, index=ret.index)
+    return _worst_windows_from_sr(sr, td, window)
+
+
 def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
-                      spx_m: "dict | None" = None) -> str:
+                      spx_m: "dict | None" = None,
+                      worst_w: "dict | None" = None) -> str:
     strat = metrics["strategy"]
     bh = metrics["bh"]
     closed = [t for t in trades if not t["open"]]
@@ -182,7 +271,8 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
 
     def _card(label: str, value: str, colour: str,
               bh_val: str = "", bh_col: str = "",
-              spx_val: str = "", tip: str = "") -> str:
+              spx_val: str = "", tip: str = "",
+              worst_val: str = "", worst_tip: str = "") -> str:
         sub = ""
         if bh_val:
             sub += (
@@ -196,6 +286,13 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
                 f'<span style="color:{COL_SPX}">SPX </span>'
                 f'<span style="color:{COL_SPX}">{spx_val}</span></div>'
             )
+        if worst_val:
+            sub += (
+                f'<div style="margin-top:2px;font-size:11px;font-family:monospace;cursor:help"'
+                f' title="{worst_tip}">'
+                f'<span style="color:{COL_DIM}">Worst yr </span>'
+                f'<span style="color:{COL_BEAR}">{worst_val}</span></div>'
+            )
         return (
             f'<div style="flex:1;background:{COL_PANEL};border:1px solid {COL_BORDER};'
             f'border-radius:4px;padding:16px 10px;text-align:center;min-width:130px;cursor:help"'
@@ -208,28 +305,43 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
         )
 
     _s = spx_m or {}
+    _ww = worst_w or {}
+
+    def _wv(key: str, fmt_fn) -> str:
+        v = _ww.get(key)
+        return fmt_fn(v) if v is not None else ""
+
+    def _wt(key: str) -> str:
+        s, e = _ww.get(f"{key}_start"), _ww.get(f"{key}_end")
+        return f"Worst 365-day window: {s} — {e}" if s and e else ""
+
     row1 = [
         _card("CAGR", _fmt_pct(strat["cagr"]), _val_col(strat["cagr"]),
               _fmt_pct(bh["cagr"]), _val_col(bh["cagr"]),
               _fmt_pct(_s.get("cagr")) if _s else "",
-              "Compound Annual Growth Rate"),
+              "Compound Annual Growth Rate",
+              worst_val=_wv("cagr", _fmt_pct), worst_tip=_wt("cagr")),
         _card("Sharpe", _fmt_ratio(strat["sharpe"]), _val_col(strat["sharpe"]),
               _fmt_ratio(bh["sharpe"]), _val_col(bh["sharpe"]),
               _fmt_ratio(_s.get("sharpe")) if _s else "",
-              "Risk-adjusted return (return / volatility)"),
+              "Risk-adjusted return (return / volatility)",
+              worst_val=_wv("sharpe", _fmt_ratio), worst_tip=_wt("sharpe")),
         _card("Sortino", _fmt_ratio(strat["sortino"]), _val_col(strat["sortino"]),
               _fmt_ratio(bh["sortino"]), _val_col(bh["sortino"]),
               _fmt_ratio(_s.get("sortino")) if _s else "",
-              "Return / downside volatility only"),
+              "Return / downside volatility only",
+              worst_val=_wv("sortino", _fmt_ratio), worst_tip=_wt("sortino")),
         _card("Max Drawdown", _fmt_pct(strat["max_dd"]),
               _val_col(strat["max_dd"], positive_good=False),
               _fmt_pct(bh["max_dd"]), _val_col(bh["max_dd"], positive_good=False),
               _fmt_pct(_s.get("max_dd")) if _s else "",
-              "Largest peak-to-trough equity decline"),
+              "Largest peak-to-trough equity decline",
+              worst_val=_wv("max_dd", _fmt_pct), worst_tip=_wt("max_dd")),
         _card("Calmar", _fmt_ratio(strat["calmar"]), _val_col(strat["calmar"]),
               _fmt_ratio(bh["calmar"]), _val_col(bh["calmar"]),
               _fmt_ratio(_s.get("calmar")) if _s else "",
-              "CAGR / |Max Drawdown|"),
+              "CAGR / |Max Drawdown|",
+              worst_val=_wv("calmar", _fmt_ratio), worst_tip=_wt("calmar")),
         _card("Win Rate",
               f"{wr:.0f}%" if wr is not None else "—",
               COL_BULL if (wr or 0) >= 50 else COL_NEUTRAL if (wr or 0) >= 40 else COL_BEAR,
@@ -808,12 +920,25 @@ def _build_trade_scatter(trades: list[dict]) -> go.Figure:
 def _render_kpi_cards_portfolio(sym_a: str, sym_b: str, w_a: int, w_b: int,
                                  m_a: dict, m_b: dict, m_port: dict,
                                  exp_a: float, exp_b: float,
-                                 spx_m: "dict | None" = None) -> str:
+                                 spx_m: "dict | None" = None,
+                                 worst_w_a: "dict | None" = None,
+                                 worst_w_b: "dict | None" = None) -> str:
     sa, sb, sp = m_a["strategy"], m_b["strategy"], m_port["strategy"]
     ba, bb, bp = m_a["bh"],      m_b["bh"],      m_port["bh"]
 
+    _wwa = worst_w_a or {}
+    _wwb = worst_w_b or {}
+
+    def _wv_ab(ww: dict, key: str, fmt_fn) -> str:
+        v = ww.get(key)
+        return fmt_fn(v) if v is not None else ""
+
+    def _wt_ab(ww: dict, key: str) -> str:
+        s, e = ww.get(f"{key}_start"), ww.get(f"{key}_end")
+        return f"Worst 365-day window: {s} — {e}" if s and e else ""
+
     def _cell(val: str, col: str, bh: str = "", bh_col: str = "",
-              spx: str = "") -> str:
+              spx: str = "", worst_val: str = "", worst_tip: str = "") -> str:
         sub = ""
         if bh:
             sub += (f'<div style="margin-top:3px;font-size:10px;font-family:monospace">'
@@ -823,6 +948,11 @@ def _render_kpi_cards_portfolio(sym_a: str, sym_b: str, w_a: int, w_b: int,
             sub += (f'<div style="margin-top:1px;font-size:10px;font-family:monospace">'
                     f'<span style="color:{COL_SPX}">SPX  </span>'
                     f'<span style="color:{COL_SPX}">{spx}</span></div>')
+        if worst_val:
+            sub += (f'<div style="margin-top:1px;font-size:10px;font-family:monospace;cursor:help"'
+                    f' title="{worst_tip}">'
+                    f'<span style="color:{COL_DIM}">Worst yr </span>'
+                    f'<span style="color:{COL_BEAR}">{worst_val}</span></div>')
         return (f'<td style="padding:12px 16px;border-bottom:1px solid {COL_BORDER};text-align:right">'
                 f'<span style="color:{col};font-size:20px;font-weight:700;font-family:monospace">{val}</span>'
                 f'{sub}</td>')
@@ -848,8 +978,8 @@ def _render_kpi_cards_portfolio(sym_a: str, sym_b: str, w_a: int, w_b: int,
         rows.append(
             f'<tr>'
             f'{_lbl(lbl, tip)}'
-            f'{_cell(fmt(sa[key]), _val_col(sa[key], pos_good), fmt(ba[key]), _val_col(ba[key], pos_good), spx_val)}'
-            f'{_cell(fmt(sb[key]), _val_col(sb[key], pos_good), fmt(bb[key]), _val_col(bb[key], pos_good), spx_val)}'
+            f'{_cell(fmt(sa[key]), _val_col(sa[key], pos_good), fmt(ba[key]), _val_col(ba[key], pos_good), spx_val, worst_val=_wv_ab(_wwa, key, fmt), worst_tip=_wt_ab(_wwa, key))}'
+            f'{_cell(fmt(sb[key]), _val_col(sb[key], pos_good), fmt(bb[key]), _val_col(bb[key], pos_good), spx_val, worst_val=_wv_ab(_wwb, key, fmt), worst_tip=_wt_ab(_wwb, key))}'
             f'{_cell(fmt(sp[key]), _val_col(sp[key], pos_good), fmt(bp[key]), _val_col(bp[key], pos_good), spx_val)}'
             f'</tr>'
         )
@@ -1228,15 +1358,16 @@ def main() -> None:
         )
         _today = datetime.date.today()
         _period = st.selectbox(
-            "Period", ["Custom", "All time", "2 years", "1 year",
+            "Period", ["Custom", "All time", "3 years", "2 years", "1 year",
                        "Year to date", "6 months", "3 months"],
             index=0, label_visibility="collapsed",
             help="Quick period selector. Choose 'Custom' to set exact Od/Do dates.",
         )
-        _period_days = {"2 years": 730, "1 year": 365, "6 months": 180, "3 months": 90}
+        _period_days = {"3 years": 1095, "2 years": 730, "1 year": 365, "6 months": 180, "3 months": 90}
+        _default_od = _today - datetime.timedelta(days=1095)
         if _period == "Custom":
             date_from = st.date_input(
-                "Od", value=None, max_value=_today, format="YYYY-MM-DD",
+                "Od", value=_default_od, max_value=_today, format="YYYY-MM-DD",
                 help="Start date of the analysis window.",
             )
             date_to = st.date_input(
@@ -1295,7 +1426,8 @@ def main() -> None:
         st.error(f"Data load failed for {symbol}: {e}")
         st.stop()
 
-    df = result.df
+    df_full = result.df
+    df = df_full
     if date_from is not None:
         df = df.loc[str(date_from):]
     if date_to is not None:
@@ -1309,7 +1441,7 @@ def main() -> None:
 
     s = build_summary(df)
     trades   = _build_trade_ledger(df)
-    metrics  = _compute_metrics(df, bear_alloc_pct=bear_alloc, td=td)
+    metrics  = _compute_metrics(df, bear_alloc_pct=bear_alloc, td=td, df_full=df_full)
     is_bull  = (df["signal_state"].shift(1) == S_BULL).astype(float)
     exposure = (is_bull * 100 + (1 - is_bull) * bear_alloc).mean()
 
@@ -1325,7 +1457,8 @@ def main() -> None:
         except Exception as e:
             st.error(f"Data load failed for {sym_b}: {e}")
             st.stop()
-        df_b = result_b.df
+        df_b_full = result_b.df
+        df_b = df_b_full
         if date_from is not None:
             df_b = df_b.loc[str(date_from):]
         if date_to is not None:
@@ -1335,7 +1468,8 @@ def main() -> None:
             st.stop()
         td_b_val = 252 if sym_b in STOCK_SYMBOLS else 365
         m_a, m_b, m_port, df_a_al, df_b_al, port_ret = _compute_portfolio_metrics(
-            df, df_b, w_a, w_b, bear_alloc, td_a=td, td_b=td_b_val)
+            df, df_b, w_a, w_b, bear_alloc, td_a=td, td_b=td_b_val,
+            df_a_full=df_full, df_b_full=df_b_full)
         s_b = build_summary(df_b_al)
         is_bull_b = (df_b_al["signal_state"].shift(1) == S_BULL).astype(float)
         exp_b = (is_bull_b * 100 + (1 - is_bull_b) * bear_alloc).mean()
@@ -1357,6 +1491,17 @@ def main() -> None:
     except Exception:
         pass  # SPX unavailable — continue without benchmark
 
+    # ── worst 365-day window ──────────────────────────────────────────────────
+    worst_w = worst_w_b = None
+    try:
+        worst_w = _compute_worst_window(symbol, bars, use_btc_filter, use_er,
+                                         bear_alloc, td)
+        if portfolio_mode and sym_b:
+            worst_w_b = _compute_worst_window(sym_b, bars, False, use_er,
+                                               bear_alloc, td_b_val or td)
+    except Exception:
+        pass
+
     # ── status bar ────────────────────────────────────────────────────────────
     st.markdown(_status_bar(s, symbol, use_btc_filter), unsafe_allow_html=True)
 
@@ -1365,11 +1510,13 @@ def main() -> None:
         st.markdown(
             _render_kpi_cards_portfolio(symbol, sym_b, w_a, w_b,
                                         m_a, m_b, m_port, exposure, exp_b,
-                                        spx_m=spx_m),
+                                        spx_m=spx_m,
+                                        worst_w_a=worst_w, worst_w_b=worst_w_b),
             unsafe_allow_html=True,
         )
     else:
-        st.markdown(_render_kpi_cards(metrics, trades, exposure, spx_m=spx_m),
+        st.markdown(_render_kpi_cards(metrics, trades, exposure, spx_m=spx_m,
+                                      worst_w=worst_w),
                     unsafe_allow_html=True)
 
     # ── info bar ──────────────────────────────────────────────────────────────
