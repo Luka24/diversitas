@@ -116,11 +116,15 @@ def _stats(r: pd.Series, td: int = TRADING_DAYS) -> dict:
 
 
 def _compute_metrics(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
-                     td: int = TRADING_DAYS) -> dict:
-    close     = df["close"]
-    ret       = close.pct_change().fillna(0.0)
-    sig       = df["signal_state"]
-    is_bull   = (sig.shift(1) == S_BULL).astype(float)
+                     td: int = TRADING_DAYS,
+                     df_full: "pd.DataFrame | None" = None) -> dict:
+    # Compute returns on df_full (unfiltered) so the first bar of a date-filtered
+    # window has the correct return instead of NaN→0.
+    src       = df_full if df_full is not None else df
+    ret_full  = src["close"].pct_change().fillna(0.0)
+    ib_full   = (src["signal_state"].shift(1) == S_BULL).astype(float)
+    ret       = ret_full.reindex(df.index).fillna(0.0)
+    is_bull   = ib_full.reindex(df.index).fillna(0.0)
     pos       = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
     strat_ret = pd.Series(ret.values * pos, index=ret.index)
     return {"strategy": _stats(strat_ret, td), "bh": _stats(ret, td)}
@@ -130,17 +134,28 @@ def _compute_portfolio_metrics(df_a: pd.DataFrame, df_b: pd.DataFrame,
                                 w_a: int, w_b: int,
                                 bear_alloc_pct: float = 0.0,
                                 td_a: int = TRADING_DAYS,
-                                td_b: int = TRADING_DAYS):
+                                td_b: int = TRADING_DAYS,
+                                df_a_full: "pd.DataFrame | None" = None,
+                                df_b_full: "pd.DataFrame | None" = None):
     """Floating-weight portfolio metrics for A, B, and combined."""
     idx  = df_a.index.intersection(df_b.index)
     a, b = df_a.loc[idx], df_b.loc[idx]
 
-    r_a   = a["close"].pct_change().fillna(0.0)
-    pos_a = np.where((a["signal_state"].shift(1) == S_BULL), 1.0, bear_alloc_pct / 100.0)
+    src_a = df_a_full if df_a_full is not None else df_a
+    src_b = df_b_full if df_b_full is not None else df_b
+    r_a_full   = src_a["close"].pct_change().fillna(0.0)
+    pos_a_full = (src_a["signal_state"].shift(1) == S_BULL).astype(float)
+    r_b_full   = src_b["close"].pct_change().fillna(0.0)
+    pos_b_full = (src_b["signal_state"].shift(1) == S_BULL).astype(float)
+
+    r_a   = r_a_full.reindex(idx).fillna(0.0)
+    ib_a  = pos_a_full.reindex(idx).fillna(0.0)
+    pos_a = np.where(ib_a, 1.0, bear_alloc_pct / 100.0)
     sr_a  = pd.Series(r_a.values * pos_a, index=idx)
 
-    r_b   = b["close"].pct_change().fillna(0.0)
-    pos_b = np.where((b["signal_state"].shift(1) == S_BULL), 1.0, bear_alloc_pct / 100.0)
+    r_b   = r_b_full.reindex(idx).fillna(0.0)
+    ib_b  = pos_b_full.reindex(idx).fillna(0.0)
+    pos_b = np.where(ib_b, 1.0, bear_alloc_pct / 100.0)
     sr_b  = pd.Series(r_b.values * pos_b, index=idx)
 
     wa, wb     = w_a / 100.0, w_b / 100.0
@@ -1712,7 +1727,8 @@ def main() -> None:
         st.error(f"Data load failed for {symbol}: {e}")
         st.stop()
 
-    df = result.df
+    df_full = result.df
+    df = df_full
     if date_from is not None:
         df = df.loc[str(date_from):]
     if date_to is not None:
@@ -1723,7 +1739,7 @@ def main() -> None:
 
     s = build_summary(df)
     trades   = _build_trade_ledger(df)
-    metrics  = _compute_metrics(df, bear_alloc_pct=bear_alloc, td=td)
+    metrics  = _compute_metrics(df, bear_alloc_pct=bear_alloc, td=td, df_full=df_full)
     is_bull  = (df["signal_state"].shift(1) == S_BULL).astype(float)
     exposure = (is_bull * 100 + (1 - is_bull) * bear_alloc).mean()
 
@@ -1739,7 +1755,8 @@ def main() -> None:
         except Exception as e:
             st.error(f"Data load failed for {sym_b}: {e}")
             st.stop()
-        df_b = result_b.df
+        df_b_full = result_b.df
+        df_b = df_b_full
         if date_from is not None:
             df_b = df_b.loc[str(date_from):]
         if date_to is not None:
@@ -1750,7 +1767,8 @@ def main() -> None:
         s_b = build_summary(df_b)
         td_b_val = 252 if sym_b in STOCK_SYMBOLS else TRADING_DAYS
         m_a, m_b, m_port, df_a_al, df_b_al, port_ret = _compute_portfolio_metrics(
-            df, df_b, w_a, w_b, bear_alloc, td_a=td, td_b=td_b_val)
+            df, df_b, w_a, w_b, bear_alloc, td_a=td, td_b=td_b_val,
+            df_a_full=df_full, df_b_full=df_b_full)
         is_bull_b = (df_b_al["signal_state"].shift(1) == S_BULL).astype(float)
         exp_b = (is_bull_b * 100 + (1 - is_bull_b) * bear_alloc).mean()
         trades_b = _build_trade_ledger(df_b)
