@@ -1944,9 +1944,8 @@ def main() -> None:
                 _st_a = None
 
             def _render_stress_panel(ww, sym, td_val, tab_ctx=None):
-                ctx = tab_ctx if tab_ctx is not None else st
                 rc = ww.get("_roll_cagr")
-                with ctx:
+                def _body():
                     st.markdown(_render_stress_test_table(ww, sym),
                                 unsafe_allow_html=True)
                     if rc is not None and not rc.dropna().empty:
@@ -1957,6 +1956,11 @@ def main() -> None:
                             use_container_width=True,
                             key=f"stress_{sym}",
                         )
+                if tab_ctx is not None:
+                    with tab_ctx:
+                        _body()
+                else:
+                    _body()
 
             if _st_a is not None:
                 _render_stress_panel(worst_w,   symbol, td,           _st_a)
