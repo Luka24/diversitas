@@ -1658,12 +1658,12 @@ def main() -> None:
         )
         _today = datetime.date.today()
         _period = st.selectbox(
-            "Period", ["Custom", "All time", "2 years", "1 year",
-                       "Year to date", "6 months", "3 months"],
+            "Period", ["3 years", "All time", "2 years", "1 year",
+                       "Year to date", "6 months", "3 months", "Custom"],
             index=0, label_visibility="collapsed",
             help="Quick period selector. Choose 'Custom' to set exact Od/Do dates.",
         )
-        _period_days = {"2 years": 730, "1 year": 365, "6 months": 180, "3 months": 90}
+        _period_days = {"3 years": 1095, "2 years": 730, "1 year": 365, "6 months": 180, "3 months": 90}
         if _period == "Custom":
             date_from = st.date_input(
                 "Od", value=None, max_value=_today, format="YYYY-MM-DD",
