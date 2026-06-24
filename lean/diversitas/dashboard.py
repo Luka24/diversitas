@@ -1583,7 +1583,9 @@ def main() -> None:
         h1,h2,h3,h4 {{color:{COL_TEXT};font-weight:600}}
         section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {{color:{COL_TEXT} !important;font-size:11px}}
         section[data-testid="stSidebar"] div[data-baseweb="select"]>div:first-child {{background:{COL_PANEL} !important;border-color:{COL_BORDER} !important}}
-        section[data-testid="stSidebar"] div[data-baseweb="select"] span {{color:#ffffff !important;font-weight:600 !important}}
+        section[data-testid="stSidebar"] div[data-baseweb="select"] span,
+        section[data-testid="stSidebar"] div[data-baseweb="select"] div,
+        section[data-testid="stSidebar"] div[data-baseweb="select"] p {{color:#ffffff !important;font-weight:600 !important}}
         section[data-testid="stSidebar"] div[data-baseweb="select"] svg {{fill:#ffffff !important}}
         div[data-baseweb="popover"] ul {{background:{COL_PANEL} !important}}
         div[data-baseweb="popover"] li {{color:{COL_TEXT} !important}}
