@@ -123,7 +123,7 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
     log_ret = np.log(close / close.shift(1))
     df["log_ret"] = log_ret
     daily_std = ind.stdev_pop(log_ret, cfg.vol_lookback)
-    df["annual_vol"] = daily_std * math.sqrt(365) * 100.0
+    df["annual_vol"] = daily_std * math.sqrt(cfg.trading_days) * 100.0
     vol_sma100 = ind.sma(df["annual_vol"], 100)
     vol_std100 = ind.stdev_pop(df["annual_vol"], 100)
     df["vol_z"] = ((df["annual_vol"] - vol_sma100) / vol_std100.replace(0, np.nan)).fillna(0.0)

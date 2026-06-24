@@ -73,7 +73,8 @@ def _load_btc(bars: int) -> pd.DataFrame:
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _run(symbol: str, bars: int, use_btc_filter: bool, use_er: bool):
-    cfg   = Config(use_btc_filter=use_btc_filter, use_er=use_er)
+    _td   = 252 if symbol in STOCK_SYMBOLS else TRADING_DAYS
+    cfg   = Config(use_btc_filter=use_btc_filter, use_er=use_er, trading_days=_td)
     daily = _load_candles(symbol, bars)
     btc   = _load_btc(bars) if use_btc_filter else None
     return cfg, daily, run_strategy(daily, btc_daily=btc, config=cfg)
@@ -81,7 +82,8 @@ def _run(symbol: str, bars: int, use_btc_filter: bool, use_er: bool):
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _run_b(symbol: str, bars: int, use_er: bool):
-    cfg   = Config(use_btc_filter=False, use_er=use_er)
+    _td   = 252 if symbol in STOCK_SYMBOLS else TRADING_DAYS
+    cfg   = Config(use_btc_filter=False, use_er=use_er, trading_days=_td)
     daily = _load_candles(symbol, bars)
     return run_strategy(daily, config=cfg)
 
@@ -332,7 +334,7 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
 
     def _wt(key: str) -> str:
         s, e = _ww.get(f"{key}_start"), _ww.get(f"{key}_end")
-        return f"Worst 365-day window: {s} — {e}" if s and e else ""
+        return f"Worst 1-year window: {s} — {e}" if s and e else ""
 
     row1 = [
         _card("CAGR", _fmt_pct(strat["cagr"]), _val_col(strat["cagr"]),
@@ -954,7 +956,7 @@ def _render_kpi_cards_portfolio(sym_a: str, sym_b: str, w_a: int, w_b: int,
 
     def _wt_ab(ww: dict, key: str) -> str:
         s, e = ww.get(f"{key}_start"), ww.get(f"{key}_end")
-        return f"Worst 365-day window: {s} — {e}" if s and e else ""
+        return f"Worst 1-year window: {s} — {e}" if s and e else ""
 
     def _cell(val: str, col: str, bh: str = "", bh_col: str = "",
               spx: str = "", worst_val: str = "", worst_tip: str = "") -> str:
@@ -1521,15 +1523,17 @@ def main() -> None:
     except Exception:
         pass  # SPX unavailable — continue without benchmark
 
-    # ── worst 365-day window ──────────────────────────────────────────────────
+    # ── worst 1-year window ───────────────────────────────────────────────────
     worst_w = worst_w_b = None
     try:
         worst_w = _compute_worst_window(symbol, bars, use_btc_filter, use_er,
                                          bear_alloc, td,
-                                         fee_per_side_pct=fee_per_side)
+                                         window=td, fee_per_side_pct=fee_per_side)
         if portfolio_mode and sym_b:
+            _td_b_w = td_b_val or td
             worst_w_b = _compute_worst_window(sym_b, bars, False, use_er,
-                                               bear_alloc, td_b_val or td,
+                                               bear_alloc, _td_b_w,
+                                               window=_td_b_w,
                                                fee_per_side_pct=fee_per_side)
     except Exception:
         pass
