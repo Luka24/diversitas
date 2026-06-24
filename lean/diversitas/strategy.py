@@ -68,7 +68,7 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
     log_ret = np.log(close / close.shift(1))
     df["log_ret"] = log_ret
     daily_std = ind.stdev_pop(log_ret, cfg.vol_lookback)
-    df["annual_vol"] = daily_std * math.sqrt(365) * 100.0
+    df["annual_vol"] = daily_std * math.sqrt(cfg.trading_days) * 100.0
     vol_avg50 = ind.sma(df["annual_vol"], 50)
     df["vol_avg50"] = vol_avg50
 
