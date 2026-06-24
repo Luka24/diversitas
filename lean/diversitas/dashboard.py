@@ -1583,8 +1583,8 @@ def main() -> None:
         h1,h2,h3,h4 {{color:{COL_TEXT};font-weight:600}}
         section[data-testid="stSidebar"] [data-testid="stWidgetLabel"] p {{color:{COL_TEXT} !important;font-size:11px}}
         section[data-testid="stSidebar"] div[data-baseweb="select"]>div:first-child {{background:{COL_PANEL} !important;border-color:{COL_BORDER} !important}}
-        section[data-testid="stSidebar"] div[data-baseweb="select"] span {{color:#4fc3f7 !important;font-weight:600 !important}}
-        section[data-testid="stSidebar"] div[data-baseweb="select"] svg {{fill:#4fc3f7 !important}}
+        section[data-testid="stSidebar"] div[data-baseweb="select"] span {{color:{COL_TEXT} !important;font-weight:600 !important}}
+        section[data-testid="stSidebar"] div[data-baseweb="select"] svg {{fill:{COL_TEXT} !important}}
         div[data-baseweb="popover"] ul {{background:{COL_PANEL} !important}}
         div[data-baseweb="popover"] li {{color:{COL_TEXT} !important}}
         div[data-baseweb="popover"] li:hover {{background:{COL_BORDER} !important}}
@@ -1631,7 +1631,7 @@ def main() -> None:
                  "0% = fully out (default). E.g. 20% = always keep 20% invested even in BEAR.",
         )
         fee_per_side = st.slider(
-            "Fee + Slippage per stran %", min_value=0.0, max_value=1.0, value=0.3, step=0.05,
+            "Fee & Slippage per trade %", min_value=0.0, max_value=1.0, value=0.3, step=0.05,
             help="Skupni fee + slippage na vsako stran posla (vstop ALI izstop). "
                  "Round trip = 2×. Binance VIP0 + BNB: 0.075% fee. "
                  "Slippage retail: BTC ~0.02%, SOL ~0.05%. "
