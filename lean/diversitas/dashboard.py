@@ -1818,7 +1818,7 @@ def main() -> None:
             _spx_al.index = df.index
             _spx_ret = _spx_al.pct_change().fillna(0.0)
             spx_eq = (1 + _spx_ret).cumprod() * 100
-            spx_m  = _stats(_spx_ret)
+            spx_m  = _stats(_spx_ret, td=252)
     except Exception:
         pass  # SPX unavailable — continue without benchmark
 
