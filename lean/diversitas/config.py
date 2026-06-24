@@ -46,6 +46,9 @@ class LeanConfig:
     # Optional cross-asset filter — OFF by default in Lean
     use_btc_filter: bool = False
 
+    # Trading-day calendar: 365 for crypto (24/7), 252 for stock ETFs
+    trading_days: int = 365
+
     # Symbol → per-source identifier (same map as full)
     symbol_map: Dict[str, Dict[str, str]] = field(default_factory=lambda: {
         "BTC": {"binance": "BTCUSDT", "yahoo": "BTC-USD", "coingecko": "bitcoin"},

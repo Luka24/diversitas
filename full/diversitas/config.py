@@ -46,6 +46,9 @@ class Config:
     er_len: int = 10          # lookback bars
     er_thresh: float = 0.30   # below this = chop, entry blocked
 
+    # Trading-day calendar: 365 for crypto (24/7), 252 for stock ETFs
+    trading_days: int = 365
+
     # Display / behaviour
     skip_weekend: bool = True
 

@@ -74,7 +74,8 @@ def _load_btc(bars: int) -> pd.DataFrame:
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _run(symbol: str, bars: int, use_btc_filter: bool, use_er: bool):
-    cfg   = LeanConfig(use_btc_filter=use_btc_filter, use_er=use_er)
+    _td   = 252 if symbol in STOCK_SYMBOLS else TRADING_DAYS
+    cfg   = LeanConfig(use_btc_filter=use_btc_filter, use_er=use_er, trading_days=_td)
     daily = _load_candles(symbol, bars)
     btc   = _load_btc(bars) if use_btc_filter else None
     return cfg, daily, run_strategy(daily, btc_daily=btc, config=cfg)
@@ -82,7 +83,8 @@ def _run(symbol: str, bars: int, use_btc_filter: bool, use_er: bool):
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _run_b(symbol: str, bars: int, use_er: bool):
-    cfg   = LeanConfig(use_btc_filter=False, use_er=use_er)
+    _td   = 252 if symbol in STOCK_SYMBOLS else TRADING_DAYS
+    cfg   = LeanConfig(use_btc_filter=False, use_er=use_er, trading_days=_td)
     daily = _load_candles(symbol, bars)
     return cfg, run_strategy(daily, config=cfg)
 
@@ -347,7 +349,7 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
 
     def _wt(key: str) -> str:
         s, e = _ww.get(f"{key}_start"), _ww.get(f"{key}_end")
-        return f"Worst 365-day window: {s} — {e}" if s and e else ""
+        return f"Worst 1-year window: {s} — {e}" if s and e else ""
 
     row1 = [
         _card("CAGR", _fmt_pct(strat["cagr"]), _val_col(strat["cagr"]),
@@ -1122,7 +1124,7 @@ def _build_rolling_sharpe(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
 def _build_stress_test_chart(roll_cagr: pd.Series,
                               worst_start, worst_end,
                               symbol: str) -> go.Figure:
-    """Rolling 365-day CAGR line with the worst window highlighted."""
+    """Rolling 1-year CAGR line with the worst window highlighted."""
     rc_pct = roll_cagr * 100
 
     fig = go.Figure()
@@ -1165,7 +1167,7 @@ def _build_stress_test_chart(roll_cagr: pd.Series,
     fig.update_layout(
         title=dict(
             text=f'<span style="color:{COL_TEXT};font-size:12px;text-transform:uppercase;'
-                 f'letter-spacing:1px">Rolling 365-day CAGR · {symbol}</span>',
+                 f'letter-spacing:1px">Rolling 1-year CAGR · {symbol}</span>',
             x=0.01, y=0.98, yanchor="top",
         ),
         margin=dict(t=56),
@@ -1176,7 +1178,7 @@ def _build_stress_test_chart(roll_cagr: pd.Series,
 
 
 def _render_stress_test_table(worst_w: dict, symbol: str) -> str:
-    """HTML table: worst 365-day value + period for each metric."""
+    """HTML table: worst 1-year value + period for each metric."""
     if not worst_w:
         return ""
 
@@ -1820,12 +1822,12 @@ def main() -> None:
     except Exception:
         pass  # SPX unavailable — continue without benchmark
 
-    # ── worst 365-day windows ─────────────────────────────────────────────────
+    # ── worst 1-year windows ──────────────────────────────────────────────────
     worst_w = worst_w_b = {}
     try:
         worst_w = _compute_worst_window(
             symbol, bars, use_btc_filter, use_er, float(bear_alloc), td,
-            fee_per_side_pct=fee_per_side)
+            window=td, fee_per_side_pct=fee_per_side)
     except Exception:
         pass
     if portfolio_mode and sym_b:
@@ -1833,7 +1835,7 @@ def main() -> None:
             td_b_worst = 252 if sym_b in STOCK_SYMBOLS else TRADING_DAYS
             worst_w_b = _compute_worst_window(
                 sym_b, bars, False, use_er, float(bear_alloc), td_b_worst,
-                fee_per_side_pct=fee_per_side)
+                window=td_b_worst, fee_per_side_pct=fee_per_side)
         except Exception:
             pass
 
@@ -1961,11 +1963,11 @@ def main() -> None:
 
     # ── stress test expander ─────────────────────────────────────────────────
     if worst_w:
-        with st.expander("📊 Stress test · worst 365-day window", expanded=False):
+        with st.expander("📊 Stress test · worst 1-year window", expanded=False):
             st.markdown(
                 f'<div style="color:{COL_DIM};font-size:11px;margin-bottom:10px">'
                 f'Rolling analysis across all available history — the worst consecutive '
-                f'365-calendar-day window for each risk metric, strategy returns only '
+                f'1-year rolling window for each risk metric, strategy returns only '
                 f'(fee + slippage {fee_per_side:.2f}%/stran). Hover metric names for tooltip.'
                 f'</div>',
                 unsafe_allow_html=True,
