@@ -119,14 +119,19 @@ def _stats(r: pd.Series, td: int = TRADING_DAYS) -> dict:
 
 def _compute_metrics(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
                      td: int = TRADING_DAYS,
-                     df_full: "pd.DataFrame | None" = None) -> dict:
-    src       = df_full if df_full is not None else df
-    ret_full  = src["close"].pct_change().fillna(0.0)
-    ib_full   = (src["signal_state"].shift(1) == S_BULL).astype(float)
-    ret       = ret_full.reindex(df.index).fillna(0.0)
-    is_bull   = ib_full.reindex(df.index).fillna(0.0)
-    pos       = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
-    strat_ret = pd.Series(ret.values * pos, index=ret.index)
+                     df_full: "pd.DataFrame | None" = None,
+                     fee_per_side_pct: float = 0.0) -> dict:
+    src          = df_full if df_full is not None else df
+    ret_full     = src["close"].pct_change().fillna(0.0)
+    ib_full      = (src["signal_state"].shift(1) == S_BULL).astype(float)
+    sig_ch_full  = src["signal_changed"].fillna(False)
+    ret          = ret_full.reindex(df.index).fillna(0.0)
+    is_bull      = ib_full.reindex(df.index).fillna(0.0)
+    sig_ch       = sig_ch_full.reindex(df.index).fillna(False)
+    pos          = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
+    strat_ret    = pd.Series(ret.values * pos, index=ret.index)
+    if fee_per_side_pct > 0:
+        strat_ret -= sig_ch.astype(float) * (fee_per_side_pct / 100.0)
     return {"strategy": _stats(strat_ret, td), "bh": _stats(ret, td)}
 
 
@@ -136,27 +141,37 @@ def _compute_portfolio_metrics(df_a: pd.DataFrame, df_b: pd.DataFrame,
                                 td_a: int = TRADING_DAYS,
                                 td_b: int = TRADING_DAYS,
                                 df_a_full: "pd.DataFrame | None" = None,
-                                df_b_full: "pd.DataFrame | None" = None):
+                                df_b_full: "pd.DataFrame | None" = None,
+                                fee_per_side_pct: float = 0.0):
     """Floating-weight portfolio metrics for A, B, and combined."""
     idx  = df_a.index.intersection(df_b.index)
     a, b = df_a.loc[idx], df_b.loc[idx]
 
     src_a = df_a_full if df_a_full is not None else df_a
     src_b = df_b_full if df_b_full is not None else df_b
-    r_a_full   = src_a["close"].pct_change().fillna(0.0)
-    pos_a_full = (src_a["signal_state"].shift(1) == S_BULL).astype(float)
-    r_b_full   = src_b["close"].pct_change().fillna(0.0)
-    pos_b_full = (src_b["signal_state"].shift(1) == S_BULL).astype(float)
+    r_a_full      = src_a["close"].pct_change().fillna(0.0)
+    pos_a_full    = (src_a["signal_state"].shift(1) == S_BULL).astype(float)
+    sig_ch_a_full = src_a["signal_changed"].fillna(False)
+    r_b_full      = src_b["close"].pct_change().fillna(0.0)
+    pos_b_full    = (src_b["signal_state"].shift(1) == S_BULL).astype(float)
+    sig_ch_b_full = src_b["signal_changed"].fillna(False)
 
-    r_a   = r_a_full.reindex(idx).fillna(0.0)
-    ib_a  = pos_a_full.reindex(idx).fillna(0.0)
-    pos_a = np.where(ib_a, 1.0, bear_alloc_pct / 100.0)
-    sr_a  = pd.Series(r_a.values * pos_a, index=idx)
+    r_a      = r_a_full.reindex(idx).fillna(0.0)
+    ib_a     = pos_a_full.reindex(idx).fillna(0.0)
+    sig_ch_a = sig_ch_a_full.reindex(idx).fillna(False)
+    pos_a    = np.where(ib_a, 1.0, bear_alloc_pct / 100.0)
+    sr_a     = pd.Series(r_a.values * pos_a, index=idx)
 
-    r_b   = r_b_full.reindex(idx).fillna(0.0)
-    ib_b  = pos_b_full.reindex(idx).fillna(0.0)
-    pos_b = np.where(ib_b, 1.0, bear_alloc_pct / 100.0)
-    sr_b  = pd.Series(r_b.values * pos_b, index=idx)
+    r_b      = r_b_full.reindex(idx).fillna(0.0)
+    ib_b     = pos_b_full.reindex(idx).fillna(0.0)
+    sig_ch_b = sig_ch_b_full.reindex(idx).fillna(False)
+    pos_b    = np.where(ib_b, 1.0, bear_alloc_pct / 100.0)
+    sr_b     = pd.Series(r_b.values * pos_b, index=idx)
+
+    if fee_per_side_pct > 0:
+        fee   = fee_per_side_pct / 100.0
+        sr_a -= sig_ch_a.astype(float) * fee
+        sr_b -= sig_ch_b.astype(float) * fee
 
     wa, wb     = w_a / 100.0, w_b / 100.0
     port_strat = wa * sr_a + wb * sr_b
@@ -238,7 +253,8 @@ def _worst_windows_from_sr(sr: pd.Series, td: int, window: int = 365) -> dict:
 @st.cache_data(ttl=300, show_spinner=False)
 def _compute_worst_window(symbol: str, bars: int, use_btc_filter: bool,
                            use_er: bool, bear_alloc_pct: float,
-                           td: int, window: int = 365) -> dict:
+                           td: int, window: int = 365,
+                           fee_per_side_pct: float = 0.0) -> dict:
     cfg   = Config(use_btc_filter=use_btc_filter, use_er=use_er)
     daily = _load_candles(symbol, bars)
     btc   = _load_btc(bars) if use_btc_filter else None
@@ -249,6 +265,9 @@ def _compute_worst_window(symbol: str, bars: int, use_btc_filter: bool,
         (df["signal_state"].shift(1) == S_BULL), 1.0, bear_alloc_pct / 100.0
     )
     sr = pd.Series(ret.values * pos, index=ret.index)
+    if fee_per_side_pct > 0:
+        sig_ch = df["signal_changed"].fillna(False)
+        sr -= sig_ch.astype(float) * (fee_per_side_pct / 100.0)
     return _worst_windows_from_sr(sr, td, window)
 
 
@@ -1311,6 +1330,13 @@ def main() -> None:
             help="Minimum % of capital that stays in crypto during BEAR signal. "
                  "0% = fully out (default). E.g. 20% = always keep 20% invested even in BEAR.",
         )
+        fee_per_side = st.slider(
+            "Fee + Slippage per stran %", min_value=0.0, max_value=1.0, value=0.3, step=0.05,
+            help="Skupni fee + slippage na vsako stran posla (vstop ALI izstop). "
+                 "Round trip = 2×. Binance VIP0 + BNB: 0.075% fee. "
+                 "Slippage retail: BTC ~0.02%, SOL ~0.05%. "
+                 "Default 0.30% je konservativna ocena.",
+        )
         st.divider()
         st.markdown(
             f"<div style='color:{COL_DIM};font-size:10px;text-transform:uppercase;"
@@ -1441,7 +1467,8 @@ def main() -> None:
 
     s = build_summary(df)
     trades   = _build_trade_ledger(df)
-    metrics  = _compute_metrics(df, bear_alloc_pct=bear_alloc, td=td, df_full=df_full)
+    metrics  = _compute_metrics(df, bear_alloc_pct=bear_alloc, td=td, df_full=df_full,
+                                fee_per_side_pct=fee_per_side)
     is_bull  = (df["signal_state"].shift(1) == S_BULL).astype(float)
     exposure = (is_bull * 100 + (1 - is_bull) * bear_alloc).mean()
 
@@ -1469,7 +1496,8 @@ def main() -> None:
         td_b_val = 252 if sym_b in STOCK_SYMBOLS else 365
         m_a, m_b, m_port, df_a_al, df_b_al, port_ret = _compute_portfolio_metrics(
             df, df_b, w_a, w_b, bear_alloc, td_a=td, td_b=td_b_val,
-            df_a_full=df_full, df_b_full=df_b_full)
+            df_a_full=df_full, df_b_full=df_b_full,
+            fee_per_side_pct=fee_per_side)
         s_b = build_summary(df_b_al)
         is_bull_b = (df_b_al["signal_state"].shift(1) == S_BULL).astype(float)
         exp_b = (is_bull_b * 100 + (1 - is_bull_b) * bear_alloc).mean()
@@ -1495,10 +1523,12 @@ def main() -> None:
     worst_w = worst_w_b = None
     try:
         worst_w = _compute_worst_window(symbol, bars, use_btc_filter, use_er,
-                                         bear_alloc, td)
+                                         bear_alloc, td,
+                                         fee_per_side_pct=fee_per_side)
         if portfolio_mode and sym_b:
             worst_w_b = _compute_worst_window(sym_b, bars, False, use_er,
-                                               bear_alloc, td_b_val or td)
+                                               bear_alloc, td_b_val or td,
+                                               fee_per_side_pct=fee_per_side)
     except Exception:
         pass
 
@@ -1773,7 +1803,7 @@ def main() -> None:
     st.markdown(
         f'<div style="color:{COL_VERY_DIM};font-size:10px;margin-top:8px;'
         f'font-family:monospace;text-align:right">'
-        f'Naive long-flat backtest · no slippage / fees · Pro v3</div>',
+        f'Backtest · fee+slip {fee_per_side:.2f}%/stran ({fee_per_side*2:.2f}% RT) · Pro v3</div>',
         unsafe_allow_html=True,
     )
 
