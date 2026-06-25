@@ -108,10 +108,9 @@ def _stats(r: pd.Series, td: int = TRADING_DAYS) -> dict:
     cagr   = final ** (1.0 / years) - 1.0
     ann_ret = r.mean() * td
     ann_std = r.std() * np.sqrt(td)
-    neg     = r[r < 0]
-    down_std = neg.std() * np.sqrt(td) if len(neg) > 1 else np.nan
+    down_dev = np.sqrt(np.mean(np.minimum(r.values, 0.0) ** 2)) * np.sqrt(td)
     sharpe   = ann_ret / ann_std if ann_std > 1e-9 else np.nan
-    sortino  = ann_ret / down_std if (not np.isnan(down_std) and down_std > 1e-9) else np.nan
+    sortino  = ann_ret / down_dev if down_dev > 1e-9 else np.nan
     calmar   = cagr / abs(max_dd) if max_dd < -1e-6 else np.nan
     return dict(cagr=cagr, sharpe=sharpe, sortino=sortino,
                 max_dd=max_dd, calmar=calmar, eq=eq, dd=dd)
@@ -205,8 +204,8 @@ def _worst_windows_from_sr(sr: pd.Series, td: int, window: int = 365) -> dict:
     # ── rolling loop: Sharpe / Sortino / Max DD / Calmar ────────────────────
     # All use exactly the same formula as _stats() so "Worst yr" values match
     # the KPI cards when the user selects that date range.
-    #   Sharpe  = ann_ret / std(all_returns, ddof=1)       [pandas default]
-    #   Sortino = ann_ret / std(negative_returns, ddof=1)  [_stats formula]
+    #   Sharpe  = ann_ret / std(all_returns, ddof=1)                    [pandas default]
+    #   Sortino = ann_ret / sqrt(mean(min(r,0)^2)) * sqrt(td)          [standard semi-deviation]
     #   Max DD  = min(equity/cummax - 1)
     #   Calmar  = CAGR / |Max DD|
     arr         = sr.values
@@ -221,11 +220,9 @@ def _worst_windows_from_sr(sr: pd.Series, td: int, window: int = 365) -> dict:
         s    = w.std(ddof=1) * np.sqrt(td)
         if s > 1e-9:
             sharpe_arr[i] = ar / s
-        neg  = w[w < 0]
-        if len(neg) > 1:
-            ds = neg.std(ddof=1) * np.sqrt(td)
-            if ds > 1e-9:
-                sortino_arr[i] = ar / ds
+        ds = np.sqrt(np.mean(np.minimum(w, 0.0) ** 2)) * np.sqrt(td)
+        if ds > 1e-9:
+            sortino_arr[i] = ar / ds
         eq  = np.cumprod(1.0 + np.clip(w, -0.999, None))
         pk  = np.maximum.accumulate(eq)
         mdd_arr[i] = float((eq / pk - 1.0).min())
@@ -272,7 +269,7 @@ def _compute_worst_window(symbol: str, bars: int, use_btc_filter: bool,
                            td: int, window: int = 365,
                            fee_per_side_pct: float = 0.0) -> dict:
     """Cached entry point — derives sr from a fresh strategy run."""
-    cfg    = LeanConfig(use_btc_filter=use_btc_filter, use_er=use_er)
+    cfg    = LeanConfig(use_btc_filter=use_btc_filter, use_er=use_er, trading_days=td)
     daily  = _load_candles(symbol, bars)
     btc    = _load_btc(bars) if use_btc_filter else None
     result = run_strategy(daily, btc_daily=btc, config=cfg)
@@ -305,11 +302,33 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
     gross_loss = abs(sum(t["pnl_pct"] for t in closed if t["pnl_pct"] < 0))
     pf = gross_profit / gross_loss if gross_loss > 1e-9 else None
 
+    def _delta(sv, bv, is_pct: bool = True, positive_good: bool = True):
+        """Returns (text, color) for strategy-vs-B&H delta badge."""
+        try:
+            if sv is None or bv is None or np.isnan(float(sv)) or np.isnan(float(bv)):
+                return "", ""
+        except (TypeError, ValueError):
+            return "", ""
+        d = float(sv) - float(bv)
+        if abs(d) < 1e-9:
+            return "", ""
+        txt = f"{d * 100:+.1f}pp" if is_pct else f"{d:+.2f}"
+        good = (d > 0) if positive_good else (d < 0)
+        return txt, COL_BULL if good else COL_BEAR
+
     def _card(label: str, value: str, colour: str,
               bh_val: str = "", bh_col: str = "",
               spx_val: str = "", tip: str = "",
-              worst_val: str = "", worst_tip: str = "") -> str:
+              worst_val: str = "", worst_tip: str = "",
+              delta_str: str = "", delta_col: str = "") -> str:
         sub = ""
+        if delta_str:
+            sub += (
+                f'<div style="margin-top:4px;font-size:10px;font-family:monospace">'
+                f'<span style="background:{delta_col}22;color:{delta_col};'
+                f'padding:1px 6px;border-radius:3px;font-weight:700">'
+                f'{delta_str} vs B&H</span></div>'
+            )
         if bh_val:
             sub += (
                 f'<div style="margin-top:5px;font-size:11px;font-family:monospace">'
@@ -351,33 +370,44 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
         s, e = _ww.get(f"{key}_start"), _ww.get(f"{key}_end")
         return f"Worst 1-year window: {s} — {e}" if s and e else ""
 
+    _dcagr,    _dcagr_c    = _delta(strat["cagr"],    bh["cagr"],    is_pct=True,  positive_good=True)
+    _dsharpe,  _dsharpe_c  = _delta(strat["sharpe"],  bh["sharpe"],  is_pct=False, positive_good=True)
+    _dsortino, _dsortino_c = _delta(strat["sortino"], bh["sortino"], is_pct=False, positive_good=True)
+    _dmdd,     _dmdd_c     = _delta(strat["max_dd"],  bh["max_dd"],  is_pct=True,  positive_good=False)
+    _dcalmar,  _dcalmar_c  = _delta(strat["calmar"],  bh["calmar"],  is_pct=False, positive_good=True)
+
     row1 = [
         _card("CAGR", _fmt_pct(strat["cagr"]), _val_col(strat["cagr"]),
               _fmt_pct(bh["cagr"]), _val_col(bh["cagr"]),
               _fmt_pct(_s.get("cagr")) if _s else "",
               "Compound Annual Growth Rate",
-              worst_val=_wv("cagr", _fmt_pct), worst_tip=_wt("cagr")),
+              worst_val=_wv("cagr", _fmt_pct), worst_tip=_wt("cagr"),
+              delta_str=_dcagr, delta_col=_dcagr_c),
         _card("Sharpe", _fmt_ratio(strat["sharpe"]), _val_col(strat["sharpe"]),
               _fmt_ratio(bh["sharpe"]), _val_col(bh["sharpe"]),
               _fmt_ratio(_s.get("sharpe")) if _s else "",
               "Risk-adjusted return (return / volatility)",
-              worst_val=_wv("sharpe", _fmt_ratio), worst_tip=_wt("sharpe")),
+              worst_val=_wv("sharpe", _fmt_ratio), worst_tip=_wt("sharpe"),
+              delta_str=_dsharpe, delta_col=_dsharpe_c),
         _card("Sortino", _fmt_ratio(strat["sortino"]), _val_col(strat["sortino"]),
               _fmt_ratio(bh["sortino"]), _val_col(bh["sortino"]),
               _fmt_ratio(_s.get("sortino")) if _s else "",
               "Return / downside volatility only",
-              worst_val=_wv("sortino", _fmt_ratio), worst_tip=_wt("sortino")),
+              worst_val=_wv("sortino", _fmt_ratio), worst_tip=_wt("sortino"),
+              delta_str=_dsortino, delta_col=_dsortino_c),
         _card("Max Drawdown", _fmt_pct(strat["max_dd"]),
               _val_col(strat["max_dd"], positive_good=False),
               _fmt_pct(bh["max_dd"]), _val_col(bh["max_dd"], positive_good=False),
               _fmt_pct(_s.get("max_dd")) if _s else "",
               "Largest peak-to-trough equity decline",
-              worst_val=_wv("max_dd", _fmt_pct), worst_tip=_wt("max_dd")),
+              worst_val=_wv("max_dd", _fmt_pct), worst_tip=_wt("max_dd"),
+              delta_str=_dmdd, delta_col=_dmdd_c),
         _card("Calmar", _fmt_ratio(strat["calmar"]), _val_col(strat["calmar"]),
               _fmt_ratio(bh["calmar"]), _val_col(bh["calmar"]),
               _fmt_ratio(_s.get("calmar")) if _s else "",
               "CAGR / |Max Drawdown|",
-              worst_val=_wv("calmar", _fmt_ratio), worst_tip=_wt("calmar")),
+              worst_val=_wv("calmar", _fmt_ratio), worst_tip=_wt("calmar"),
+              delta_str=_dcalmar, delta_col=_dcalmar_c),
         _card("Win Rate",
               f"{wr:.0f}%" if wr is not None else "—",
               COL_BULL if (wr or 0) >= 50 else COL_NEUTRAL if (wr or 0) >= 40 else COL_BEAR,
@@ -869,6 +899,7 @@ def _build_equity_chart(metrics: dict, symbol: str = "",
     s_eq  = strat["eq"] * 100
     b_eq  = bh["eq"]   * 100
     s_dd  = strat["dd"] * 100
+    b_dd  = bh["dd"]   * 100
     sym_label = f" · {symbol}" if symbol else ""
 
     fig = make_subplots(
@@ -891,11 +922,17 @@ def _build_equity_chart(metrics: dict, symbol: str = "",
         line=dict(color=COL_BULL, width=2),
         name=f"Strategy{sym_label}", hovertemplate="Strategy %{y:.1f}<extra></extra>",
     ), row=1, col=1)
+    # Drawdown subplot — both strategy (filled) and B&H (line only) for comparison
+    fig.add_trace(go.Scatter(
+        x=b_dd.index, y=b_dd, mode="lines",
+        line=dict(color=COL_DIM, width=1, dash="dot"),
+        name="B&H DD", hovertemplate="B&H DD %{y:.1f}%<extra></extra>",
+    ), row=2, col=1)
     fig.add_trace(go.Scatter(
         x=s_dd.index, y=s_dd, mode="lines",
         fill="tozeroy", line=dict(color=COL_BEAR, width=1),
         fillcolor="rgba(242,54,69,0.18)",
-        name="Drawdown %", hovertemplate="DD %{y:.1f}%<extra></extra>",
+        name="Strategy DD", hovertemplate="Strategy DD %{y:.1f}%<extra></extra>",
     ), row=2, col=1)
 
     _chart_layout(fig, height=420)
@@ -1097,17 +1134,30 @@ def _build_rolling_sharpe(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
         is_bull = (df["signal_state"].shift(1) == S_BULL).astype(float)
         pos = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
         strat_ret = pd.Series(ret.values * pos, index=ret.index)
+    bh_ret = df["close"].pct_change().fillna(0.0)
     window = 90
-    rm = strat_ret.rolling(window, min_periods=window).mean() * td
-    rs = strat_ret.rolling(window, min_periods=window).std() * np.sqrt(td)
-    sharpe = (rm / rs).replace([np.inf, -np.inf], np.nan).dropna()
+
+    def _roll_sharpe(sr):
+        rm = sr.rolling(window, min_periods=window).mean() * td
+        rs = sr.rolling(window, min_periods=window).std() * np.sqrt(td)
+        return (rm / rs).replace([np.inf, -np.inf], np.nan)
+
+    sharpe    = _roll_sharpe(strat_ret)
+    bh_sharpe = _roll_sharpe(bh_ret)
+
     fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=bh_sharpe.index, y=bh_sharpe, mode="lines",
+        line=dict(color=COL_DIM, width=1.2, dash="dot"),
+        name="B&H 90d Sharpe",
+        hovertemplate="B&H Sharpe %{y:.2f}<extra></extra>",
+    ))
     fig.add_trace(go.Scatter(
         x=sharpe.index, y=sharpe, mode="lines",
         line=dict(color=COL_BLUE, width=1.5),
         fill="tozeroy", fillcolor="rgba(41,98,255,0.08)",
-        name="Rolling 90d Sharpe",
-        hovertemplate="Sharpe %{y:.2f}<extra></extra>",
+        name="Strategy 90d Sharpe",
+        hovertemplate="Strategy Sharpe %{y:.2f}<extra></extra>",
     ))
     fig.add_hline(y=0, line_dash="dash", line_color=COL_DIM, line_width=0.5)
     fig.add_hline(y=1, line_dash="dot", line_color=COL_BULL, line_width=0.5)
@@ -1396,19 +1446,23 @@ def _render_trade_ledger(trades: list[dict], n: int = 12) -> str:
                   if t["open"] else
                   f'<span style="color:{COL_DIM};font-size:11px">{t["exit_reason"]}</span>')
         ex = "—" if t["open"] else t["exit_date"].strftime("%Y-%m-%d")
+        dist = t.get("entry_dist")
+        dist_col = COL_BULL if (dist or 0) > 5 else COL_NEUTRAL if (dist or 0) > 0 else COL_BEAR
+        dist_txt = f"{dist:+.1f}%" if dist is not None else "—"
         rows_html.append(
             f'<tr style="border-bottom:1px solid {COL_BORDER}">'
             f'<td style="padding:9px 12px;color:{COL_TEXT};font-family:monospace;font-size:12px">{t["entry_date"].strftime("%Y-%m-%d")}</td>'
             f'<td style="padding:9px 12px;color:{COL_DIM};font-family:monospace;font-size:12px">{ex}</td>'
             f'<td style="padding:9px 12px;color:{COL_TEXT};font-family:monospace;font-size:12px;text-align:right">${t["entry_px"]:,.2f}</td>'
             f'<td style="padding:9px 12px;color:{COL_DIM};font-family:monospace;font-size:12px;text-align:right">${t["exit_px"]:,.2f}</td>'
+            f'<td style="padding:9px 12px;color:{dist_col};font-family:monospace;font-size:12px;text-align:right" title="Distance above trackline at entry">{dist_txt}</td>'
             f'<td style="padding:9px 12px;color:{COL_DIM};font-family:monospace;font-size:12px;text-align:right">{t["duration_days"]}d</td>'
             f'<td style="padding:9px 12px;color:{pc};font-family:monospace;font-size:13px;font-weight:600;text-align:right">{pnl:+.2f}%</td>'
             f'<td style="padding:9px 12px;text-align:center">{status}</td>'
             f'</tr>'
         )
     cols = [("ENTRY","left"),("EXIT","left"),("ENTRY PX","right"),("EXIT PX","right"),
-            ("DUR","right"),("P&L","right"),("EXIT TRIGGER","center")]
+            ("DIST TL","right"),("DUR","right"),("P&L","right"),("EXIT TRIGGER","center")]
     hdr = "".join(
         f'<th style="padding:7px 12px;color:{COL_DIM};font-size:10px;text-transform:uppercase;'
         f'letter-spacing:0.8px;text-align:{a};border-bottom:1px solid {COL_BORDER};font-weight:600">{lbl}</th>'
@@ -1607,6 +1661,8 @@ def main() -> None:
             f"text-transform:uppercase;margin-bottom:16px'>Lean · Live</div>",
             unsafe_allow_html=True,
         )
+
+        # ── Asset ──────────────────────────────────────────────────────────────
         symbol = st.selectbox(
             "Symbol", list(DEFAULT_CONFIG.symbol_map.keys()), index=0,
             help="Asset to analyze. Data fetched from Binance (primary) or yfinance (fallback).",
@@ -1618,111 +1674,109 @@ def main() -> None:
             f'color:{COL_BULL}">{symbol} / USD</div>',
             unsafe_allow_html=True,
         )
-        use_btc_filter = st.checkbox(
-            "BTC cross-asset filter", value=False,
-            help="When ON the strategy only signals BULL if BTC is also in a bull regime. "
-                 "Reduces false entries during broad crypto downturns. OFF by default in Lean.",
-        )
-        use_er = st.checkbox(
-            "Efficiency Ratio filter", value=True,
-            help="Kaufman Efficiency Ratio: ER = |net change over N bars| / sum(|daily changes|). "
-                 "Near 1 = clean trend, near 0 = sideways chop. "
-                 "When ON, entries are blocked during choppy markets (ER < 0.30).",
-        )
-        bear_alloc = st.slider(
-            "Min BEAR allocation %", min_value=0, max_value=50, value=0, step=5,
-            help="Minimum % of capital that stays in crypto during BEAR signal. "
-                 "0% = fully out (default). E.g. 20% = always keep 20% invested even in BEAR.",
-        )
-        fee_per_side = st.slider(
-            "Fee & Slippage per trade %", min_value=0.0, max_value=1.0, value=0.3, step=0.05,
-            help="Skupni fee + slippage na vsako stran posla (vstop ALI izstop). "
-                 "Round trip = 2×. Binance VIP0 + BNB: 0.075% fee. "
-                 "Slippage retail: BTC ~0.02%, SOL ~0.05%. "
-                 "Default 0.30% je konservativna ocena.",
-        )
-        st.divider()
-        st.markdown(
-            f"<div style='color:{COL_DIM};font-size:10px;text-transform:uppercase;"
-            f"letter-spacing:1.2px;margin-bottom:6px'>Portfolio (optional)</div>",
-            unsafe_allow_html=True,
-        )
-        _sym_b_options = ["—"] + list(DEFAULT_CONFIG.symbol_map.keys())
-        sym_b = st.selectbox(
-            "Asset B", _sym_b_options, index=0,
-            help="Add a second asset for portfolio mode. '—' = single-asset mode. "
-                 "Each asset is traded independently; weights are fixed at start (floating, no daily rebalancing).",
-        )
-        portfolio_mode = sym_b != "—"
-        if portfolio_mode:
-            st.markdown(
-                f'<div style="background:#4fc3f71a;border-left:3px solid #4fc3f7;'
-                f'border-radius:3px;padding:6px 12px;margin:2px 0 8px 0;'
-                f'font-family:monospace;font-size:15px;font-weight:700;letter-spacing:1.5px;'
-                f'color:#4fc3f7">{sym_b} / USD</div>',
-                unsafe_allow_html=True,
+
+        # ── Strategy filters ───────────────────────────────────────────────────
+        with st.expander("Strategy filters", expanded=True):
+            use_btc_filter = st.checkbox(
+                "BTC cross-asset filter", value=False,
+                help="When ON the strategy only signals BULL if BTC is also in a bull regime. "
+                     "Reduces false entries during broad crypto downturns. OFF by default in Lean.",
             )
-            w_a = st.slider(
-                "Asset A weight %", min_value=5, max_value=95, value=60, step=5,
-                help=f"% of starting capital in {symbol}. {sym_b} receives the remainder.",
+            use_er = st.checkbox(
+                "Efficiency Ratio filter", value=True,
+                help="Kaufman Efficiency Ratio: ER = |net change over N bars| / sum(|daily changes|). "
+                     "Near 1 = clean trend, near 0 = sideways chop. "
+                     "When ON, entries are blocked during choppy markets (ER < 0.30).",
             )
-            w_b = 100 - w_a
-            st.markdown(
-                f'<div style="display:flex;gap:8px;margin:4px 0 2px 0">'
-                f'<div style="flex:1;background:{COL_BULL}1a;border-radius:3px;padding:5px 8px;'
-                f'text-align:center;font-family:monospace;font-size:12px;font-weight:700;color:{COL_BULL}">'
-                f'{symbol}  {w_a}%</div>'
-                f'<div style="flex:1;background:#4fc3f71a;border-radius:3px;padding:5px 8px;'
-                f'text-align:center;font-family:monospace;font-size:12px;font-weight:700;color:#4fc3f7">'
-                f'{sym_b}  {w_b}%</div>'
-                f'</div>',
-                unsafe_allow_html=True,
+            bear_alloc = st.slider(
+                "Min BEAR allocation %", min_value=0, max_value=50, value=0, step=5,
+                help="Minimum % of capital held during BEAR signal. "
+                     "0% = fully out (default). E.g. 20% = always keep 20% invested even in BEAR.",
             )
-        else:
-            w_a, w_b = 100, 0
-        st.divider()
-        st.markdown(
-            f"<div style='color:{COL_DIM};font-size:10px;text-transform:uppercase;"
-            f"letter-spacing:1.2px;margin-bottom:6px'>Backtest window</div>",
-            unsafe_allow_html=True,
-        )
-        _today = datetime.date.today()
-        _period = st.selectbox(
-            "Period", ["Custom", "All time", "3 years", "2 years", "1 year",
-                       "Year to date", "6 months", "3 months"],
-            index=0, label_visibility="collapsed",
-            help="Quick period selector. Choose 'Custom' to set exact Od/Do dates.",
-        )
-        _period_days = {"3 years": 1095, "2 years": 730, "1 year": 365, "6 months": 180, "3 months": 90}
-        _default_od = _today - datetime.timedelta(days=1095)
-        if _period == "Custom":
-            date_from = st.date_input(
-                "Od", value=_default_od, max_value=_today, format="YYYY-MM-DD",
-                help="Start date of the analysis window.",
+            fee_per_side = st.slider(
+                "Fee & slippage per side %", min_value=0.0, max_value=1.0, value=0.3, step=0.05,
+                help="Combined fee + slippage per trade side (entry OR exit). "
+                     "Round trip = 2×. Binance VIP0 + BNB: 0.075% fee. "
+                     "Retail slippage: BTC ~0.02%, SOL ~0.05%. Default 0.30% is conservative.",
             )
-            date_to = st.date_input(
-                "Do", value=_today, max_value=_today, format="YYYY-MM-DD",
-                help="End date of the analysis window.",
+
+        # ── Portfolio (optional) ───────────────────────────────────────────────
+        with st.expander("Portfolio (optional)", expanded=False):
+            _sym_b_options = ["—"] + list(DEFAULT_CONFIG.symbol_map.keys())
+            sym_b = st.selectbox(
+                "Asset B", _sym_b_options, index=0,
+                help="Add a second asset for portfolio mode. '—' = single-asset mode. "
+                     "Each asset is traded independently; weights are fixed at start (floating, no daily rebalancing).",
             )
-        else:
-            if _period == "All time":
-                date_from, date_to = None, _today
-            elif _period == "Year to date":
-                date_from = datetime.date(_today.year, 1, 1)
-                date_to = _today
+            portfolio_mode = sym_b != "—"
+            if portfolio_mode:
+                st.markdown(
+                    f'<div style="background:#4fc3f71a;border-left:3px solid #4fc3f7;'
+                    f'border-radius:3px;padding:6px 12px;margin:2px 0 8px 0;'
+                    f'font-family:monospace;font-size:15px;font-weight:700;letter-spacing:1.5px;'
+                    f'color:#4fc3f7">{sym_b} / USD</div>',
+                    unsafe_allow_html=True,
+                )
+                w_a = st.slider(
+                    "Asset A weight %", min_value=5, max_value=95, value=60, step=5,
+                    help=f"% of starting capital in {symbol}. {sym_b} receives the remainder.",
+                )
+                w_b = 100 - w_a
+                st.markdown(
+                    f'<div style="display:flex;gap:8px;margin:4px 0 2px 0">'
+                    f'<div style="flex:1;background:{COL_BULL}1a;border-radius:3px;padding:5px 8px;'
+                    f'text-align:center;font-family:monospace;font-size:12px;font-weight:700;color:{COL_BULL}">'
+                    f'{symbol}  {w_a}%</div>'
+                    f'<div style="flex:1;background:#4fc3f71a;border-radius:3px;padding:5px 8px;'
+                    f'text-align:center;font-family:monospace;font-size:12px;font-weight:700;color:#4fc3f7">'
+                    f'{sym_b}  {w_b}%</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
             else:
-                date_from = _today - datetime.timedelta(days=_period_days[_period])
-                date_to = _today
-            _from_txt = str(date_from) if date_from else "all"
-            st.markdown(
-                f"<div style='color:{COL_TEXT};font-family:monospace;font-size:12px;"
-                f"background:{COL_BG};border:1px solid {COL_BORDER};border-radius:4px;"
-                f"padding:6px 10px;margin:4px 0'>"
-                f"<span style='color:{COL_DIM};font-size:10px'>Od</span> {_from_txt}"
-                f"<span style='color:{COL_DIM};font-size:10px;margin-left:14px'>Do</span> {date_to}"
-                f"</div>",
-                unsafe_allow_html=True,
+                w_a, w_b = 100, 0
+
+        # ── Backtest window ────────────────────────────────────────────────────
+        with st.expander("Backtest window", expanded=True):
+            _today = datetime.date.today()
+            _period = st.selectbox(
+                "Period", ["Custom", "All time", "3 years", "2 years", "1 year",
+                           "Year to date", "6 months", "3 months"],
+                index=0, label_visibility="collapsed",
+                help="Quick period selector. Choose 'Custom' to set exact From/To dates.",
             )
+            _period_days = {"3 years": 1095, "2 years": 730, "1 year": 365, "6 months": 180, "3 months": 90}
+            _default_od = _today - datetime.timedelta(days=1095)
+            if _period == "Custom":
+                date_from = st.date_input(
+                    "From", value=_default_od, max_value=_today, format="YYYY-MM-DD",
+                    help="Start date of the analysis window.",
+                )
+                date_to = st.date_input(
+                    "To", value=_today, max_value=_today, format="YYYY-MM-DD",
+                    help="End date of the analysis window.",
+                )
+            else:
+                if _period == "All time":
+                    date_from, date_to = None, _today
+                elif _period == "Year to date":
+                    date_from = datetime.date(_today.year, 1, 1)
+                    date_to = _today
+                else:
+                    date_from = _today - datetime.timedelta(days=_period_days[_period])
+                    date_to = _today
+                _from_txt = str(date_from) if date_from else "all"
+                st.markdown(
+                    f"<div style='color:{COL_TEXT};font-family:monospace;font-size:12px;"
+                    f"background:{COL_BG};border:1px solid {COL_BORDER};border-radius:4px;"
+                    f"padding:6px 10px;margin:4px 0'>"
+                    f"<span style='color:{COL_DIM};font-size:10px'>From</span> {_from_txt}"
+                    f"<span style='color:{COL_DIM};font-size:10px;margin-left:14px'>To</span> {date_to}"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+        # ── Display & refresh ──────────────────────────────────────────────────
         st.divider()
         st.checkbox("Dark theme", value=True, key="lean_dark_theme",
                     help="Toggle between dark (TradingView-style) and light background.")
@@ -1806,21 +1860,22 @@ def main() -> None:
         exp_b = (is_bull_b * 100 + (1 - is_bull_b) * bear_alloc).mean()
         trades_b = _build_trade_ledger(df_b)
 
-    # ── S&P 500 benchmark ─────────────────────────────────────────────────────
+    # ── S&P 500 benchmark (skip when SPY is selected — SPY already IS the index)
     spx_eq = spx_m = None
-    try:
-        _spx_raw = _load_spx(bars)
-        if not _spx_raw.empty:
-            _df_dates = df.index.normalize()
-            if _df_dates.tz is not None:
-                _df_dates = _df_dates.tz_localize(None)
-            _spx_al = _spx_raw.reindex(_df_dates, method="ffill")
-            _spx_al.index = df.index
-            _spx_ret = _spx_al.pct_change().fillna(0.0)
-            spx_eq = (1 + _spx_ret).cumprod() * 100
-            spx_m  = _stats(_spx_ret, td=252)
-    except Exception:
-        pass  # SPX unavailable — continue without benchmark
+    if symbol != "SPY":
+        try:
+            _spx_raw = _load_spx(bars)
+            if not _spx_raw.empty:
+                _df_dates = df.index.normalize()
+                if _df_dates.tz is not None:
+                    _df_dates = _df_dates.tz_localize(None)
+                _spx_al = _spx_raw.reindex(_df_dates, method="ffill")
+                _spx_al.index = df.index
+                _spx_ret = _spx_al.pct_change().fillna(0.0)
+                spx_eq = (1 + _spx_ret).cumprod() * 100
+                spx_m  = _stats(_spx_ret, td=252)
+        except Exception:
+            pass  # SPX unavailable — continue without benchmark
 
     # ── worst 1-year windows ──────────────────────────────────────────────────
     worst_w = worst_w_b = {}
