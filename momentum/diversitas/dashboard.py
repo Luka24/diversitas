@@ -808,10 +808,9 @@ def _build_price_chart(df: pd.DataFrame, symbol: str,
             customdata=bears["close"],
         ), row=1, col=1)
 
-    # Allocation subplot — actual vol-scaled values
-    is_bull_prev = (df["signal_state"].shift(1) == S_BULL)
-    alloc = np.where(is_bull_prev,
-                     df["target_alloc"].shift(1).fillna(0.0),
+    # Allocation subplot — current bar's vol-scaled target (no shift; shift is only for returns)
+    alloc = np.where(df["signal_state"] == S_BULL,
+                     df["target_alloc"].fillna(0.0),
                      bear_alloc_pct)
     fig.add_trace(go.Scatter(
         x=df.index, y=alloc, mode="lines",
