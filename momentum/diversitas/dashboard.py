@@ -379,57 +379,91 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
         _card("CAGR", _fmt_pct(strat["cagr"]), _val_col(strat["cagr"]),
               _fmt_pct(bh["cagr"]), _val_col(bh["cagr"]),
               _fmt_pct(_s.get("cagr")) if _s else "",
-              "Compound Annual Growth Rate",
+              "Compound Annual Growth Rate — geometrična letna stopnja rasti kapitala. "
+              "Formula: (končna vrednost)^(1/leta) − 1. Npr. 2× v 4 letih = CAGR 18.9%. "
+              "Upošteva sestavljene obresti, zato je bolj realen od povprečnega letnega donosa.",
               worst_val=_wv("cagr", _fmt_pct), worst_tip=_wt("cagr"),
               delta_str=_dcagr, delta_col=_dcagr_c),
         _card("Sharpe", _fmt_ratio(strat["sharpe"]), _val_col(strat["sharpe"]),
               _fmt_ratio(bh["sharpe"]), _val_col(bh["sharpe"]),
               _fmt_ratio(_s.get("sharpe")) if _s else "",
-              "Risk-adjusted return (return / volatility)",
+              "Sharpe Ratio — razmerje med letnim donosom in letno volatilnostjo (std dnevnih returna × √365). "
+              "Formula: letni donos / letna std. Meri koliko donosa dobiš na enoto tveganja. "
+              "> 1.0 dobro · > 1.5 zelo dobro · > 2.0 odlično. "
+              "Slabost: kaznuje tudi pozitivne skoke (simetrično tveganje).",
               worst_val=_wv("sharpe", _fmt_ratio), worst_tip=_wt("sharpe"),
               delta_str=_dsharpe, delta_col=_dsharpe_c),
         _card("Sortino", _fmt_ratio(strat["sortino"]), _val_col(strat["sortino"]),
               _fmt_ratio(bh["sortino"]), _val_col(bh["sortino"]),
               _fmt_ratio(_s.get("sortino")) if _s else "",
-              "Return / downside volatility only",
+              "Sortino Ratio — izboljšava Sharpe: v imenovalcu je samo downside volatilnost "
+              "(kvadratni koren povprečja kvadratov negativnih dnevnih returna × √365). "
+              "Pozitivnih skokov NE kaznuje. Boljša mera za strategije ki 'odrezejo' padce. "
+              "Pričakujemo da bo Sortino višji od Sharpe — večja razlika = boljša asimetrija.",
               worst_val=_wv("sortino", _fmt_ratio), worst_tip=_wt("sortino"),
               delta_str=_dsortino, delta_col=_dsortino_c),
         _card("Max Drawdown", _fmt_pct(strat["max_dd"]),
               _val_col(strat["max_dd"], positive_good=False),
               _fmt_pct(bh["max_dd"]), _val_col(bh["max_dd"], positive_good=False),
               _fmt_pct(_s.get("max_dd")) if _s else "",
-              "Largest peak-to-trough equity decline",
+              "Maximum Drawdown — največji padec od vrha do dna v celotnem backtested obdobju. "
+              "Formula: min(equity / running_max − 1). Negativna vrednost; bližje 0 = bolje. "
+              "Npr. −35% pomeni da je portfelj kadarkoli padel 35% od predhodnega vrha. "
+              "Psihološko najtežja metrika — pove koliko moraš 'pretrpeti' v najslabšem scenariju.",
               worst_val=_wv("max_dd", _fmt_pct), worst_tip=_wt("max_dd"),
               delta_str=_dmdd, delta_col=_dmdd_c),
         _card("Calmar", _fmt_ratio(strat["calmar"]), _val_col(strat["calmar"]),
               _fmt_ratio(bh["calmar"]), _val_col(bh["calmar"]),
               _fmt_ratio(_s.get("calmar")) if _s else "",
-              "CAGR / |Max Drawdown|",
+              "Calmar Ratio — CAGR / |Max Drawdown|. Meri koliko letnega donosa dobiš na enoto "
+              "največjega tveganja (max DD). Npr. CAGR 30% z max DD −20% = Calmar 1.5. "
+              "> 0.5 sprejemljivo · > 1.0 dobro · > 2.0 odlično. "
+              "Boljši od Sharpe za primerjavo strategij z različno frekvenco drawdownov.",
               worst_val=_wv("calmar", _fmt_ratio), worst_tip=_wt("calmar"),
               delta_str=_dcalmar, delta_col=_dcalmar_c),
         _card("Win Rate",
               f"{wr:.0f}%" if wr is not None else "—",
               COL_BULL if (wr or 0) >= 50 else COL_NEUTRAL if (wr or 0) >= 40 else COL_BEAR,
-              tip="Winning trades / total trades"),
+              tip="Delež dobičkonosnih trade-ov med vsemi zaključenimi. "
+                  "Formula: št. trade-ov z P&L > 0 / skupno št. trade-ov. "
+                  "50% samo po sebi ne pove veliko — pomembno skupaj s Profit Factorjem. "
+                  "Sistem z 40% win rate in PF > 2 je pogosto boljši od 60% win rate z PF 1.2."),
     ]
     row2 = [
         _card("Profit Factor",
               _fmt_ratio(pf) if pf is not None else "—",
               _val_col(pf) if pf is not None else COL_TEXT,
-              tip="Gross profit / gross loss"),
+              tip="Profit Factor — vsota vseh dobičkov (%) / vsota vseh izgub (%). "
+                  "Npr. 5 dobitnih trade-ov skupaj +48% in 3 izgubni skupaj −12% → PF = 4.0. "
+                  "= 1.0 breakeven · > 1.5 sprejemljivo · > 2.0 dobro · > 3.0 odlično. "
+                  "Skupaj z Win Rate pove ali sistem zasluži z velikimi dobitki ali z visoko frekvenco."),
         _card("Trades", str(n) if n else "—", COL_TEXT,
-              tip="Completed round-trip trades"),
+              tip="Skupno število zaključenih round-trip trade-ov (vstop + izstop) v izbranem obdobju. "
+                  "Odprt trade (brez izhoda) ni vštet. Premalo trade-ov (< 20) pomeni statistično nezanesljive metrike."),
         _card("Avg P&L",
               f"{avg_pl:+.2f}%" if avg_pl is not None else "—",
-              _val_col(avg_pl), tip="Average profit/loss per trade"),
+              _val_col(avg_pl),
+              tip="Povprečen P&L na trade v %. "
+                  "Formula: vsota vseh P&L (%) / število trade-ov. "
+                  "Pozitivna vrednost je nujna za dolgoročno profitabilnost. "
+                  "Skupaj s povprečnim trajanjem pove 'koliko % na dan' sistem generira."),
         _card("Avg Duration",
               f"{avg_d:.0f}d" if avg_d is not None else "—", COL_TEXT,
-              tip="Average holding period in days"),
+              tip="Povprečno trajanje trade-a v koledarskih dneh (od vstopa do izstopa). "
+                  "Kratki trade-i (< 10d) nakazujejo churn; dolgi (> 60d) da sistem drži trende. "
+                  "Momentum strategija pričakuje 20–80 dni povprečno."),
         _card("Best / Worst",
               f"{best:+.0f}% / {worst:+.0f}%" if best is not None else "—",
-              COL_TEXT, tip="Best and worst single-trade P&L"),
+              COL_TEXT,
+              tip="Najboljši in najslabši posamezni trade v %. "
+                  "Razkorak med njima pove o 'repnem tveganju' strategije. "
+                  "Idealno: najboljši >> |najslabši| — sistem odreže izgube preden postanejo velike. "
+                  "Trailing stop (12%) omejuje najslabši možni izid posameznega trade-a."),
         _card("Exposure", f"{exposure:.0f}%", COL_BLUE,
-              tip="Average capital deployed (vol-scaled, includes bear regime cuts)"),
+              tip="Povprečna izpostavljenost trgu v % — časovno uteženo povprečje dejanske alokacije. "
+                  "NI binarno 0/100: upošteva vol-scaling (manj kapitala pri visoki volatilnosti) "
+                  "in bear regime cut (50% pozicija ko je 100 MA bearish). "
+                  "Nižja izpostavljenost ob enakem donos = boljša kapitalska učinkovitost."),
     ]
 
     def _row_html(cards: list[str]) -> str:
