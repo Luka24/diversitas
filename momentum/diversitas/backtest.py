@@ -77,15 +77,15 @@ def main(argv: list[str] | None = None) -> int:
               f"dist={row['dist_pct']:+5.1f}%{reason}")
 
     df = df.copy()
-    df["ret"]      = df["close"].pct_change().fillna(0.0)
-    df["pos"]      = (df["signal_state"].shift(1) == S_BULL).astype(float)
+    df["ret"]       = df["close"].pct_change().fillna(0.0)
+    df["pos"]       = df["target_alloc"].shift(1).fillna(0.0) / 100.0
     df["strat_ret"] = df["pos"] * df["ret"]
     bh_total = (1 + df["ret"]).prod() - 1
     st_total = (1 + df["strat_ret"]).prod() - 1
-    print(f"\nNaive equity proxy (BULL = long, BEAR = flat, no fees):")
+    print(f"\nEquity proxy (vol-scaled alloc, no fees):")
     print(f"  Buy & hold           : {bh_total*100:+.1f}%")
     print(f"  Diversitas Momentum  : {st_total*100:+.1f}%")
-    print(f"  Exposure             : {df['pos'].mean()*100:.1f}%")
+    print(f"  Avg exposure         : {df['pos'].mean()*100:.1f}%")
 
     return 0
 
