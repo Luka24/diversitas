@@ -76,12 +76,17 @@ def worst_missed_rally(df: pd.DataFrame, s_bull: int, min_days: int = 60) -> dic
     return dict(missed_rally_pct=worst_pct, missed_days=worst_days, span=worst_span)
 
 
+# Per-philosophy signal-frequency budget (user decision, Phase 1 review):
+# Lean is the conservative variant (tight budget); Momentum is aggressive by design.
+C3_BUDGET = {"lean": 20.0, "momentum": 35.0}
+
+
 def evaluate(strat: dict, bh: dict, n_entries: int, years: float,
-             missed: dict) -> dict:
+             missed: dict, variant: str) -> dict:
     signals_per_3y = n_entries / years * 3.0
     c1 = strat["max_dd"] > bh["max_dd"]                     # less negative = smaller DD
     c2 = strat["cagr"] >= 0.60 * bh["cagr"] if bh["cagr"] > 0 else strat["cagr"] > 0
-    c3 = signals_per_3y < 20.0
+    c3 = signals_per_3y < C3_BUDGET.get(variant, 20.0)
     c4 = not (missed["missed_days"] >= 60 and missed["missed_rally_pct"] >= 50.0)
     return dict(c1_maxdd=c1, c2_cagr=c2, c3_signals=c3, c4_no_wrong=c4,
                 signals_per_3y=signals_per_3y, n_pass=int(c1 + c2 + c3 + c4))
@@ -110,7 +115,7 @@ def main() -> int:
             n_ent = _n_entries(df, sb)
             yrs = _years(df, td)
             missed = worst_missed_rally(df, sb)
-            ev = evaluate(m, bh, n_ent, yrs, missed)
+            ev = evaluate(m, bh, n_ent, yrs, missed, variant)
             trials.add(asset, variant, n=1, phase="phase1_baseline")
             rows.append({
                 "asset": asset, "variant": variant,
@@ -169,7 +174,7 @@ def _write_report(df: pd.DataFrame) -> None:
 
     # Criteria pass counts
     lines += ["## Success criteria (per variant)", "",
-              "| Variant | C1 MaxDD<BH | C2 CAGR≥60%BH | C3 <20 sig/3y | C4 no wrong-window | All-4 |",
+              "| Variant | C1 MaxDD<BH | C2 CAGR≥60%BH | C3 sig-budget | C4 no wrong-window | All-4 |",
               "|---|---|---|---|---|---|"]
     for v in VARIANTS:
         d = df[df["variant"] == v]
@@ -211,34 +216,30 @@ def _write_report(df: pd.DataFrame) -> None:
         if not l.empty and not m.empty and (m.iloc[0]["calmar"] or 0) > (l.iloc[0]["calmar"] or 0):
             mom_wins += 1
 
+    mom_all4 = df[(df.variant == "momentum") & (df.n_pass == 4)]["asset"].tolist()
+    lean_all4 = df[(df.variant == "lean") & (df.n_pass == 4)]["asset"].tolist()
     lines += ["", "## Gate & interpretation", "",
-              f"Assets passing **all 4** criteria simultaneously on ≥1 variant: "
-              f"**{n_pass_all4}/{n_core}** core (target ≥6/8). **Gate: {gate}**", "",
-              "### Why 'all-4-at-once' is misleading here — the criteria conflict by design",
-              "- **C1 (cut Max DD vs B&H) — the Q&A doc's *primary* objective — passes "
-              f"{c1_rate['lean']}/8 (lean) and {c1_rate['momentum']}/8 (momentum): 100%.** "
-              "Every strategy roughly halves the drawdown (BTC −38% vs −77% B&H).",
-              "- **C3 (<20 signals/3y) vs C4 (no missed >50% rally) are in direct tension.** "
-              "Lean is conservative → passes C3 8/8 but sits out big rallies → fails C4. "
-              "Momentum reacts fast → passes C4 6/8 but trades more → fails C3. No single "
-              "variant can pass both, because they sit at opposite ends of the "
-              "trade-frequency spectrum *on purpose*.",
-              "- **C2 (CAGR ≥ 60% B&H)** is the hardest bar: crypto B&H CAGRs are huge "
-              "(SOL 119%). Trend-following deliberately trades raw return for safety.", "",
+              "**C3 signal budget applied per-philosophy (user decision): Lean <20/3y, "
+              f"Momentum <35/3y.**", "",
+              f"Assets passing **all 4** criteria on ≥1 variant: **{n_pass_all4}/{n_core}** "
+              f"core. **Gate: {gate}** (the 4-at-once bar stays strict on purpose — C1 is the "
+              "objective that actually matters). ",
+              f"Momentum all-4: {', '.join(mom_all4) or '—'}. Lean all-4: {', '.join(lean_all4) or '—'}.", "",
+              "### C1 — the primary objective — is met everywhere",
+              f"- **C1 (cut Max DD vs B&H) passes {c1_rate['lean']}/8 (lean) and "
+              f"{c1_rate['momentum']}/8 (momentum): 100%.** Every strategy roughly halves the "
+              "drawdown (BTC −38% vs −77% B&H). This is the Q&A doc's stated primary goal.",
+              "- **C2 (CAGR ≥ 60% B&H)** is now the binding constraint (crypto B&H CAGRs are "
+              "huge — SOL 119%). Trend-following deliberately trades raw return for safety; "
+              "failing C2 on the biggest-CAGR coins is expected, not a defect.", "",
               "### Decisive signal: Momentum dominates risk-adjusted return",
               f"- Momentum wins Calmar on **{mom_wins}/8** assets (often 2×: ETH 1.28 vs 0.52, "
-              "AVAX 0.97 vs 0.08, ADA 1.29 vs 0.87).",
-              "- Momentum's Max DD is consistently smaller despite higher exposure — the "
-              "trailing stop + vol-sizing are doing real work.", "",
+              "AVAX 0.97 vs 0.08, ADA 1.29 vs 0.87), with smaller Max DD despite higher "
+              "exposure — the trailing stop + vol-sizing are doing real work.", "",
               "### Problem assets flagged for later phases",
-              "- **LINK** is weak on both (Calmar 0.02 lean / 0.14 momentum) — worst performer.",
+              "- **LINK** is weak on both (Calmar 0.02 lean / 0.14 momentum) — worst performer; "
+              "fails C2 and C4. Candidate for exclusion or asset-specific handling.",
               "- **AVAX lean** is effectively broken (Calmar 0.08, DD −76%); momentum fixes it (0.97).", "",
-              "### Recommended criteria refinement (for user decision)",
-              "The 4 criteria were written in the Q&A doc assuming a single conservative "
-              "strategy. With two variants, evaluate **C3 per-philosophy**: keep <20/3y for "
-              "Lean, relax to <35/3y for the aggressive Momentum variant. Under that split, "
-              "Momentum passes all-4 on BTC/ETH/AVAX/ADA and Lean on BTC/ADA. "
-              "**This is a user decision — not applied automatically.**", "",
               "Trial counter initialized (1 default trial per asset×variant).", ""]
     (REPORTS / "phase1_report.md").write_text("\n".join(lines))
 
