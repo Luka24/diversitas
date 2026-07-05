@@ -313,6 +313,42 @@ def supertrend_filter(asset: str, variant_name: str, period: int = 10, mult: flo
     return engine.strat_returns(d2, s_bull_code=engine.s_bull(variant_name))
 
 
+def macro_filter(asset: str, variant_name: str, dxy_only: bool = False,
+                 dxy_thr: float = 2.0) -> pd.Series:
+    """§7 macro pipe: block entries while the macro regime is BEAR
+    (DXY YoY > thr AND BBB spread elevated; dxy_only uses just DXY YoY)."""
+    from testing.scripts import external_data as X
+    daily, btc = _daily_btc(asset)
+
+    def override(df, cfg):
+        if dxy_only:
+            d = X.align(X.dxy(), df.index)
+            bear = ((d / d.shift(252) - 1.0) * 100.0 > dxy_thr).fillna(False)
+        else:
+            bear = X.macro_bear(df.index, dxy_yoy_thr=dxy_thr)
+        df = df.copy()
+        df["above_tl"] = df["above_tl"] & ~bear.reindex(df.index).fillna(False).values
+        return features._rebuild_bull(df, cfg, variant_name)
+
+    d2 = engine.run_overlay(variant_name, daily, btc, override_fn=override, use_btc_filter=False)
+    return engine.strat_returns(d2, s_bull_code=engine.s_bull(variant_name))
+
+
+def premium_filter(asset: str, variant_name: str, thr: float = -0.1, smooth: int = 14) -> pd.Series:
+    """§6 on-chain flow pipe: block entries while smoothed Coinbase premium < thr%."""
+    from testing.scripts import external_data as X
+    daily, btc = _daily_btc(asset)
+
+    def override(df, cfg):
+        bear = X.premium_bear(df.index, thr=thr, smooth=smooth)
+        df = df.copy()
+        df["above_tl"] = df["above_tl"] & ~bear.reindex(df.index).fillna(False).values
+        return features._rebuild_bull(df, cfg, variant_name)
+
+    d2 = engine.run_overlay(variant_name, daily, btc, override_fn=override, use_btc_filter=False)
+    return engine.strat_returns(d2, s_bull_code=engine.s_bull(variant_name))
+
+
 def dynamic_trail(asset: str, variant_name: str, base: float = 12.0, coef: float = 4.0) -> pd.Series:
     """Vol-calibrated trailing stop: trail% = base·(1 + vol_z·coef/100), wider in
     high-vol regimes, tighter in calm ones. Research: 'dynamic trailing stop
