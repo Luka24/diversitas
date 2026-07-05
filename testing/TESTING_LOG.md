@@ -145,3 +145,12 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - Poročilo: `testing/reports/improvements_report.md` (kompletno A+B+C + implementacijske opombe).
 
 **IZBOLJŠAVE (Part A+B+C) ZAKLJUČENE.** Produkcijska koda nedotaknjena; poročilo vsebuje natančne recepte za implementacijo.
+
+## 2026-07-05 — Coverage audit + metodologija ✅
+
+- `coverage_and_methodology.md`: popoln pregled VSEH idej iz Q&A dokumenta → status + parametri.
+- **Vse ideje applicable za Lean/Momentum stestirane** (večina s parameter sweepom).
+- Netestirano: (a) Full-variant conviction-score družina (⛔ arhitekturno odsotna iz lean/momentum), (b) on-chain/macro (⏸ user-excluded).
+- Zaprte vrzeli: vol_z buffer (marginal), dynamic re-entry (škodi momentumu -58%), BTC filter A/B (ON pomaga momentum altcoinom 0.97→1.12).
+- **Metodologija proti overfittingu** (grounded v web research): karantiniran hold-out ≥20%, purge+embargo 200 bars, anchored WF 4 folds, CPCV+PBO, regime-segmented (bull/bear/sideways), Deflated Sharpe (N-trials), pooled cross-asset, red-flag tripwires (WR>80%/PF>5).
+- Ključno spoznanje iz raziskave: **walk-forward sam validira v enem regimu → potreben regime coverage + CPCV**.
