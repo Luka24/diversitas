@@ -47,3 +47,12 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - Phase 6 shortlist: `track_period`, `track_buf_pct`, `reentry_hold` (pod walk-forward + DSR kontrolo).
 - Trial counter: 367.
 - Poročilo: `testing/reports/phase3_report.md` + 18 PNG sweep grafov.
+
+## 2026-07-05 — Faza 4 (v3): Monte Carlo & stabilnost ✅
+
+- `run_montecarlo.py`: block bootstrap (2000×, blok 20d), trade-shuffle (2000×), parameter-noise ±10% (300×).
+- **Parameter-noise Calmar CV: momentum 0.14, lean 0.20** (oba < 0.35) → strategiji sta na platoju, ne na konici. Kvantitativno potrdi Fazo 3.
+- **Sharpe 95% CI izključuje 0:** momentum 3/3 (BTC/ETH/SOL), lean 2/3 (SOL vključuje 0).
+- **Trade-shuffle MDD percentil:** momentum visok (52/72/97%) → realiziran DD je konservativen, ne srečen; lean nizek (15/20/6%) → DD delno odvisen od zaporedja (caveat za lean).
+- Momentum robustnejši na vseh oseh. Gate ✅.
+- Poročilo: `testing/reports/phase4_report.md`.
