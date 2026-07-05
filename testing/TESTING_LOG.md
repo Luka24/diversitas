@@ -37,3 +37,13 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - Pošten caveat: nizka β delno mehanska (~65% časa v cashu); per-asset α večinoma ni značilna pri 5% (samo ADA momentum t=2.33) — značilnost se dokaže čez več assetov + DSR v Fazah 4–5.
 - **LINK izjema** — hedged Sharpe ≈ 0, njegov performance je večinoma beta.
 - Poročilo: `testing/reports/phase2_report.md`.
+
+## 2026-07-05 — Faza 3 (v3): Sensitivity ✅
+
+- `run_sensitivity.py`: 1-parametrski sweepi (BTC primarno + ETH/SOL cross-asset), robustnost = Calmar plato.
+- **Momentum: 0 fragilnih (interior-sharp) parametrov** — strukturno robusten. Lean: 1 (`track_buf_pct`), a ETH/SOL se ne strinjata (x-agree 0/2) → asset-specific šum → obdrži default 3.0.
+- **Edge optima kažejo v smer agresije** (krajši trackline, manjši buffer, hitrejši re-entry, višji vol-target) — in-sample BTC pull. **Ne lovimo jih** — to je overfitting past; OOS test v Fazi 5 odloči.
+- **Nizka cross-asset agreement (večinoma 0/2)** = BTC-specifičen šum, ne strukturno. Izjema: momentum `target_vol_pct=80` (2/2 agree) — edini edge signal vreden OOS testa.
+- Phase 6 shortlist: `track_period`, `track_buf_pct`, `reentry_hold` (pod walk-forward + DSR kontrolo).
+- Trial counter: 367.
+- Poročilo: `testing/reports/phase3_report.md` + 18 PNG sweep grafov.
