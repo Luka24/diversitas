@@ -164,3 +164,15 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - **Regime trade-off surface:** obrambne nastavitve žrtvujejo design a močno izboljšajo bear hold-out (Momentum atr_buffer k=2.5 → hold-out +0.43!, trail_pct=6 → +0.18, daljši lean track_period → +0.21/+0.23).
 - Kelly močno reže DD a škodi Calmar. Večina parametrov flat-topped (robustno, potrjuje Ph3/4).
 - Multiple-testing caveat: ~50 config/varianta → nekateri ★ so šum; zaupaj tistim z mehanizmom + hold-out.
+
+## 2026-07-05 — Leakage-safe validacija + nove ideje (raziskava) ✅ (POMEMBEN POPRAVEK)
+
+- Spletna raziskava potrdila overfitting tveganje: **feature selection mora biti samo na train/validation, ne hold-out.** Moje izboljšave (Part A/B/C, matrix) so hold-out uporabile večkrat kot selection filter → leakage.
+- `run_validation.py`: 3-way split (TRAIN ≤2023-06, VALIDATION 2023-07→2025-03 za selekcijo, HOLD-OUT ≥2025-04 enkrat). Retest zmagovalcev + nove ideje.
+- **HONEST POPRAVEK:**
+  - **Rotation je EDINI robusten zmagovalec:** validation Calmar 2.48 (plain) / 3.21 (graded) vs momentum baseline 1.51, hold-out zdrži (0.64/0.73). NI leakage artifact.
+  - **graded_entry napihnjen:** izgledal +24% na design, a le **+0.03 na validation** (1.54 vs 1.51).
+  - **lean atr_buffer napihnjen:** izgledal +22%, a **slabši na validation** (0.80 vs 0.88) — dobiček je bil hold-out sreča.
+- **Nove ideje iz raziskave (SuperTrend, dynamic trailing, TSMOM):** NE premagajo baseline na validation (1.35/1.30/1.27 < 1.51). Nevtralno-obrambne.
+- **Obrambni vzvodi** (regime-switch, TSMOM-120): izgubijo na bull validation, izboljšajo bear hold-out — regime tradeoff.
+- **Bottom line: po popravku leakage samo rotacija robustno izboljša rezultat.** Manjši tweaki ne preživijo čiste selekcije. Poročilo: `validation_report.md`.
