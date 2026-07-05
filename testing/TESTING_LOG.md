@@ -154,3 +154,13 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - Zaprte vrzeli: vol_z buffer (marginal), dynamic re-entry (škodi momentumu -58%), BTC filter A/B (ON pomaga momentum altcoinom 0.97→1.12).
 - **Metodologija proti overfittingu** (grounded v web research): karantiniran hold-out ≥20%, purge+embargo 200 bars, anchored WF 4 folds, CPCV+PBO, regime-segmented (bull/bear/sideways), Deflated Sharpe (N-trials), pooled cross-asset, red-flag tripwires (WR>80%/PF>5).
 - Ključno spoznanje iz raziskave: **walk-forward sam validira v enem regimu → potreben regime coverage + CPCV**.
+
+## 2026-07-05 — Full per-parameter results matrix ✅
+
+- `run_feature_matrix.py`: VSAK feature pri VSAKI parameter vrednosti → pooled design + hold-out (185 config-ov, 8 assetov).
+- Poročilo `feature_matrix_results.md`: polne per-parameter tabele za lean & momentum + winners + correctness notes + key findings.
+- **Verificirani genuini no-opi (ne bugi):** target_vol_pct na lean (binary target_alloc, vol-sizing off-path), vol_shock_mul/ema_volshock (vol_shock zadane le 2/2600 barov v BULL).
+- **Ship-grade zmagovalca:** Momentum graded_entry (+24% design, hold-out -0.21→-0.01, DD -38%→-27%), Lean ATR buffer k=1.5 (+22%, hold-out -0.09→+0.22).
+- **Regime trade-off surface:** obrambne nastavitve žrtvujejo design a močno izboljšajo bear hold-out (Momentum atr_buffer k=2.5 → hold-out +0.43!, trail_pct=6 → +0.18, daljši lean track_period → +0.21/+0.23).
+- Kelly močno reže DD a škodi Calmar. Večina parametrov flat-topped (robustno, potrjuje Ph3/4).
+- Multiple-testing caveat: ~50 config/varianta → nekateri ★ so šum; zaupaj tistim z mehanizmom + hold-out.
