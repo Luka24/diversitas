@@ -6,3 +6,10 @@ plotly>=5.20
 streamlit>=1.32
 streamlit-autorefresh>=1.0
 pytest>=7.4
+
+# Validation campaign (testing/ harness — v3 plan)
+scipy>=1.11
+statsmodels>=0.14
+optuna>=4.0
+matplotlib>=3.7
+pyarrow>=14.0
