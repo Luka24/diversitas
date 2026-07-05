@@ -205,3 +205,57 @@ def feat(asset, variant_name, fn, **kw):
     daily, btc = _daily_btc(asset)
     r, _ = fn(variant_name, daily, btc, **kw)
     return r
+
+
+# ── gap-closers (Q&A ideas not yet properly covered for lean/momentum) ────────
+
+def volz_buffer(asset: str, variant_name: str, coef: float = 0.5) -> pd.Series:
+    """Q&A §2 vol_z-scaled buffer: buffer% = base%·(1 + vol_z·coef), where
+    vol_z is the z-score of annual_vol. Widens the trackline band in high-vol
+    regimes, tightens it in calm ones (distinct from the ATR-absolute buffer)."""
+    daily, btc = _daily_btc(asset)
+
+    def override(df, cfg):
+        av = df["annual_vol"]
+        vz = (av - av.rolling(200, min_periods=60).mean()) / av.rolling(200, min_periods=60).std()
+        base = getattr(cfg, "track_buf_pct", 3.0) / 100.0
+        buf = (base * (1 + vz.clip(-2, 2) * coef)).clip(lower=0.005)
+        tl, close = df["trackline"], df["close"]
+        df = df.copy()
+        df["above_tl"] = close > tl * (1 + buf)
+        df["below_tl"] = close < tl * (1 - buf)
+        return features._rebuild_bull(df, cfg, variant_name)
+
+    df2 = engine.run_overlay(variant_name, daily, btc, override_fn=override, use_btc_filter=False)
+    return engine.strat_returns(df2, s_bull_code=engine.s_bull(variant_name))
+
+
+def dynamic_reentry(asset: str, variant_name: str,
+                    base: int = 15, coef: float = 5.0, lo: int = 5, hi: int = 30) -> pd.Series:
+    """Q&A §8 vol-scaled re-entry lock: after each exit, suppress re-entries for
+    clip(base − vol_z·coef, lo, hi) bars (fast re-entry in high vol, slow in calm).
+    Implemented as a position-suppression overlay on the realized signal path."""
+    daily, btc = _daily_btc(asset)
+    df = engine.run(variant_name, daily, btc=btc)
+    sb = engine.s_bull(variant_name)
+    av = df["annual_vol"]
+    vz = ((av - av.rolling(200, min_periods=60).mean())
+          / av.rolling(200, min_periods=60).std()).fillna(0.0).values
+    sig = df["signal_state"].values
+    pos_mult = np.ones(len(df))
+    lock_until = -1
+    for i in range(1, len(df)):
+        if sig[i] != sb and sig[i - 1] == sb:                # just exited
+            lock = int(np.clip(base - vz[i] * coef, lo, hi))
+            lock_until = i + lock
+        if i < lock_until and sig[i] == sb:                  # re-entered inside lock → suppress
+            pos_mult[i] = 0.0
+    base_ret = engine.strat_returns(df, s_bull_code=sb)
+    return base_ret * pd.Series(pos_mult, index=df.index).shift(1).fillna(1.0)
+
+
+def btc_filter_toggle(asset: str, variant_name: str, on: bool) -> pd.Series:
+    """Q&A §4 BTC filter for altcoins: run with use_btc_filter on/off."""
+    daily, btc = _daily_btc(asset)
+    df = engine.run(variant_name, daily, btc=btc, use_btc_filter=on)
+    return engine.strat_returns(df, s_bull_code=engine.s_bull(variant_name))

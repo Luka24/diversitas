@@ -382,6 +382,52 @@ def _append_report_c(df):
         f.write("\n".join(L))
 
 
+def run_gaps():
+    """Close the remaining Q&A gaps for lean/momentum + regime-segmented view."""
+    print("=== Gap-closers (Q&A ideas not yet covered) ===")
+    rows = []
+    for vn in ("lean", "momentum"):
+        base = _variant_baseline(vn)
+        bd, bh = base["d_calmar"], base["h_calmar"]
+        print(f"\n## {vn} (baseline design {bd:.2f}, holdout {bh:.2f})")
+
+        # vol_z-scaled buffer (Q&A §2)
+        for coef in [0.3, 0.5, 0.8]:
+            r = pooled(lambda a, c=coef: imp.volz_buffer(a, vn, c), f"volz_buffer_{coef}")
+            rows.append(dict(variant=vn, idea="volz_buffer", param=coef, **_m(r)))
+            _pg(rows[-1], bd, bh)
+        # dynamic re-entry lock (Q&A §8)
+        r = pooled(lambda a: imp.dynamic_reentry(a, vn), "dynamic_reentry")
+        rows.append(dict(variant=vn, idea="dynamic_reentry", param="volz", **_m(r)))
+        _pg(rows[-1], bd, bh)
+
+    # BTC filter A/B — altcoins only (Q&A §4)
+    alts = [a for a in ASSETS if a != "BTC"]
+    for vn in ("lean", "momentum"):
+        for on in (True, False):
+            vals = [imp.btc_filter_toggle(a, vn, on) for a in alts]
+            dc = float(np.nanmedian([metrics.core_stats(pd.Series(_slice(r, "design")))["calmar"] for r in vals]))
+            hc = float(np.nanmedian([metrics.core_stats(pd.Series(_slice(r, "holdout")))["calmar"] for r in vals]))
+            rows.append(dict(variant=vn, idea="btc_filter", param=("on" if on else "off"),
+                             d_calmar=dc, d_sharpe=np.nan, d_maxdd=np.nan, h_calmar=hc, h_maxdd=np.nan))
+            print(f"  btc_filter {vn:9} {'ON ' if on else 'OFF'} (alts) design Calmar {dc:.2f}  holdout {hc:.2f}")
+
+    df = pd.DataFrame(rows)
+    df.to_csv(RESULTS / "gaps.csv", index=False)
+    print(f"\nWrote {RESULTS/'gaps.csv'}")
+
+
+def _m(r):
+    return dict(d_calmar=r["d_calmar"], d_sharpe=r["d_sharpe"], d_maxdd=r["d_maxdd"],
+                h_calmar=r["h_calmar"], h_maxdd=r["h_maxdd"])
+
+
+def _pg(row, bd, bh):
+    v = _verdict(row["d_calmar"], row["h_calmar"], bd, bh)
+    print(f"  {row['idea']:16} {str(row['param']):>6}  design {row['d_calmar']:.2f} "
+          f"(base {bd:.2f})  holdout {row['h_calmar']:.2f} (base {bh:.2f})  {v}")
+
+
 if __name__ == "__main__":
     part = (sys.argv[1] if len(sys.argv) > 1 else "A").upper()
     if part == "A":
@@ -390,3 +436,5 @@ if __name__ == "__main__":
         run_part_b()
     elif part == "C":
         run_part_c()
+    elif part == "G":
+        run_gaps()
