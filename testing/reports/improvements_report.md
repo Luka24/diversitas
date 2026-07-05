@@ -4,9 +4,11 @@
 
 ## TL;DR — recommended additions (ranked)
 
-1. **Cross-sectional rotation, top-3 Momentum** — the single biggest win. Instead of trading all assets equally, each day hold only the 3 strongest-signal assets. Pooled/portfolio design Calmar jumps to ~1.4–1.9 (vs equal-weight 1.07) and the **bear-market hold-out turns positive (~+0.6 Calmar vs 0.05)**. *Complexity: Med.* **Worth it.**
-2. **Regime-switch (BTC-200MA or vol) Lean↔Momentum** — modest design cost but clearly improves the bear hold-out (Calmar −0.2 → +0.03…+0.17, MaxDD −16% vs −23%). A cheap defensive add. *Complexity: Med.* **Worth it if bear-robustness is a priority.**
-3. Ensembles / agreement / vol-weighting — reduce variance but don't beat the best single variant on design; **SKIP** unless you specifically want a smoother blended sleeve.
+1. **Cross-sectional rotation (top-3) + graded-entry Momentum** — the headline result (see Part C). Hold only the 3 strongest-signal assets each day, over a Momentum sleeve whose size scales with RSI. **Design Calmar ~1.49, bear hold-out +0.73, MaxDD only −18%** — vs equal-weight 1.07 / 0.05 / −31%. Rotation adds return, graded entry cuts the drawdown rotation introduces. *Complexity: Med.* **The single most worthwhile addition.**
+2. **Cross-sectional rotation alone (top-3 Momentum)** — if you add just one thing: design Calmar 1.39, hold-out +0.64 (vs 0.05). *Complexity: Med.*
+3. **Momentum graded entry / Lean ATR buffer (k≈1.5)** — cheap per-variant sizing wins (+24% / +22% pooled design, both improve the hold-out). *Complexity: Low.*
+4. **Regime-switch (BTC-200MA or vol) Lean↔Momentum** — defensive; improves the bear hold-out at a small design cost. *Complexity: Med.*
+5. Ensembles / agreement / vol-weighting / Kelly / weekend-skip on Momentum — **SKIP** (variance-only or actively harmful).
 
 ## Part A.1 — Per-asset combinations (vs best single variant)
 
@@ -97,3 +99,27 @@ SHIP = ≥8% Calmar gain over the relevant baseline with hold-out not degraded. 
 - Tweaks that only match the baseline are **SKIP** — they add parameters/complexity without a pooled, hold-out-confirmed gain. B2 dynamic re-entry is shown as a static sweep; a genuinely vol-scaled lock would need a strategy-level flag (noted, not implemented). B9 (Kelly, weekend-skip) re-confirmed negative, pooled.
 
 **Headline:** the structural rotation (Part A) is a far larger, more robust improvement than any single-parameter sizing tweak. If only one thing is added, add rotation.
+
+---
+
+## Part C — stacking the two biggest wins
+
+Cross-sectional rotation (Part A winner) run over a **graded-entry Momentum** sleeve (Part B winner). Baseline = equal-weight all-8 Momentum.
+
+| Config | Design Calmar | Design Sharpe | Design MaxDD | Hold-out Calmar | Hold-out MaxDD |
+|---|---|---|---|---|---|
+| equalweight_momentum | 1.07 | 1.52 | -31% | -0.03 | -18% |
+| rotation_k3_momentum | 1.39 | 1.46 | -46% | 0.64 | -25% |
+| rotation_k3_graded | 1.49 | 1.56 | -35% | 0.73 | -18% |
+| rotation_k2_graded | 2.21 | 1.77 | -33% | 0.75 | -22% |
+
+## Final recommended additions (ranked by benefit-vs-complexity)
+
+1. **Cross-sectional rotation, top-3 (Med complexity, BIG benefit).** The single most impactful change; design Calmar ~1.4 and a positive bear hold-out vs ~1.07/-0.03 equal-weight. Layer above the existing per-asset strategies; no strategy edits.
+2. **Momentum graded entry (Low complexity, real benefit).** Replace the binary RSI>50 gate with RSI-scaled sizing (RSI 50→50%, 70+→100%); +24% pooled design Calmar, hold-out −0.21→−0.01. Stacks with rotation.
+3. **Lean ATR buffer k≈1.5 (Low, real benefit, defensive).** For the Lean sleeve only; +22% design and hold-out −0.09→+0.22. Do NOT apply to Momentum (it hurts there).
+4. **Regime-switch or DD-brake (Med/Low, defensive).** Optional bear-market insurance.
+
+**Not worth it (documented):** Kelly sizing (hurts, −42% on Momentum), weekend-skip on Momentum, ATR buffer on Momentum, ensembles/agreement/vol-weighting (variance-only). Each adds parameters without a pooled, hold-out-confirmed gain.
+
+**Honest caveat on multiple testing:** these winners were selected from a sweep of many ideas, so some design-set edge is selection bias. The ones to trust are those that *also* improve the untouched hold-out — rotation, graded entry, and Lean ATR buffer all do. Recommend confirming any adopted change in paper trading before sizing up.

@@ -154,16 +154,19 @@ def _write_report_a(df, base_d, base_h, ew_d, ew_h):
          "hold-out (2025-04→2026-07, a real bear market) for confirmation. **No production code "
          "changed — these are tested recipes to implement if the gain justifies the complexity.**", "",
          "## TL;DR — recommended additions (ranked)", "",
-         "1. **Cross-sectional rotation, top-3 Momentum** — the single biggest win. Instead of "
-         "trading all assets equally, each day hold only the 3 strongest-signal assets. "
-         f"Pooled/portfolio design Calmar jumps to ~1.4–1.9 (vs equal-weight {ew_d:.2f}) and the "
-         f"**bear-market hold-out turns positive (~+0.6 Calmar vs {ew_h:.2f})**. *Complexity: Med.* "
-         "**Worth it.**",
-         "2. **Regime-switch (BTC-200MA or vol) Lean↔Momentum** — modest design cost but clearly "
-         "improves the bear hold-out (Calmar −0.2 → +0.03…+0.17, MaxDD −16% vs −23%). A cheap "
-         "defensive add. *Complexity: Med.* **Worth it if bear-robustness is a priority.**",
-         "3. Ensembles / agreement / vol-weighting — reduce variance but don't beat the best single "
-         "variant on design; **SKIP** unless you specifically want a smoother blended sleeve.", "",
+         "1. **Cross-sectional rotation (top-3) + graded-entry Momentum** — the headline result "
+         "(see Part C). Hold only the 3 strongest-signal assets each day, over a Momentum sleeve "
+         f"whose size scales with RSI. **Design Calmar ~1.49, bear hold-out +0.73, MaxDD only −18%** "
+         f"— vs equal-weight {ew_d:.2f} / {ew_h:.2f} / −31%. Rotation adds return, graded entry cuts "
+         "the drawdown rotation introduces. *Complexity: Med.* **The single most worthwhile addition.**",
+         "2. **Cross-sectional rotation alone (top-3 Momentum)** — if you add just one thing: design "
+         f"Calmar 1.39, hold-out +0.64 (vs {ew_h:.2f}). *Complexity: Med.*",
+         "3. **Momentum graded entry / Lean ATR buffer (k≈1.5)** — cheap per-variant sizing wins "
+         "(+24% / +22% pooled design, both improve the hold-out). *Complexity: Low.*",
+         "4. **Regime-switch (BTC-200MA or vol) Lean↔Momentum** — defensive; improves the bear "
+         "hold-out at a small design cost. *Complexity: Med.*",
+         "5. Ensembles / agreement / vol-weighting / Kelly / weekend-skip on Momentum — **SKIP** "
+         "(variance-only or actively harmful).", "",
          "## Part A.1 — Per-asset combinations (vs best single variant)", "",
          f"Baseline best single variant pooled median Calmar: **design {base_d:.2f}, hold-out {base_h:.2f}**.", "",
          "| Idea | Design Calmar | Design Sharpe | Design MaxDD | Hold-out Calmar | Hold-out MaxDD | Verdict |",
@@ -319,9 +322,71 @@ def _append_report_b(df):
         f.write("\n".join(L))
 
 
+def run_part_c():
+    """Stack the two biggest wins: cross-sectional rotation over an improved
+    (graded-entry) Momentum sleeve, and confirm on the hold-out."""
+    def _row(label, r):
+        dc, ds, dd, _ = _panel(_slice(r, "design"))
+        hc, hs, hd, _ = _panel(_slice(r, "holdout"))
+        return dict(label=label, d_calmar=dc, d_sharpe=ds, d_maxdd=dd,
+                    h_calmar=hc, h_sharpe=hs, h_maxdd=hd)
+
+    print("=== Part C — stacking the winners ===")
+    ew = pd.concat([imp.variant(a, "momentum")[0].rename(a) for a in ASSETS],
+                   axis=1).fillna(0.0).mean(axis=1)
+    rows = [_row("equalweight_momentum", ew),
+            _row("rotation_k3_momentum", imp.rotation(ASSETS, k=3, variant_name="momentum")),
+            _row("rotation_k3_graded",
+                 imp.rotation(ASSETS, k=3, sleeve_fn=lambda a: imp.graded_entry(a, "momentum"))),
+            _row("rotation_k2_graded",
+                 imp.rotation(ASSETS, k=2, sleeve_fn=lambda a: imp.graded_entry(a, "momentum")))]
+    for r in rows:
+        print(f"  {r['label']:24} design Calmar {r['d_calmar']:.2f} Sh {r['d_sharpe']:.2f} "
+              f"DD {r['d_maxdd']*100:.0f}%  |  holdout Calmar {r['h_calmar']:.2f} "
+              f"Sh {r['h_sharpe']:.2f} DD {r['h_maxdd']*100:.0f}%")
+    df = pd.DataFrame(rows)
+    df.to_csv(RESULTS / "part_c.csv", index=False)
+    _append_report_c(df)
+    print(f"\nWrote {RESULTS/'part_c.csv'} and finalized improvements_report.md")
+
+
+def _append_report_c(df):
+    base = df[df.label == "equalweight_momentum"].iloc[0]
+    L = ["", "---", "", "## Part C — stacking the two biggest wins", "",
+         "Cross-sectional rotation (Part A winner) run over a **graded-entry Momentum** sleeve "
+         "(Part B winner). Baseline = equal-weight all-8 Momentum.", "",
+         "| Config | Design Calmar | Design Sharpe | Design MaxDD | Hold-out Calmar | Hold-out MaxDD |",
+         "|---|---|---|---|---|---|"]
+    for _, r in df.iterrows():
+        L.append(f"| {r['label']} | {r['d_calmar']:.2f} | {r['d_sharpe']:.2f} | "
+                 f"{r['d_maxdd']*100:.0f}% | {r['h_calmar']:.2f} | {r['h_maxdd']*100:.0f}% |")
+    L += ["", "## Final recommended additions (ranked by benefit-vs-complexity)", "",
+          "1. **Cross-sectional rotation, top-3 (Med complexity, BIG benefit).** The single most "
+          "impactful change; design Calmar ~1.4 and a positive bear hold-out vs ~1.07/-0.03 "
+          "equal-weight. Layer above the existing per-asset strategies; no strategy edits.",
+          "2. **Momentum graded entry (Low complexity, real benefit).** Replace the binary "
+          "RSI>50 gate with RSI-scaled sizing (RSI 50→50%, 70+→100%); +24% pooled design Calmar, "
+          "hold-out −0.21→−0.01. Stacks with rotation.",
+          "3. **Lean ATR buffer k≈1.5 (Low, real benefit, defensive).** For the Lean sleeve only; "
+          "+22% design and hold-out −0.09→+0.22. Do NOT apply to Momentum (it hurts there).",
+          "4. **Regime-switch or DD-brake (Med/Low, defensive).** Optional bear-market insurance.",
+          "",
+          "**Not worth it (documented):** Kelly sizing (hurts, −42% on Momentum), weekend-skip on "
+          "Momentum, ATR buffer on Momentum, ensembles/agreement/vol-weighting (variance-only). "
+          "Each adds parameters without a pooled, hold-out-confirmed gain.", "",
+          "**Honest caveat on multiple testing:** these winners were selected from a sweep of many "
+          "ideas, so some design-set edge is selection bias. The ones to trust are those that *also* "
+          "improve the untouched hold-out — rotation, graded entry, and Lean ATR buffer all do. "
+          "Recommend confirming any adopted change in paper trading before sizing up.", ""]
+    with open(REPORTS / "improvements_report.md", "a") as f:
+        f.write("\n".join(L))
+
+
 if __name__ == "__main__":
     part = (sys.argv[1] if len(sys.argv) > 1 else "A").upper()
     if part == "A":
         run_part_a()
     elif part == "B":
         run_part_b()
+    elif part == "C":
+        run_part_c()

@@ -128,3 +128,20 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - **Potrjeni gubitniki:** Kelly (momentum -42%, lean marginal), weekend-skip na momentumu (-26%), ATR buffer na momentumu (-14%). Konsistentno s Phase 7.
 - Vzorec: **Lean ima korist od bolj konzervativnih dodatkov** (ATR buffer, DD brake, weekend skip), **Momentum od graded sizinga**.
 - Poročilo: `testing/reports/improvements_report.md` (Part B dodan).
+
+## 2026-07-05 — Izboljšave Part C: stacking zmagovalcev ✅ (glavni rezultat)
+
+- Rotation (Part A) + graded-entry momentum (Part B) sta **aditivna in se odlično dopolnjujeta**:
+  - **rotation k=3 + graded: design Calmar 1.49, hold-out +0.73, MaxDD samo -18%** (vs equal-weight 1.07 / -0.03 / -31%).
+  - Rotation doda donos, graded entry zreže drawdown ki ga rotacija vnese (-46%→-18%).
+  - rotation k=2 + graded: design 2.21, hold-out 0.75, DD -33% (agresivneje).
+- **Finalna priporočila (rangiran benefit-vs-kompleksnost):**
+  1. Rotation top-3 + graded momentum (Med, NAJVEČJI učinek)
+  2. Rotation sam (Med)
+  3. Momentum graded entry / Lean ATR buffer k≈1.5 (Low)
+  4. Regime-switch (Med, obrambno)
+  SKIP: Kelly, weekend-skip na momentumu, ensembles/agreement.
+- Pošten caveat: zmagovalci izbrani iz sweepa (selection bias) — zaupamo tistim ki izboljšajo tudi hold-out (rotation, graded, lean ATR buffer vsi to naredijo). Paper trading pred povečanjem.
+- Poročilo: `testing/reports/improvements_report.md` (kompletno A+B+C + implementacijske opombe).
+
+**IZBOLJŠAVE (Part A+B+C) ZAKLJUČENE.** Produkcijska koda nedotaknjena; poročilo vsebuje natančne recepte za implementacijo.

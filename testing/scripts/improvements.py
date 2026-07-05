@@ -116,9 +116,13 @@ def vol_weighted(asset: str, lookback: int = 60) -> pd.Series:
 
 # ── A4. Cross-sectional rotation (portfolio-level, returns ONE series) ─────────
 
-def rotation(assets: list[str], k: int = 3, variant_name: str = "momentum") -> pd.Series:
+def rotation(assets: list[str], k: int = 3, variant_name: str = "momentum",
+             sleeve_fn=None) -> pd.Series:
     """Each day hold the top-k assets by signal strength (variants-bull count +
-    normalized distance above trackline), equal weight, rest in cash."""
+    normalized distance above trackline), equal weight, rest in cash.
+
+    sleeve_fn(asset)->returns lets you rotate over an *improved* sleeve (e.g.
+    graded-entry momentum) instead of the plain variant."""
     strengths, rets = {}, {}
     idx = None
     for a in assets:
@@ -129,8 +133,8 @@ def rotation(assets: list[str], k: int = 3, variant_name: str = "momentum") -> p
         lb = (dfl["signal_state"] == sbl).astype(float)
         dist = dfm["dist_pct"].clip(lower=0) / 20.0
         s = (mb + lb + dist).rename(a)
-        # the sleeve return we earn if we hold this asset = chosen variant's return
-        rr = variant(a, variant_name)[0].rename(a)
+        # the sleeve return we earn if we hold this asset
+        rr = (sleeve_fn(a) if sleeve_fn else variant(a, variant_name)[0]).rename(a)
         strengths[a] = s
         rets[a] = rr
         idx = s.index if idx is None else idx.union(s.index)
