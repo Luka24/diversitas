@@ -19,3 +19,7 @@ env/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Testing harness — frozen data snapshots + generated results (hash logged, reproducible)
+testing/data/
+testing/results/
