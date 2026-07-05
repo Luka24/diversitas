@@ -68,3 +68,14 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - **Param stabilnost:** večinoma 1 (popolnoma stabilno čez folde).
 - **Momentum je jasno močnejši, manj overfit kandidat na vsaki metriki.**
 - Poročilo: `testing/reports/phase5_report.md`.
+
+## 2026-07-05 — Faza 6 (v3): Poštena optimizacija ✅ (keep defaults)
+
+- `run_optuna.py`: TPE 150 trialov, optimiziraj Calmar na train (≤2024-09-30), validiraj OOS + cross-asset.
+- **Lean:** optimiziran train 0.74→1.40, a **OOS kolaps 7.11→1.11** — učbeniški overfitting. Default zmaga.
+- **Momentum:** optimiziran zmaga BTC-OOS (5.87→7.04) a **slabši na ETH (1.24<1.28) IN SOL (0.98<1.12)** — ne generalizira.
+- **Robustnih izboljšav: 0/2.** Data-mined DSR ostane <0.95 (N≈538).
+- **Odločitev: obdrži Pine defaults za obe varianti.** "Optimizirali smo in namerno nič spremenili" = najmočnejši anti-overfitting dokaz.
+- Poročilo: `testing/reports/phase6_report.md`.
+
+**Analitični del (Faze 0–6) zaključen.** Naslednje: Faza 7 — A/B testi Q&A izboljšav (glavni fokus).
