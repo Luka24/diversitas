@@ -79,3 +79,17 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - Poročilo: `testing/reports/phase6_report.md`.
 
 **Analitični del (Faze 0–6) zaključen.** Naslednje: Faza 7 — A/B testi Q&A izboljšav (glavni fokus).
+
+## 2026-07-05 — Faza 7 (v3): A/B testi Q&A izboljšav ✅ (glavni fokus)
+
+- `run_feature_ab.py` + `features.py`: 11 idej × 2 varianti = 22 izoliranih A/B testov vs Pine default.
+- Metoda: paired block-bootstrap ΔSharpe CI (2000×) + OOS + cross-asset sign. Accept = vse troje.
+- **Rezultat: 0 sprejetih.** Nobena ideja ne premaga a-priori Pine dizajna po strogi izolirani presoji.
+  - ATR buffer: škodi (delay entry/exit); momentum CI izključuje 0 → REJECT.
+  - Kelly: škodi (MaxDD +20pp), noisy rolling ocene → over-lever. REJECT.
+  - Weekend skip: škodi momentumu (kripto 24/7). REJECT.
+  - EMA vol-shock: točno 0 (vol_shock že redundanten s trackline break).
+  - Profit-taking / rolling-peak brake / lean-trailing: nevtralno.
+  - Sanity: dodajanje 12% trail momentumu (že ima) = točno 0 → harness zvest.
+- **Zaključek: strategiji sta na robustni operativni točki; intuitivne izboljšave ne zdržijo strogega testa.** Konsistentno s Fazo 6.
+- Poročilo: `testing/reports/phase7_report.md`.

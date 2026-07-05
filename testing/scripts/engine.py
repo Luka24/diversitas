@@ -94,6 +94,30 @@ def s_bull(variant: str) -> int:
     return int(smod.S_BULL)
 
 
+def strategy_module(variant: str):
+    """Return the variant's `diversitas.strategy` module (compute_features,
+    run_state_machine, S_BULL/S_BEAR) for feature-overlay A/B testing."""
+    _switch_variant(variant)
+    return importlib.import_module("diversitas.strategy")
+
+
+def run_overlay(variant: str, daily: pd.DataFrame, btc: Optional[pd.DataFrame],
+                override_fn=None, **overrides) -> pd.DataFrame:
+    """Run compute_features → (optional column override) → run_state_machine.
+
+    `override_fn(df, cfg) -> df` mutates feature columns *before* the real state
+    machine runs, so we test signal-level Q&A ideas against the actual, validated
+    state machine instead of touching the Pine port.
+    """
+    smod = strategy_module(variant)
+    cfg = make_config(variant, **overrides)
+    use_btc = getattr(cfg, "use_btc_filter", False)
+    df = smod.compute_features(daily, btc if use_btc else None, cfg)
+    if override_fn is not None:
+        df = override_fn(df, cfg)
+    return smod.run_state_machine(df, cfg)
+
+
 def position(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
              s_bull_code: int = 1) -> np.ndarray:
     """Next-bar position in [0,1]. Mirrors dashboards' `_pos_from_df`."""
