@@ -93,3 +93,15 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
   - Sanity: dodajanje 12% trail momentumu (že ima) = točno 0 → harness zvest.
 - **Zaključek: strategiji sta na robustni operativni točki; intuitivne izboljšave ne zdržijo strogega testa.** Konsistentno s Fazo 6.
 - Poročilo: `testing/reports/phase7_report.md`.
+
+## 2026-07-05 — Faza 8 (v3): Fees + hold-out + master report ✅ (zaključek)
+
+- `run_final.py`: fee sensitivity (3 scenariji), break-the-glass hold-out (2025-04→2026-07, prvič in edinkrat), master report.
+- **Hold-out je bil pravi kripto bear market** (B&H padel povsod: BTC −19%, ADA −62%).
+- **Drawdown control zdržal OOS: 16/16 asset-varianta kombinacij reže DD vs B&H** (lean BTC −12% vs −53%, momentum ADA −21% vs −85%). Primarni cilj potrjen na nikoli videnih podatkih.
+- **Pošten preobrat regimov:** v bear hold-outu **Lean prekaša Momentum** po donosu (lean median CAGR > momentum) — previdnost se je izplačala. V (bull) design setu je vodil Momentum. Nobena varianta ne dominira čez vse regime → **ladjaj obe**.
+- Fees ne razbijejo: realist ~0.03–0.08 Calmar; momentum plača več (več tradanja).
+- Priporočilo: obe varianti s Pine defaults, LINK izloči, paper trading z realist fees.
+- Poročilo: `testing/reports/final_report.md`.
+
+**KAMPANJA (Faze 0–8) ZAKLJUČENA.**
