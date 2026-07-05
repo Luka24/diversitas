@@ -105,3 +105,15 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - Poročilo: `testing/reports/final_report.md`.
 
 **KAMPANJA (Faze 0–8) ZAKLJUČENA.**
+
+## 2026-07-05 — Izboljšave Part A: strukturne kombinacije ✅ (najdene prave izboljšave!)
+
+- `improvements.py` + `run_improvements.py`: ensemble, regime-switch, agreement, rotation, vol-weighted. Pooled 8 assetov + hold-out.
+- **ZMAGOVALEC — cross-sectional rotation (top-K najmočnejših signalov):**
+  - k=3 momentum: design Calmar **1.39** (vs equal-weight 1.07, +30%), **hold-out +0.64** (vs 0.05).
+  - k=2 momentum: design **1.94** (+81%), hold-out **0.75** — agresivneje, večji DD (-48%).
+  - Ni k=2 fluke: k=2/3/4 vsi premagajo equal-weight. Kompleksnost Med. **Vredno.**
+- **Regime-switch (BTC-200MA / vol): obrambna izboljšava** — hold-out Calmar -0.2→+0.03…+0.17, MaxDD -16% vs -23%. Design malenkost slabši. Vredno za bear-robustnost.
+- Ensemble/agreement/vol-weighted: zmanjšajo varianco a ne premagajo najboljše single variante → SKIP.
+- Že samo equal-weight diverzifikacija čez assete pomaga (holdout -0.03/+0.05 vs per-asset -0.21).
+- Poročilo: `testing/reports/improvements_report.md`.
