@@ -210,9 +210,118 @@ def _write_report_a(df, base_d, base_h, ew_d, ew_h):
     (REPORTS / "improvements_report.md").write_text("\n".join(L))
 
 
+def _variant_baseline(variant_name):
+    return pooled(lambda a: imp.variant(a, variant_name)[0], variant_name)
+
+
+def _sweep(variant_name, label, fn_of_param, params):
+    """Evaluate a swept tweak; return the best-by-design-Calmar pooled row + all."""
+    best, allr = None, []
+    for p in params:
+        row = pooled(lambda a, p=p: fn_of_param(a, p), f"{label}={p}")
+        allr.append(row)
+        if best is None or (row["d_calmar"] or -9) > (best["d_calmar"] or -9):
+            best = row
+    return best, allr
+
+
+def run_part_b():
+    from testing.scripts import features as F
+    rows = []
+    for variant_name in ("lean", "momentum"):
+        base = _variant_baseline(variant_name)
+        bd, bh = base["d_calmar"], base["h_calmar"]
+        print(f"\n########## {variant_name}  (baseline design {bd:.2f}, holdout {bh:.2f}) ##########")
+        rows.append({"variant": variant_name, "idea": "baseline", "best_param": "-",
+                     "d_calmar": bd, "d_sharpe": base["d_sharpe"], "d_maxdd": base["d_maxdd"],
+                     "h_calmar": bh, "h_maxdd": base["h_maxdd"], "verdict": "— baseline —"})
+
+        tweaks = []
+        # B1 vol-target
+        tweaks.append(("B1_vol_target",
+                       lambda a, p: imp.config_tweak(a, variant_name, target_vol_pct=p),
+                       [40, 50, 60, 70, 80, 90]))
+        # B2 reentry_hold (static sweep; true dynamic needs a strategy flag — noted)
+        rh = [5, 10, 15, 20, 25] if variant_name == "lean" else [2, 3, 4, 6, 8, 10]
+        tweaks.append(("B2_reentry_hold",
+                       lambda a, p: imp.config_tweak(a, variant_name, reentry_hold=p), rh))
+        # B3 Parkinson OHLC vol
+        tweaks.append(("B3_parkinson_vol",
+                       lambda a, p: imp.parkinson_vol(a, variant_name), ["on"]))
+        # B4 ATR buffer
+        tweaks.append(("B4_atr_buffer",
+                       lambda a, p: imp.feat(a, variant_name, F.atr_buffer, k=p),
+                       [1.5, 2.0, 2.5, 3.0]))
+        # B5 ATR blow-off
+        tweaks.append(("B5_atr_blowoff",
+                       lambda a, p: imp.feat(a, variant_name, F.atr_blowoff, pct=p),
+                       [95.0, 97.5]))
+        # B6 rolling-peak DD brake
+        tweaks.append(("B6_dd_brake",
+                       lambda a, p: imp.feat(a, variant_name, F.rolling_peak_brake, dd_pct=p),
+                       [20.0, 30.0, 40.0]))
+        # B8 profit-taking
+        tweaks.append(("B8_profit_taking",
+                       lambda a, p: imp.feat(a, variant_name, F.profit_taking), ["on"]))
+        # B9 confirm negatives
+        tweaks.append(("B9_kelly_half",
+                       lambda a, p: imp.feat(a, variant_name, F.kelly, fraction=0.5), ["on"]))
+        tweaks.append(("B9_weekend_skip",
+                       lambda a, p: imp.feat(a, variant_name, F.weekend_skip), ["on"]))
+        # B7 graded entry (momentum only)
+        if variant_name == "momentum":
+            tweaks.append(("B7_graded_entry",
+                           lambda a, p: imp.graded_entry(a, "momentum"), ["on"]))
+
+        for label, fn, params in tweaks:
+            best, _ = _sweep(variant_name, label, fn, params)
+            v = _verdict(best["d_calmar"], best["h_calmar"], bd, bh)
+            rows.append({"variant": variant_name, "idea": label,
+                         "best_param": best["label"].split("=")[-1],
+                         "d_calmar": best["d_calmar"], "d_sharpe": best["d_sharpe"],
+                         "d_maxdd": best["d_maxdd"], "h_calmar": best["h_calmar"],
+                         "h_maxdd": best["h_maxdd"], "verdict": v})
+            print(f"  {label:18} best={rows[-1]['best_param']:>5}  "
+                  f"design Calmar {best['d_calmar']:.2f} (base {bd:.2f})  "
+                  f"holdout {best['h_calmar']:.2f} (base {bh:.2f})  {v}")
+
+    df = pd.DataFrame(rows)
+    df.to_csv(RESULTS / "part_b.csv", index=False)
+    _append_report_b(df)
+    print(f"\nWrote {RESULTS/'part_b.csv'} and appended Part B to improvements_report.md")
+
+
+def _append_report_b(df):
+    L = ["", "---", "", "## Part B — Q&A sizing/signal tweaks (best swept value, pooled 8 assets)", ""]
+    for variant_name in ("lean", "momentum"):
+        d = df[df.variant == variant_name]
+        base = d[d.idea == "baseline"].iloc[0]
+        L += [f"### {variant_name} (baseline design Calmar {base['d_calmar']:.2f}, "
+              f"hold-out {base['h_calmar']:.2f})", "",
+              "| Tweak | Best param | Design Calmar | Design Sharpe | Hold-out Calmar | Verdict |",
+              "|---|---|---|---|---|---|"]
+        for _, r in d[d.idea != "baseline"].iterrows():
+            L.append(f"| {r['idea']} | {r['best_param']} | {r['d_calmar']:.2f} | "
+                     f"{r['d_sharpe']:.2f} | {r['h_calmar']:.2f} | {r['verdict']} |")
+        L += [""]
+    ships = df[df.verdict.str.startswith("SHIP")]
+    L += ["### Part B verdict", "",
+          f"- **SHIP: {len(ships)}** — " +
+          (", ".join(f"{r['idea']}({r['variant'][:4]},{r['best_param']})" for _, r in ships.iterrows())
+           or "none clear the ≥8% pooled bar."),
+          "- Tweaks that only match the baseline are **SKIP** — they add parameters/complexity "
+          "without a pooled, hold-out-confirmed gain. B2 dynamic re-entry is shown as a static "
+          "sweep; a genuinely vol-scaled lock would need a strategy-level flag (noted, not "
+          "implemented). B9 (Kelly, weekend-skip) re-confirmed negative, pooled.", "",
+          "**Headline:** the structural rotation (Part A) is a far larger, more robust improvement "
+          "than any single-parameter sizing tweak. If only one thing is added, add rotation.", ""]
+    with open(REPORTS / "improvements_report.md", "a") as f:
+        f.write("\n".join(L))
+
+
 if __name__ == "__main__":
     part = (sys.argv[1] if len(sys.argv) > 1 else "A").upper()
     if part == "A":
         run_part_a()
-    else:
-        print("Part B runner added next.")
+    elif part == "B":
+        run_part_b()

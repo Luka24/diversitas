@@ -19,7 +19,7 @@ if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
 from shared import indicators as ind
-from testing.scripts import dataio, engine
+from testing.scripts import dataio, engine, features
 
 
 # ── cached per-(asset,variant) run on the full frozen series ──────────────────
@@ -150,3 +150,54 @@ def rotation(assets: list[str], k: int = 3, variant_name: str = "momentum") -> p
         if held:
             port.loc[ts] = R.loc[ts, held].mean()
     return port
+
+
+# ── Part B — per-variant sizing/signal tweaks ────────────────────────────────
+
+def _daily_btc(asset):
+    return dataio.load(asset, split="all"), dataio.load_btc(split="all")
+
+
+def config_tweak(asset: str, variant_name: str, **ov) -> pd.Series:
+    """Run a variant with config overrides (vol-target, reentry_hold, …)."""
+    daily, btc = _daily_btc(asset)
+    df = engine.run(variant_name, daily, btc=btc, **ov)
+    return engine.strat_returns(df, s_bull_code=engine.s_bull(variant_name))
+
+
+def parkinson_vol(asset: str, variant_name: str) -> pd.Series:
+    """Override annual_vol with the Parkinson OHLC estimator (uses high/low, not
+    close-to-close) — feeds both vol-sizing and vol-shock inside the state machine."""
+    daily, btc = _daily_btc(asset)
+
+    def override(df, cfg):
+        hl = np.log(daily["high"] / daily["low"]).reindex(df.index)
+        park_var = (hl ** 2) / (4.0 * np.log(2.0))
+        park_daily = np.sqrt(park_var.rolling(cfg.vol_lookback, min_periods=cfg.vol_lookback).mean())
+        df = df.copy()
+        df["annual_vol"] = park_daily * np.sqrt(cfg.trading_days) * 100.0
+        df["vol_avg50"] = ind.sma(df["annual_vol"], 50)
+        mul = getattr(cfg, "vol_shock_mul", 1.5)
+        df["vol_shock"] = (df["annual_vol"] > df["vol_avg50"] * mul) & df["below_tl"]
+        return df
+
+    df2 = engine.run_overlay(variant_name, daily, btc, override_fn=override, use_btc_filter=False)
+    return engine.strat_returns(df2, s_bull_code=engine.s_bull(variant_name))
+
+
+def graded_entry(asset: str, variant_name: str = "momentum") -> pd.Series:
+    """Momentum: scale the in-market position by an RSI-based conviction
+    (RSI 50→0.5, 70+→1.0) instead of the binary momentum_ok gate."""
+    daily, btc = _daily_btc(asset)
+    df = engine.run(variant_name, daily, btc=btc)
+    sb = engine.s_bull(variant_name)
+    base = engine.strat_returns(df, s_bull_code=sb)
+    conv = ((df["rsi"] - 50.0) / 20.0).clip(0.5, 1.0)      # RSI 50→0.5, 70→1.0
+    return base * conv.shift(1).fillna(1.0)
+
+
+# thin adapters so features.py post-processors fit the (asset, variant) signature
+def feat(asset, variant_name, fn, **kw):
+    daily, btc = _daily_btc(asset)
+    r, _ = fn(variant_name, daily, btc, **kw)
+    return r

@@ -117,3 +117,14 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - Ensemble/agreement/vol-weighted: zmanjšajo varianco a ne premagajo najboljše single variante → SKIP.
 - Že samo equal-weight diverzifikacija čez assete pomaga (holdout -0.03/+0.05 vs per-asset -0.21).
 - Poročilo: `testing/reports/improvements_report.md`.
+
+## 2026-07-05 — Izboljšave Part B: Q&A sizing/signal tweaki (swept, pooled) ✅
+
+- Vsak tweak swept + pooled čez 8 assetov + hold-out (popravek Phase 7, ki je bil BTC-only/unswept/prestrog).
+- **Kredibilni zmagovalci (design gain IN hold-out izboljšava):**
+  - **Momentum + graded_entry** (RSI-scaled sizing): design 1.24 (+24%), hold-out -0.21→-0.01.
+  - **Lean + ATR buffer k=1.5**: design 0.54 (+22%), hold-out -0.09→+0.22.
+- Design-driven (šibkejši hold-out): Lean DD-brake (+27%), Lean weekend-skip (+15%), Momentum vol_target=90 (+13%).
+- **Potrjeni gubitniki:** Kelly (momentum -42%, lean marginal), weekend-skip na momentumu (-26%), ATR buffer na momentumu (-14%). Konsistentno s Phase 7.
+- Vzorec: **Lean ima korist od bolj konzervativnih dodatkov** (ATR buffer, DD brake, weekend skip), **Momentum od graded sizinga**.
+- Poročilo: `testing/reports/improvements_report.md` (Part B dodan).
