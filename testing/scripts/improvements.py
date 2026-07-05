@@ -338,3 +338,33 @@ def dynamic_trail(asset: str, variant_name: str, base: float = 12.0, coef: float
             peak = np.nan; stopped = False
     base_ret = engine.strat_returns(df, s_bull_code=sb)
     return base_ret * pd.Series(mult, index=df.index).shift(1).fillna(1.0)
+
+
+def tsmom_sizing(asset: str, variant_name: str, lookback: int = 90, floor: float = 0.3) -> pd.Series:
+    """TSMOM as a *sizing* lever (not a hard gate): scale the in-market position
+    by the strength of the trailing return, floored so a mild dip doesn't flatten."""
+    daily, btc = _daily_btc(asset)
+    df = engine.run(variant_name, daily, btc=btc)
+    sb = engine.s_bull(variant_name)
+    tr = (df["close"] / df["close"].shift(lookback) - 1.0)
+    size = (0.5 + tr / 0.5).clip(floor, 1.0)     # +50% trailing → full; ≤0 → floor
+    base = engine.strat_returns(df, s_bull_code=sb)
+    return base * size.shift(1).fillna(1.0)
+
+
+def donchian_filter(asset: str, variant_name: str, period: int = 55) -> pd.Series:
+    """Donchian breakout confirmation: only enter when close is within the top
+    band of its `period`-day range (classic turtle trend filter), ANDed onto entry."""
+    daily, btc = _daily_btc(asset)
+    hi = daily["high"].rolling(period, min_periods=period).max()
+    lo = daily["low"].rolling(period, min_periods=period).min()
+    pos_in_range = (daily["close"] - lo) / (hi - lo).replace(0, np.nan)
+    br = (pos_in_range > 0.75).fillna(False)     # upper quartile of the channel
+
+    def override(df, cfg):
+        df = df.copy()
+        df["above_tl"] = df["above_tl"] & br.reindex(df.index).fillna(False)
+        return features._rebuild_bull(df, cfg, variant_name)
+
+    d2 = engine.run_overlay(variant_name, daily, btc, override_fn=override, use_btc_filter=False)
+    return engine.strat_returns(d2, s_bull_code=engine.s_bull(variant_name))

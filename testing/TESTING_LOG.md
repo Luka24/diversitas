@@ -176,3 +176,15 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - **Nove ideje iz raziskave (SuperTrend, dynamic trailing, TSMOM):** NE premagajo baseline na validation (1.35/1.30/1.27 < 1.51). Nevtralno-obrambne.
 - **Obrambni vzvodi** (regime-switch, TSMOM-120): izgubijo na bull validation, izboljšajo bear hold-out — regime tradeoff.
 - **Bottom line: po popravku leakage samo rotacija robustno izboljša rezultat.** Manjši tweaki ne preživijo čiste selekcije. Poročilo: `validation_report.md`.
+
+## 2026-07-05 — Nove ideje: temeljit sweep (leakage-safe) ✅
+
+- `run_new_ideas.py`: SuperTrend (period×mult, 12 combos), TSMOM filter+sizing (lookback), dynamic vol-trailing (base×coef, 12), Donchian (period) — vse pod 3-way split (selekcija na validation, holdout enkrat).
+- **LEAN pridobi (šibkejši baseline 0.88, prostor za izboljšavo):**
+  - **Donchian breakout — standout:** validation Calmar monotono raste s periodo (20/34/55 → +0.27/+0.38/+0.52), holdout nespremenjen. Monotona (ne-spike) odzivnost = pravi efekt, ne curve-fit. Low complexity.
+  - Dynamic vol-trailing: dvigne lean na validation (10/2 → +0.20) + močno izboljša bear holdout pri tesnejših nastavitvah.
+- **MOMENTUM (1.51) težko premagati:** novi filtri večinoma obrambni — TSMOM-120/Donchian pomagajo bear holdout a stanejo bull validation. TSMOM-30 +0.17 (verjetno šum).
+- **SuperTrend: večinoma no-op ali negativno** na obeh (drop).
+- **Rotation ostaja glavni strukturni win** (val 2.48 plain, 3.21 graded sleeve); × TSMOM sizing = obrambna varianta (val 2.08, holdout 0.78).
+- 11 survivors od ~80 config-ov; multiple-testing caveat — prednost monotonim (Donchian) pred single-corner (dynamic_trail 14/6).
+- Poročilo: `testing/reports/new_ideas_report.md`.
