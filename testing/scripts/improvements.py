@@ -259,3 +259,82 @@ def btc_filter_toggle(asset: str, variant_name: str, on: bool) -> pd.Series:
     daily, btc = _daily_btc(asset)
     df = engine.run(variant_name, daily, btc=btc, use_btc_filter=on)
     return engine.strat_returns(df, s_bull_code=engine.s_bull(variant_name))
+
+
+# ── new ideas from 2026 crypto trend-following research ──────────────────────
+
+def tsmom_filter(asset: str, variant_name: str, lookback: int = 90) -> pd.Series:
+    """Time-series momentum confirmation: only stay long when the trailing
+    `lookback`-day return is positive (a slow macro-trend gate ANDed onto entry).
+    From the crypto TSMOM literature — a cheap regime confirmation."""
+    daily, btc = _daily_btc(asset)
+
+    def override(df, cfg):
+        mom_ok = (df["close"] / df["close"].shift(lookback) - 1.0) > 0
+        df = df.copy()
+        df["above_tl"] = df["above_tl"] & mom_ok.fillna(False)
+        return features._rebuild_bull(df, cfg, variant_name)
+
+    d2 = engine.run_overlay(variant_name, daily, btc, override_fn=override, use_btc_filter=False)
+    return engine.strat_returns(d2, s_bull_code=engine.s_bull(variant_name))
+
+
+def supertrend_filter(asset: str, variant_name: str, period: int = 10, mult: float = 3.0) -> pd.Series:
+    """SuperTrend confirmation (ATR bands around HL2). Research: ATR-adaptive bands
+    handle crypto vol-regime shifts better than fixed filters. Used as an extra
+    long-only gate ANDed onto the entry."""
+    daily, btc = _daily_btc(asset)
+    hl2 = (daily["high"] + daily["low"]) / 2.0
+    atr = features._atr(daily, period)
+    upper = hl2 + mult * atr
+    lower = hl2 - mult * atr
+    close = daily["close"]
+    st = pd.Series(index=close.index, dtype=float)
+    dir_up = True
+    prev_st = lower.iloc[0] if len(lower) else 0.0
+    for i in range(len(close)):
+        u, l, c = upper.iloc[i], lower.iloc[i], close.iloc[i]
+        if i == 0:
+            st.iloc[i] = l; continue
+        if c > prev_st:
+            dir_up = True
+        elif c < prev_st:
+            dir_up = False
+        cur = max(l, prev_st) if dir_up else min(u, prev_st)
+        st.iloc[i] = cur; prev_st = cur
+    st_bull = (close > st)
+
+    def override(df, cfg):
+        df = df.copy()
+        df["above_tl"] = df["above_tl"] & st_bull.reindex(df.index).fillna(False)
+        return features._rebuild_bull(df, cfg, variant_name)
+
+    d2 = engine.run_overlay(variant_name, daily, btc, override_fn=override, use_btc_filter=False)
+    return engine.strat_returns(d2, s_bull_code=engine.s_bull(variant_name))
+
+
+def dynamic_trail(asset: str, variant_name: str, base: float = 12.0, coef: float = 4.0) -> pd.Series:
+    """Vol-calibrated trailing stop: trail% = base·(1 + vol_z·coef/100), wider in
+    high-vol regimes, tighter in calm ones. Research: 'dynamic trailing stop
+    calibrated to volatility regimes'. Post-processed on the position path."""
+    daily, btc = _daily_btc(asset)
+    df = engine.run(variant_name, daily, btc=btc)
+    sb = engine.s_bull(variant_name)
+    av = df["annual_vol"]
+    vz = ((av - av.rolling(200, min_periods=60).mean())
+          / av.rolling(200, min_periods=60).std()).fillna(0.0)
+    trail = (base * (1 + vz.clip(-1.5, 1.5) * coef / 100.0)).clip(4.0, 30.0).values
+    close = df["close"].values; sig = df["signal_state"].values
+    mult = np.ones(len(df)); peak = np.nan; stopped = False
+    for i in range(len(df)):
+        if sig[i] == sb:
+            if i == 0 or sig[i - 1] != sb:
+                peak = close[i]; stopped = False
+            peak = max(peak, close[i])
+            if close[i] < peak * (1 - trail[i] / 100.0):
+                stopped = True
+            mult[i] = 0.0 if stopped else 1.0
+        else:
+            peak = np.nan; stopped = False
+    base_ret = engine.strat_returns(df, s_bull_code=sb)
+    return base_ret * pd.Series(mult, index=df.index).shift(1).fillna(1.0)
