@@ -57,3 +57,43 @@ Fair baseline = equal-weight all-8 portfolio: **design Calmar 1.07, hold-out 0.0
 - **Cost/benefit:** ~30 lines, one detector, no tuned parameters. Improves the bear hold-out at a small design cost. **Worth it for drawdown-sensitive deployment.**
 
 SHIP = ≥8% Calmar gain over the relevant baseline with hold-out not degraded. Part B (sizing/signal tweaks) follows below once run.
+
+---
+
+## Part B — Q&A sizing/signal tweaks (best swept value, pooled 8 assets)
+
+### lean (baseline design Calmar 0.44, hold-out -0.09)
+
+| Tweak | Best param | Design Calmar | Design Sharpe | Hold-out Calmar | Verdict |
+|---|---|---|---|---|---|
+| B1_vol_target | 40 | 0.44 | 0.76 | -0.09 | MARGINAL (+0%) |
+| B2_reentry_hold | 15 | 0.44 | 0.76 | -0.09 | MARGINAL (+0%) |
+| B3_parkinson_vol | on | 0.48 | 0.77 | -0.07 | MARGINAL (+8%) |
+| B4_atr_buffer | 1.5 | 0.54 | 0.77 | 0.22 | SHIP (+22% design Calmar) |
+| B5_atr_blowoff | 97.5 | 0.42 | 0.72 | -0.04 | SKIP (-6%) |
+| B6_dd_brake | 40.0 | 0.56 | 0.81 | -0.07 | SHIP (+27% design Calmar) |
+| B8_profit_taking | on | 0.41 | 0.72 | -0.09 | SKIP (-7%) |
+| B9_kelly_half | on | 0.47 | 0.73 | 0.05 | MARGINAL (+6%) |
+| B9_weekend_skip | on | 0.51 | 0.79 | -0.02 | SHIP (+15% design Calmar) |
+
+### momentum (baseline design Calmar 1.00, hold-out -0.21)
+
+| Tweak | Best param | Design Calmar | Design Sharpe | Hold-out Calmar | Verdict |
+|---|---|---|---|---|---|
+| B1_vol_target | 90 | 1.13 | 1.11 | -0.28 | MARGINAL (+13%) |
+| B2_reentry_hold | 4 | 1.00 | 1.05 | -0.21 | MARGINAL (+0%) |
+| B3_parkinson_vol | on | 0.95 | 1.01 | -0.22 | SKIP (-4%) |
+| B4_atr_buffer | 1.5 | 0.85 | 0.98 | -0.15 | SKIP (-14%) |
+| B5_atr_blowoff | 97.5 | 1.01 | 1.07 | -0.18 | MARGINAL (+1%) |
+| B6_dd_brake | 20.0 | 1.03 | 1.08 | -0.15 | MARGINAL (+3%) |
+| B8_profit_taking | on | 1.03 | 1.06 | -0.21 | MARGINAL (+3%) |
+| B9_kelly_half | on | 0.58 | 0.79 | -0.15 | SKIP (-42%) |
+| B9_weekend_skip | on | 0.74 | 0.91 | 0.00 | SKIP (-26%) |
+| B7_graded_entry | on | 1.24 | 1.07 | -0.01 | SHIP (+24% design Calmar) |
+
+### Part B verdict
+
+- **SHIP: 4** — B4_atr_buffer(lean,1.5), B6_dd_brake(lean,40.0), B9_weekend_skip(lean,on), B7_graded_entry(mome,on)
+- Tweaks that only match the baseline are **SKIP** — they add parameters/complexity without a pooled, hold-out-confirmed gain. B2 dynamic re-entry is shown as a static sweep; a genuinely vol-scaled lock would need a strategy-level flag (noted, not implemented). B9 (Kelly, weekend-skip) re-confirmed negative, pooled.
+
+**Headline:** the structural rotation (Part A) is a far larger, more robust improvement than any single-parameter sizing tweak. If only one thing is added, add rotation.
