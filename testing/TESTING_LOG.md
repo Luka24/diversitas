@@ -188,3 +188,13 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - **Rotation ostaja glavni strukturni win** (val 2.48 plain, 3.21 graded sleeve); × TSMOM sizing = obrambna varianta (val 2.08, holdout 0.78).
 - 11 survivors od ~80 config-ov; multiple-testing caveat — prednost monotonim (Donchian) pred single-corner (dynamic_trail 14/6).
 - Poročilo: `testing/reports/new_ideas_report.md`.
+
+## 2026-07-05 — On-chain (§6) + Macro (§7) pipes ✅ (zadnje netestirano)
+
+- `external_data.py` + `run_external.py`: zamrznjeni DXY+BBB (FRED) in Coinbase premium (Coinbase vs Binance BTC). MVRV rabi plačljiv on-chain feed → dokumentiran, ne testiran.
+- **Macro pipe (DXY+BBB) kot specificiran: TOČNO 0 učinka** (fires 11/2600 barov = 0.4%). Potrjuje doc-ovo napoved "mostly neutral".
+- Bolj agresivno (DXY-only 0%): -0.93/-1.30 (blokira dobre entry-je).
+- **Premium filter BTC** (spec thr): 0 učinka; thr=0 nekonsistentno (momentum +0.33, lean -1.72) → ne robustno.
+- **Zaključek: eksterni pipe-i so obrambni context filtri z majhnim učinkom** — konsistentno z doc-ovim pričakovanjem — NISO med izboljšavami vrednimi dodajanja.
+- **Coverage complete:** vse iz Q&A dokumenta testabilno na free podatkih je zdaj testirano. Ostaja le MVRV (plačljivo).
+- Poročilo: `testing/reports/external_report.md`.
