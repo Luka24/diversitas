@@ -28,3 +28,12 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - Poročilo: `testing/reports/phase1_report.md`.
 
 *Naslednje: uskladitev kriterijev (odločitev uporabnika) → Faza 2 (BTC dependence).*
+
+## 2026-07-05 — Faza 2 (v3): BTC dependence ✅
+
+- `run_btc_dependence.py`: OLS α/β (Newey–West HAC), rolling 90d β/corr, BTC-β-hedged re-score.
+- **Kritika "high BTC beta" empirično ovržena:** β = 0.09–0.31 (median 0.15), R² 0.03–0.20, corr 0.17–0.45. Strategije NISO levered BTC.
+- **Po hedgingu β edge preživi** (Momentum: ETH 1.13→0.83, SOL 1.17→0.99, ADA 1.37→1.17). Lean slabše.
+- Pošten caveat: nizka β delno mehanska (~65% časa v cashu); per-asset α večinoma ni značilna pri 5% (samo ADA momentum t=2.33) — značilnost se dokaže čez več assetov + DSR v Fazah 4–5.
+- **LINK izjema** — hedged Sharpe ≈ 0, njegov performance je večinoma beta.
+- Poročilo: `testing/reports/phase2_report.md`.
