@@ -56,3 +56,15 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - **Trade-shuffle MDD percentil:** momentum visok (52/72/97%) → realiziran DD je konservativen, ne srečen; lean nizek (15/20/6%) → DD delno odvisen od zaporedja (caveat za lean).
 - Momentum robustnejši na vseh oseh. Gate ✅.
 - Poročilo: `testing/reports/phase4_report.md`.
+
+## 2026-07-05 — Faza 5 (v3): Walk-forward + CPCV + Deflated Sharpe ✅ (ključna faza)
+
+- `run_walkforward.py`: anchored WF (4×6mes OOS, 21d embargo), CPCV PBO (252 poti), dva DSR računa.
+- **WFE > 1 povsod** (lean 2.9/2.0, momentum 3.9/1.3) → OOS Calmar presega IS → NASPROTJE overfittinga.
+- **PBO:** momentum čist (BTC 0.22, ETH 0.46 ✅); **lean/ETH 0.87 ⚠️** — genuina overfitting past za lean.
+- **Dva poštena Sharpe verdikta:**
+  - PSR a-priori (N=3, default Pine ni bil izbran iz sweepa): **momentum BTC 0.980, ETH 0.973 ✅**; lean BTC 0.949 (borderline), ETH 0.870.
+  - DSR data-mined (N≈385, brutalen counterfactual): 0.30–0.61 — objavljeno transparentno; rešitev = ne cherry-pickamo + hold-out (Faza 8).
+- **Param stabilnost:** večinoma 1 (popolnoma stabilno čez folde).
+- **Momentum je jasno močnejši, manj overfit kandidat na vsaki metriki.**
+- Poročilo: `testing/reports/phase5_report.md`.
