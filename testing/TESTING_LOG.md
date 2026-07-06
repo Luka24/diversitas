@@ -229,3 +229,13 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - **Zakaj defaults zmagajo:** so kompromis ki ni nikoli per-period optimum a nikoli daleč — robusten sredina platoja čez režime.
 - **Zaključek:** optimalni parametri so NESTACIONARNI (BTC režim se spremenil), zato train-optimal je sistematično napačen za naslednje obdobje. Vrednost dodaš z regime-switch / rotacijo (adaptirata čez režime), ne s finejšim tuningom.
 - Poročilo: `testing/reports/wfo_diagnosis_report.md`.
+
+## 2026-07-06 — Rolling vs anchored WF: profesionalni fix za non-stationarity ✅
+
+- Sodelavčeva opazka pravilna: anchored WF pokriva ~en cikel prehod (train = 2017-2021 bull, test = 2022-25).
+- `run_wfo_rolling.py`: rolling okno (train = zadnjih 730 dni) vs anchored vs default, stitched OOS.
+- **Rolling pomaga vs anchored na BTC** (momentum 1.63 vs 1.50, lean 2.02 vs 1.57) — pozabi stale 2017 bull, ujame recent regime. Na ETH mešano.
+- **A rolling premaga default le 1/4** — na BTC default še vedno zmaga (momentum 1.88, lean 2.28). Kripto režimi se obrnejo hitreje kot okno → 6-mes test blok je še vedno drug režim kot 2-letno train okno. **Ujemanje okna zoži vrzel, a je ne zapre.**
+- **Profesionalne rešitve za "en del cikla":** (1) rolling okna [demonstrirano], (2) CPCV [imamo PBO], (3) regime-switching [Part D/A], (4) test čez ≥1 boom-bust cikel, (5) parameter/model ensembli.
+- **Zaključek: durable edge = adaptacija čez režime (rotacija/regime-switch), NE finejši tuning parametrov.**
+- Poročilo: `testing/reports/wfo_rolling_report.md`.
