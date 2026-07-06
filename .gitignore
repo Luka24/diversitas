@@ -23,3 +23,6 @@ env/
 # Testing harness — frozen data snapshots + generated results (hash logged, reproducible)
 testing/data/
 testing/results/
+
+# Live signal exports
+signals/

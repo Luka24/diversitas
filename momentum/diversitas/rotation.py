@@ -1,10 +1,19 @@
 """Cross-sectional rotation — production portfolio layer over the Momentum strategy.
 
-The one robust, hold-out-confirmed improvement from the validation campaign: instead
-of trading every asset equally, hold only the K strongest-signal assets each day, with
-a graded (RSI-scaled) Momentum sleeve. This *adapts across regimes* (it rotates toward
-whichever assets are trending) rather than tuning fixed parameters — which the campaign
-proved does not generalize out-of-sample.
+The one robust structural improvement from the validation campaign: instead of trading
+every asset equally, hold only the K strongest-signal assets, with a graded (RSI-scaled)
+Momentum sleeve, rebalanced weekly. It *adapts across regimes* (rotates toward whichever
+assets are trending) rather than tuning fixed parameters — which the campaign proved does
+not generalize out-of-sample.
+
+Honest profile (calibrated, not overclaimed):
+  - Its edge is **drawdown control + bear robustness**, NOT beating a diversified hold on
+    every window. Full-period design Calmar ≈1.58 vs equal-weight ≈1.07 and a strong bear
+    hold-out (Sortino ~1.8 vs ~0), with max drawdown roughly halved — but it *loses* some
+    calm bull windows (it concentrates / goes to cash and misses broad rallies), winning
+    ~2/5 design windows on Sortino. Position it as risk-controlled, not a universal winner.
+  - **Turnover is high and fee-sensitive**: ~1500%/yr at weekly rebalance (was ~3400% daily).
+    All figures should be quoted net of fees; needs low-cost execution.
 
 Design invariants:
   - No look-ahead: the day-t weight uses only signal strength known at t-1 (shift(1)).
@@ -109,3 +118,33 @@ def run_rotation(daily_by_asset: Dict[str, pd.DataFrame],
     return RotationResult(returns=port, weights=weights, strength=S,
                           equity=equity, held_count=held_count.astype(int),
                           assets=assets)
+
+
+def current_allocation(daily_by_asset: Dict[str, pd.DataFrame],
+                       config: MomentumConfig = DEFAULT_CONFIG,
+                       k: int = 3, graded: bool = True,
+                       min_strength: float = 1.0) -> dict:
+    """Today's target allocation for live / paper trading, computed from the latest
+    bar (act on the next bar → no look-ahead). Returns a dict with the effective
+    per-asset weight (fraction of capital), a CASH remainder, per-asset signal
+    detail, and the held set. Effective weight = (1/held_count) × momentum position
+    × RSI conviction — i.e. what the backtest actually holds."""
+    detail, strengths = {}, {}
+    for a, daily in daily_by_asset.items():
+        last = run_strategy(daily, config=config).df.iloc[-1]
+        bull = 1.0 if last["signal_state"] == S_BULL else 0.0
+        strengths[a] = bull + max(float(last["dist_pct"]) / 20.0, 0.0)
+        conv = float(np.clip((last["rsi"] - 50.0) / 20.0, 0.5, 1.0)) if graded else 1.0
+        detail[a] = dict(state="BULL" if bull else "BEAR",
+                         strength=round(strengths[a], 3),
+                         dist_pct=round(float(last["dist_pct"]), 2),
+                         rsi=round(float(last["rsi"]), 1),
+                         momentum_pos=round(float(last["target_alloc"]) / 100.0 * conv, 4))
+    elig = {a: s for a, s in strengths.items() if s >= min_strength}
+    held = sorted(elig, key=elig.get, reverse=True)[:k]
+    hc = len(held)
+    alloc = {a: (round((1.0 / hc) * detail[a]["momentum_pos"], 4) if a in held else 0.0)
+             for a in daily_by_asset}
+    alloc["CASH"] = round(max(0.0, 1.0 - sum(alloc.values())), 4)
+    return dict(allocation=alloc, held=held, detail=detail,
+                k=k, graded=graded, min_strength=min_strength)
