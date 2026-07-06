@@ -209,3 +209,13 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - **D5 Lead-lag:** ≤ baseline.
 - **Zaključek: nobena napredna tehnika ne izpodrine rotacije.** Meta-labeling = drawdown-reduction vzvod, ne return-booster.
 - 6 novih unit testov (triple-barrier, PurgedKFold, HRP). Poročilo: `advanced_report.md`; summary posodobljen.
+
+## 2026-07-06 — Profesionalna walk-forward optimizacija (Part E) ✅
+
+- Spletna raziskava → profesionalni WFO recept: per-fold reoptimizacija + stitched OOS, plateau selection (ne peak), multi-seed. `wfo.py` + `run_wfo.py`.
+- Metoda: 5 anchored foldov, Optuna TPE (plateau-selected), 5 seedov, stitched OOS, hold-out potrditev. Lean+Momentum × BTC/ETH/SOL.
+- **Rezultat: optimizirano premaga defaults na stitched OOS le 2/6**, in ti "zmagi" ne zdržita hold-out (lean/SOL: stitched 1.52 vs 0.44 ampak hold-out -0.99 vs -0.09 = kolaps). Samo momentum/ETH konsistenten (1/6 = naključje pri 6 poskusih).
+- **Parameter instability visok** (track_buf_pct 6-7 distinct vrednosti čez 25 fitov, reentry_hold 8-10) = optimizer lovi šum, ne konvergira na stabilno nastavitev.
+- **Optimum drifta v agresijo** (kratek trackline, tesen buffer, visok vol-target) ki zmaga in-sample a propade forward — učbeniški overfit signature.
+- **Zaključek: tudi z najstrožjim profesionalnim WFO originalne parametre ni mogoče zanesljivo premagati.** Defaults so na robustnem platoju.
+- 4 novi unit testi (plateau_select, folds). Poročilo: `testing/reports/wfo_report.md`.
