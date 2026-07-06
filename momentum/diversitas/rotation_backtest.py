@@ -42,6 +42,7 @@ def main(argv=None) -> int:
     p.add_argument("--k", type=int, default=3, help="number of assets held")
     p.add_argument("--bars", type=int, default=2600)
     p.add_argument("--no-graded", action="store_true", help="disable RSI conviction sizing")
+    p.add_argument("--rebalance", type=int, default=7, help="rebalance every N days (default weekly)")
     args = p.parse_args(argv)
 
     assets = [a.strip().upper() for a in args.assets.split(",") if a.strip()]
@@ -56,12 +57,14 @@ def main(argv=None) -> int:
     if len(daily) < 2:
         print("Need at least 2 assets."); return 1
 
-    res = run_rotation(daily, config=cfg, k=args.k, graded=not args.no_graded)
+    res = run_rotation(daily, config=cfg, k=args.k, graded=not args.no_graded,
+                       rebalance_every=args.rebalance)
+    turnover = 0.5 * res.weights.diff().abs().sum(axis=1).fillna(0.0)
     m = _metrics(res.returns)
 
     print("\n" + "=" * 60)
     print(f"  ROTATION  ·  top-{args.k} of {len(daily)}  ·  "
-          f"{'graded' if not args.no_graded else 'binary'} sleeve")
+          f"{'graded' if not args.no_graded else 'binary'} · rebalance {args.rebalance}d")
     print("=" * 60)
     print(f"  Period          : {res.returns.index[0].date()} → {res.returns.index[-1].date()}")
     print(f"  CAGR            : {m['cagr']*100:+.1f}%")
@@ -71,6 +74,7 @@ def main(argv=None) -> int:
     print(f"  Max drawdown    : {m['max_dd']*100:.1f}%")
     print(f"  Value of 100    : {m['final']*100:,.0f}")
     print(f"  Avg assets held : {res.held_count.mean():.1f} / {args.k}")
+    print(f"  Ann. turnover   : {turnover.mean()*365*100:,.0f}%  (fee-sensitive)")
 
     # current allocation (last bar)
     last_w = res.weights.iloc[-1]

@@ -90,10 +90,10 @@ def _run_b(symbol: str, bars: int, use_er: bool):
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def _run_rotation_cached(assets: tuple, bars: int, k: int, graded: bool, use_er: bool):
+def _run_rotation_cached(assets: tuple, bars: int, k: int, graded: bool, use_er: bool, rebalance: int):
     cfg   = MomentumConfig(use_er=use_er)
     daily = {a: _load_candles(a, bars) for a in assets}
-    res   = run_rotation(daily, config=cfg, k=k, graded=graded)
+    res   = run_rotation(daily, config=cfg, k=k, graded=graded, rebalance_every=rebalance)
     # equal-weight buy&hold of the same universe, as the honest benchmark
     ew_bh = pd.concat([daily[a]["close"].pct_change().rename(a) for a in assets],
                       axis=1).reindex(res.returns.index).fillna(0.0).mean(axis=1)
@@ -1563,14 +1563,14 @@ def _render_gates_and_status(df: pd.DataFrame, s: dict, cfg: MomentumConfig,
 # ── main ──────────────────────────────────────────────────────────────────────
 
 def _render_rotation(assets: tuple, bars: int, k: int, graded: bool, use_er: bool,
-                     date_from, date_to, fee_per_side: float) -> None:
+                     date_from, date_to, fee_per_side: float, rebalance: int = 7) -> None:
     """Full rotation-portfolio view: KPIs vs equal-weight HODL, equity, allocation
     over time, current allocation, held-count."""
     st.markdown(_section_label(f"Rotation portfolio · top-{k} of {len(assets)} · "
-                               f"{'graded' if graded else 'binary'} sleeve"),
+                               f"{'graded' if graded else 'binary'} · rebalance {rebalance}d"),
                 unsafe_allow_html=True)
     try:
-        res, ew_bh = _run_rotation_cached(assets, bars, k, graded, use_er)
+        res, ew_bh = _run_rotation_cached(assets, bars, k, graded, use_er, rebalance)
     except Exception as e:  # noqa: BLE001
         st.error(f"Rotation failed: {e}"); return
 
@@ -1807,6 +1807,10 @@ def main() -> None:
                               help="How many strongest-signal assets to hold each day.")
             rot_graded = st.checkbox("Graded RSI sizing", value=True,
                                      help="Scale each position by RSI conviction (cuts drawdown).")
+            rot_rebalance = st.slider(
+                "Rebalance (dni)", min_value=1, max_value=21, value=7,
+                help="Kako pogosto rebalansiramo. Tedensko (7) je privzeto — nižji turnover in "
+                     "boljši net-of-fees rezultat kot dnevno (1), ki prekomerno tradá na RSI šumu.")
 
         with st.expander("Backtest window", expanded=True):
             _today  = datetime.date.today()
@@ -1865,7 +1869,7 @@ def main() -> None:
     # Rotation portfolio mode takes over the whole view when enabled.
     if rotation_on and len(rot_assets) >= 2:
         _render_rotation(tuple(rot_assets), bars, rot_k, rot_graded, use_er,
-                         date_from, date_to, fee_per_side)
+                         date_from, date_to, fee_per_side, rot_rebalance)
         if auto_refresh:
             st_autorefresh(interval=60_000, key="auto_refresh_tick_mom")
         return
