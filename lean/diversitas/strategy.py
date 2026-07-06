@@ -95,6 +95,15 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
     # Entry distance: must be > buf + extra
     df["dist_entry_ok"] = df["dist_pct"] >= (cfg.track_buf_pct + cfg.min_dist_entry_pct)
 
+    # Donchian breakout confirmation (optional; default OFF → factor is all-True).
+    if getattr(cfg, "use_donchian", False):
+        dc_hi = ind.highest(high, cfg.donchian_period)
+        dc_lo = ind.lowest(low, cfg.donchian_period)
+        pos_in_chan = (close - dc_lo) / (dc_hi - dc_lo).replace(0, np.nan)
+        df["donchian_ok"] = (pos_in_chan > cfg.donchian_top_frac).fillna(False)
+    else:
+        df["donchian_ok"] = True
+
     df["bull_condition"] = (
         df["above_tl"]
         & df["above_ma_med"]
@@ -103,6 +112,7 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
         & df["regime_ok"]
         & df["btc_filter_ok"]
         & df["er_ok"]
+        & df["donchian_ok"]
     ).fillna(False)
 
     df["trend_break"] = df["below_tl"]
