@@ -40,11 +40,24 @@ def test_at_most_k_held():
 
 def test_k_ge_n_holds_all_eligible():
     uni = _universe(3)
-    res = run_rotation(uni, k=10)          # k exceeds universe → hold all bullish
-    # on any day with ≥1 eligible asset, held_count == number eligible that day
+    res = run_rotation(uni, k=10, rebalance_every=1)   # daily → held reflects same-day eligibility
     S = res.strength
     elig = (S >= 1.0).sum(axis=1)
     assert (res.held_count == elig).all()
+
+
+def test_rebalance_reduces_turnover():
+    uni = _universe(5)
+    daily_r = run_rotation(uni, k=3, rebalance_every=1)
+    weekly_r = run_rotation(uni, k=3, rebalance_every=7)
+    to = lambda r: 0.5 * r.weights.diff().abs().sum(axis=1).sum()
+    assert to(weekly_r) < to(daily_r)                  # weekly churns less
+
+
+def test_rebalance_default_is_weekly():
+    uni = _universe(4)
+    assert np.allclose(run_rotation(uni, k=3).returns.values,
+                       run_rotation(uni, k=3, rebalance_every=7).returns.values)
 
 
 def test_no_lookahead_strength_is_lagged():

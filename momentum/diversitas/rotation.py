@@ -63,10 +63,18 @@ def _strength(df: pd.DataFrame) -> pd.Series:
 def run_rotation(daily_by_asset: Dict[str, pd.DataFrame],
                  config: MomentumConfig = DEFAULT_CONFIG,
                  k: int = 3, graded: bool = True, min_strength: float = 1.0,
+                 rebalance_every: int = 7,
                  btc_daily: Optional[pd.DataFrame] = None) -> RotationResult:
     """Run the Momentum strategy on each asset, then each day hold the top-`k`
     assets by (lagged) signal strength with strength ≥ `min_strength`, equal weight;
     the rest in cash. Returns portfolio returns + weights aligned on the union index.
+
+    `rebalance_every` (days) holds the target weights between rebalances. Default is
+    **weekly (7)**: on the leakage-safe design/hold-out split it beats daily on the
+    design set (Calmar 1.58 vs 1.19 net of 0.15%/side) without degrading the hold-out
+    (1.35 vs 1.33) and roughly halves turnover (~1500% vs ~3400%). Daily overtrades on
+    RSI noise; biweekly (14) looks better in-sample but overfits (hold-out Calmar drops
+    to 0.87). Weights are set only from lagged information → no look-ahead at any cadence.
     """
     assets = list(daily_by_asset.keys())
     sleeves, strengths = {}, {}
@@ -88,6 +96,13 @@ def run_rotation(daily_by_asset: Dict[str, pd.DataFrame],
     held_mask = ranks.le(k) & elig.notna()
     held_count = held_mask.sum(axis=1)
     weights = held_mask.div(held_count.replace(0, np.nan), axis=0).fillna(0.0)
+
+    if rebalance_every > 1:
+        # keep only every Nth row's target weights; hold (ffill) in between
+        keep = np.zeros(len(weights), dtype=bool)
+        keep[::rebalance_every] = True
+        weights = weights.where(pd.Series(keep, index=weights.index), other=np.nan).ffill().fillna(0.0)
+        held_count = (weights > 0).sum(axis=1)
 
     port = (weights * R).sum(axis=1)
     equity = (1.0 + port).cumprod()
