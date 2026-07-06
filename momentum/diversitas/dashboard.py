@@ -20,6 +20,7 @@ from streamlit_autorefresh import st_autorefresh
 from shared.data_source import fetch_candles, fetch_btc_daily, fetch_spx_daily
 from diversitas.config import MomentumConfig, DEFAULT_CONFIG
 from diversitas.strategy import run_strategy, build_summary, S_BULL, S_NEUTRAL, S_BEAR
+from diversitas.rotation import run_rotation
 
 
 TRADING_DAYS = 365
@@ -86,6 +87,17 @@ def _run_b(symbol: str, bars: int, use_er: bool):
     cfg   = MomentumConfig(use_btc_filter=False, use_er=use_er, trading_days=_td)
     daily = _load_candles(symbol, bars)
     return cfg, run_strategy(daily, config=cfg)
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _run_rotation_cached(assets: tuple, bars: int, k: int, graded: bool, use_er: bool):
+    cfg   = MomentumConfig(use_er=use_er)
+    daily = {a: _load_candles(a, bars) for a in assets}
+    res   = run_rotation(daily, config=cfg, k=k, graded=graded)
+    # equal-weight buy&hold of the same universe, as the honest benchmark
+    ew_bh = pd.concat([daily[a]["close"].pct_change().rename(a) for a in assets],
+                      axis=1).reindex(res.returns.index).fillna(0.0).mean(axis=1)
+    return res, ew_bh
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -1550,6 +1562,130 @@ def _render_gates_and_status(df: pd.DataFrame, s: dict, cfg: MomentumConfig,
 
 # ── main ──────────────────────────────────────────────────────────────────────
 
+def _render_rotation(assets: tuple, bars: int, k: int, graded: bool, use_er: bool,
+                     date_from, date_to, fee_per_side: float) -> None:
+    """Full rotation-portfolio view: KPIs vs equal-weight HODL, equity, allocation
+    over time, current allocation, held-count."""
+    st.markdown(_section_label(f"Rotation portfolio · top-{k} of {len(assets)} · "
+                               f"{'graded' if graded else 'binary'} sleeve"),
+                unsafe_allow_html=True)
+    try:
+        res, ew_bh = _run_rotation_cached(assets, bars, k, graded, use_er)
+    except Exception as e:  # noqa: BLE001
+        st.error(f"Rotation failed: {e}"); return
+
+    def _win(s):
+        if date_from is not None: s = s.loc[str(date_from):]
+        if date_to   is not None: s = s.loc[:str(date_to)]
+        return s
+    ret = _win(res.returns)
+    weights = _win(res.weights)
+    held = _win(res.held_count)
+    ew = _win(ew_bh).reindex(ret.index).fillna(0.0)
+    if len(ret) < 10:
+        st.warning("Not enough data in the selected window."); return
+
+    # fee on one-way turnover = 0.5·Σ|Δweight| (selling A + buying B is one round of
+    # trading half the summed change). Rotation rebalances to weights daily, so this
+    # is the honest cost — and the graded sleeve drifts daily, making turnover high.
+    turnover = 0.5 * weights.diff().abs().sum(axis=1).fillna(0.0)
+    ret_net = ret - turnover * (fee_per_side / 100.0)
+    ann_turnover = float(turnover.mean() * TRADING_DAYS)
+
+    m_rot = _stats(ret_net, td=TRADING_DAYS)
+    m_ew  = _stats(ew, td=TRADING_DAYS)
+    v_rot = float(m_rot["eq"].iloc[-1]) * 100
+    v_ew  = float(m_ew["eq"].iloc[-1]) * 100
+
+    # ── KPI cards ─────────────────────────────────────────────────────────────
+    def _kc(label, val, colour, sub="", tip=""):
+        return (f'<div style="flex:1;background:{COL_PANEL};border:1px solid {COL_BORDER};'
+                f'border-radius:4px;padding:16px 10px;text-align:center;min-width:130px;cursor:help"'
+                f' title="{tip}"><div style="color:{COL_DIM};font-size:9px;text-transform:uppercase;'
+                f'letter-spacing:1.2px;margin-bottom:8px">{label}</div>'
+                f'<div style="color:{colour};font-size:24px;font-weight:700;font-family:monospace;'
+                f'line-height:1.1">{val}</div>{sub}</div>')
+
+    def _bh(v): return (f'<div style="margin-top:5px;font-size:11px;font-family:monospace">'
+                        f'<span style="color:{COL_DIM}">EW-HODL </span>'
+                        f'<span style="color:{COL_DIM}">{v}</span></div>')
+    cards = [
+        _kc("Vrednost 100", f"{v_rot:,.0f}", _val_col(m_rot["cagr"]), _bh(f"{v_ew:,.0f}"),
+            "Končna vrednost 100 enot v rotacijski portfelj vs equal-weight HODL istega univerzuma."),
+        _kc("CAGR", _fmt_pct(m_rot["cagr"]), _val_col(m_rot["cagr"]), _bh(_fmt_pct(m_ew["cagr"])),
+            "Letna geometrična rast."),
+        _kc("Sharpe", _fmt_ratio(m_rot["sharpe"]), _val_col(m_rot["sharpe"]), _bh(_fmt_ratio(m_ew["sharpe"])),
+            "Donos / volatilnost."),
+        _kc("Sortino", _fmt_ratio(m_rot["sortino"]), _val_col(m_rot["sortino"]), _bh(_fmt_ratio(m_ew["sortino"])),
+            "Donos / downside volatilnost."),
+        _kc("Max DD", _fmt_pct(m_rot["max_dd"]), _val_col(m_rot["max_dd"], positive_good=False),
+            _bh(_fmt_pct(m_ew["max_dd"])), "Največji padec od vrha."),
+        _kc("Calmar", _fmt_ratio(m_rot["calmar"]), _val_col(m_rot["calmar"]), _bh(_fmt_ratio(m_ew["calmar"])),
+            "CAGR / |Max DD|."),
+        _kc("Avg drži", f"{held.mean():.1f}/{k}", COL_BLUE, "",
+            "Povprečno število hkrati držanih assetov (ostalo cash)."),
+        _kc("Turnover", f"{ann_turnover*100:,.0f}%", COL_NEUTRAL if ann_turnover < 8 else COL_BEAR, "",
+            "Letni one-way turnover. Rotacija dnevno rebalansira → visok turnover = občutljiva na "
+            "fees. Vse metrike so NETO po fee+slippage na turnover."),
+    ]
+    st.markdown(f'<div style="display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 14px 0">'
+                f'{"".join(cards)}</div>', unsafe_allow_html=True)
+
+    # ── equity: rotation vs equal-weight HODL ─────────────────────────────────
+    st.markdown(_section_label("Equity · rotacija vs equal-weight HODL"), unsafe_allow_html=True)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=m_rot["eq"].index, y=m_rot["eq"].values * 100, name="Rotation",
+                             line=dict(color=COL_BULL, width=2)))
+    fig.add_trace(go.Scatter(x=m_ew["eq"].index, y=m_ew["eq"].values * 100, name="Equal-weight HODL",
+                             line=dict(color=COL_DIM, width=1.5, dash="dot")))
+    _chart_layout(fig, height=380)
+    fig.update_yaxes(gridcolor=COL_GRID, tickfont=dict(color=COL_DIM, size=10), side="right",
+                     title_text="Vrednost 100", title_font=dict(color=COL_DIM, size=10))
+    st.plotly_chart(fig, use_container_width=True, key="rot_equity")
+
+    # ── allocation over time (stacked) ────────────────────────────────────────
+    st.markdown(_section_label("Alokacija skozi čas (delež po assetu)"), unsafe_allow_html=True)
+    fa = go.Figure()
+    _palette = ["#089981", "#2962ff", "#f59e0b", "#ef4444", "#a855f7",
+                "#14b8a6", "#eab308", "#ec4899"]
+    for i, a in enumerate(assets):
+        if a in weights.columns:
+            fa.add_trace(go.Scatter(x=weights.index, y=weights[a].values * 100, name=a,
+                                    mode="lines", stackgroup="w", line=dict(width=0.5,
+                                    color=_palette[i % len(_palette)])))
+    _chart_layout(fa, height=300)
+    fa.update_yaxes(gridcolor=COL_GRID, tickfont=dict(color=COL_DIM, size=10), side="right",
+                    title_text="Delež %", range=[0, 100])
+    st.plotly_chart(fa, use_container_width=True, key="rot_alloc")
+
+    # ── current allocation ────────────────────────────────────────────────────
+    last_w = weights.iloc[-1]
+    held_now = last_w[last_w > 0].sort_values(ascending=False)
+    st.markdown(_section_label(f"Trenutna alokacija · {weights.index[-1]:%Y-%m-%d}"),
+                unsafe_allow_html=True)
+    if len(held_now):
+        bars_html = ""
+        for a, w in held_now.items():
+            bars_html += (f'<div style="display:flex;align-items:center;gap:10px;margin:6px 0">'
+                          f'<div style="width:60px;font-family:monospace;color:{COL_TEXT};'
+                          f'font-size:13px">{a}</div>'
+                          f'<div style="flex:1;background:{COL_PANEL};border-radius:4px;height:26px;'
+                          f'position:relative"><div style="width:{w*100:.0f}%;background:{COL_BULL};'
+                          f'height:100%;border-radius:4px;display:flex;align-items:center;padding-left:8px;'
+                          f'font-family:monospace;font-size:12px;font-weight:700;color:#fff">'
+                          f'{w*100:.0f}%</div></div></div>')
+        st.markdown(bars_html, unsafe_allow_html=True)
+    else:
+        st.markdown(f'<div style="color:{COL_NEUTRAL};font-family:monospace;padding:12px;'
+                    f'background:{COL_PANEL};border-radius:4px">100% CASH — noben asset ni dovolj '
+                    f'močan danes.</div>', unsafe_allow_html=True)
+
+    st.markdown(f'<div style="color:{COL_VERY_DIM};font-size:10px;margin-top:12px;'
+                f'font-family:monospace;text-align:right">Rotacija · graded Momentum sleeve · '
+                f'fee+slip {fee_per_side:.2f}%/side na turnover · validirana izboljšava</div>',
+                unsafe_allow_html=True)
+
+
 def main() -> None:
     st.set_page_config(
         page_title="Diversitas Momentum",
@@ -1657,6 +1793,21 @@ def main() -> None:
             else:
                 w_a, w_b = 100, 0
 
+        with st.expander("🔄 Rotation portfolio", expanded=False):
+            rotation_on = st.checkbox(
+                "Enable rotation mode", value=False,
+                help="Each day hold the K strongest-signal assets (graded Momentum sleeve), "
+                     "rest in cash. The validated portfolio improvement — adapts across regimes.")
+            _all_assets = list(DEFAULT_CONFIG.symbol_map.keys())
+            _rot_default = [a for a in ["BTC", "ETH", "SOL", "AVAX", "LINK", "XRP", "BNB", "ADA"]
+                            if a in _all_assets]
+            rot_assets = st.multiselect("Universe", _all_assets, default=_rot_default,
+                                        help="Assets to rotate across (≥2).")
+            rot_k = st.slider("Hold top-K", min_value=1, max_value=6, value=3,
+                              help="How many strongest-signal assets to hold each day.")
+            rot_graded = st.checkbox("Graded RSI sizing", value=True,
+                                     help="Scale each position by RSI conviction (cuts drawdown).")
+
         with st.expander("Backtest window", expanded=True):
             _today  = datetime.date.today()
             _period = st.selectbox(
@@ -1710,6 +1861,14 @@ def main() -> None:
         bars  = max(600, ((_days // 100) + 1) * 100)
     else:
         bars = 2000
+
+    # Rotation portfolio mode takes over the whole view when enabled.
+    if rotation_on and len(rot_assets) >= 2:
+        _render_rotation(tuple(rot_assets), bars, rot_k, rot_graded, use_er,
+                         date_from, date_to, fee_per_side)
+        if auto_refresh:
+            st_autorefresh(interval=60_000, key="auto_refresh_tick_mom")
+        return
 
     td = 252 if symbol in STOCK_SYMBOLS else TRADING_DAYS
 
