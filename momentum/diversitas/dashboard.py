@@ -375,7 +375,22 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
     _dmdd,     _dmdd_c     = _delta(strat["max_dd"],  bh["max_dd"],  is_pct=True,  positive_good=False)
     _dcalmar,  _dcalmar_c  = _delta(strat["calmar"],  bh["calmar"],  is_pct=False, positive_good=True)
 
+    # Value of 100 units invested at the start of the window (compounded) — strategy vs B&H vs SPX
+    _v_strat = float(strat["eq"].iloc[-1]) * 100 if len(strat["eq"]) else 100.0
+    _v_bh    = float(bh["eq"].iloc[-1]) * 100 if len(bh["eq"]) else 100.0
+    _v_spx   = (float(_s["eq"].iloc[-1]) * 100
+                if _s.get("eq") is not None and len(_s["eq"]) else None)
+    _v_mult  = (_v_strat / _v_bh) if _v_bh > 1e-9 else None
+    _v_delta = (f"{_v_mult:.2f}×", COL_BULL if _v_strat >= _v_bh else COL_BEAR) if _v_mult else ("", "")
+
     row1 = [
+        _card("Vrednost 100", f"{_v_strat:,.0f}", _val_col(strat["cagr"]),
+              f"{_v_bh:,.0f}", _val_col(bh["cagr"]),
+              f"{_v_spx:,.0f}" if _v_spx else "",
+              "Končna vrednost 100 enot, vloženih na začetku obdobja, z reinvestiranjem donosa "
+              "(compounding) — za strategijo, v primerjavi z Buy & Hold in S&P 500. Npr. 340 pomeni "
+              "da bi 100 enot naraslo na 340. Delta (×) je večkratnik strategije glede na B&H.",
+              delta_str=_v_delta[0], delta_col=_v_delta[1]),
         _card("CAGR", _fmt_pct(strat["cagr"]), _val_col(strat["cagr"]),
               _fmt_pct(bh["cagr"]), _val_col(bh["cagr"]),
               _fmt_pct(_s.get("cagr")) if _s else "",
