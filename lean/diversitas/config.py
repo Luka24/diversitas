@@ -43,6 +43,13 @@ class LeanConfig:
     er_len: int = 10          # lookback bars
     er_thresh: float = 0.30   # below this = chop, entry blocked
 
+    # Donchian breakout confirmation (validated improvement; OFF by default so the
+    # a-priori Lean is unchanged). When ON, entry also requires the close to sit in
+    # the top quartile of the `donchian_period`-day high/low channel.
+    use_donchian: bool = False
+    donchian_period: int = 55
+    donchian_top_frac: float = 0.75
+
     # Optional cross-asset filter — OFF by default in Lean
     use_btc_filter: bool = False
 
