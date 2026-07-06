@@ -30,20 +30,27 @@ napredne tehnike + walk-forward optimizacija + root-cause diagnoza).
 **znižala** živo performanso. "Optimizirali smo in namerno nič spremenili" je najmočnejši
 anti-overfitting dokaz za sodelavca.
 
-### B) DODAJ cross-sectional rotacijo (top-3) — glavna izboljšava *(Med kompleksnost)*
-Namesto da tržiš vse assete enako, vsak dan drži 3 najmočnejše po signalu (graded-momentum
-sleeve). **Design Calmar 1.49 vs equal-weight 1.07 (+40%), bear hold-out +0.73 vs −0.03.**
-To je edina sprememba ki pomaga v obeh režimih (bull design + bear hold-out) — ker se
-*adaptira* čez assete, ne fiksira parametrov.
+### B) DODAJ cross-sectional rotacijo (top-3, tedenski rebalans) — glavna izboljšava *(Med)*
+Namesto da tržiš vse assete enako, drži 3 najmočnejše po signalu (graded-momentum sleeve),
+rebalansiraj tedensko. **Poštena slika (kalibrirano, ne napihnjeno):**
+- Prednost je **kontrola drawdowna + bear robustnost**, NE premagovanje diverzificiranega
+  holda v vsakem oknu. Full-period design Calmar ≈1.58 vs equal-weight ≈1.07, bear hold-out
+  Sortino ~1.8 vs ~0, max drawdown ~prepolovljen. **A izgubi nekaj mirnih bull oken** (koncentrira
+  se / gre v cash, zamudi široke rallyje) — zmaga ~2/5 design oken po Sortinu.
+- **Turnover je visok in fee-občutljiv:** ~1500%/leto (tedensko; dnevno je bilo ~3400%).
+  Vse številke NETO po fees; rabi poceni izvedbo.
+- Pozicioniraj kot **risk-controlled portfelj**, ne univerzalni zmagovalec.
+- Implementirano: `momentum/diversitas/rotation.py` (+ CLI, dashboard način, live signal export).
 
 ### C) DODAJ regime-switch (Lean↔Momentum) kot bear zavarovanje *(Med, opcijsko)*
 Detektor (BTC vs 200-MA ali vol režim), lagged 1 dan: bull → Momentum, bear → Lean.
 Izboljša bear hold-out (Calmar −0.2 → +0.03…+0.17) za majhno ceno v bull. Vklopi če je
 zaščita pred padci prioriteta.
 
-### D) LEAN sleeve: dodaj Donchian-55 breakout confirmation *(Low)*
-Edini signal-level tweak ki preživi čisto validacijo z **monotonim** odzivom (period 20/34/55
-→ +0.27/+0.38/+0.52 validation Calmar). Nizka kompleksnost (en kanal).
+### D) LEAN sleeve: Donchian-55 breakout confirmation — OPCIJSKO, marginalno *(Low)*
+Na validacijskem *slicu* je kazal +0.52 Calmar (monoton odziv 20/34/55), a na **poolani
+leakage-safe evalvaciji je učinek marginalen** (+0.02 design, 0.00 hold-out). Implementiran
+za config flagom (default OFF — a-priori Lean nespremenjen). Vključi le če hočeš, ni jasen win.
 
 ### E) NE dodajaj: Kelly sizing, weekend-skip (momentum), SuperTrend, meta-labeling,
 HRP, macro/on-chain pipe-i. Vsi testirani, nobeden ne preživi (variance-only ali škodljivi).
@@ -87,9 +94,12 @@ HRP, macro/on-chain pipe-i. Vsi testirani, nobeden ne preživi (variance-only al
 > "Obstoječih parametrov ne moremo zanesljivo bolje nastaviti — dokazali smo, da so optimalni
 > parametri nestacionarni (BTC režim se je spremenil), zato vsak tuning propade out-of-sample.
 > Zato ohranjamo robustne defaults. Vrednost dodamo **strukturno**: cross-sectional rotacija
-> (drži najmočnejše assete) je edina sprememba ki robustno pomaga v bull IN bear — ker se
-> adaptira čez režime namesto da fiksira parametre. To je tudi točno kar profesionalna
-> literatura priporoča za nestacionarne trge (regime-adaptacija, ne parameter-optimizacija)."
+> (drži najmočnejše assete). Poštено: njena prednost je **kontrola drawdowna in bear robustnost**
+> (design Calmar 1.58 vs 1.07, bear hold-out močan, DD ~prepolovljen), NE premagovanje
+> diverzificiranega holda v vsakem oknu — v mirnih bull obdobjih včasih zaostane. Turnover je
+> visok (~1500%/leto), zato rabi poceni izvedbo. To je regime-adaptacija (kar literatura
+> priporoča za nestacionarne trge), ne parameter-optimizacija — in jo pozicioniramo kot
+> risk-controlled portfelj, ne univerzalni zmagovalec."
 
 ---
 

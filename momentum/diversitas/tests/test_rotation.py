@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from diversitas.config import MomentumConfig
-from diversitas.rotation import run_rotation, _strength, _sleeve_returns
+from diversitas.rotation import run_rotation, current_allocation, _strength, _sleeve_returns
 from diversitas.strategy import run_strategy
 
 
@@ -76,6 +76,17 @@ def test_future_change_does_not_affect_past_weights():
     res_b = run_rotation(uni2, k=2)
     # weights before the last bar unchanged
     assert np.allclose(res_a.weights.iloc[:-1].values, res_b.weights.iloc[:-1].values)
+
+
+def test_current_allocation_is_valid():
+    sig = current_allocation(_universe(5), k=3)
+    alloc = sig["allocation"]
+    assert "CASH" in alloc
+    assert all(w >= -1e-9 for w in alloc.values())          # no negative weights
+    assert abs(sum(alloc.values()) - 1.0) < 1e-6            # sums to 1 (incl cash)
+    assert len(sig["held"]) <= 3                            # at most k held
+    # invested fraction never exceeds 1 (cash absorbs the rest)
+    assert sum(w for a, w in alloc.items() if a != "CASH") <= 1.0 + 1e-9
 
 
 def test_graded_reduces_or_equals_exposure():
