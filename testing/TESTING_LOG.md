@@ -219,3 +219,13 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - **Optimum drifta v agresijo** (kratek trackline, tesen buffer, visok vol-target) ki zmaga in-sample a propade forward — učbeniški overfit signature.
 - **Zaključek: tudi z najstrožjim profesionalnim WFO originalne parametre ni mogoče zanesljivo premagati.** Defaults so na robustnem platoju.
 - 4 novi unit testi (plateau_select, folds). Poročilo: `testing/reports/wfo_report.md`.
+
+## 2026-07-06 — Root-cause: ZAKAJ optimizacija ne premaga defaults ✅
+
+- `run_wfo_diagnosis.py`: za vsak fold skenira grid na train IN na OOS, primerja argmax + regime stats.
+- **H2 (distribution shift) POTRJEN:** train-best track_period == OOS-best le **1/5**. Train VEDNO reče TP=30 (dominira ga eksplozivni 2017-2021 bull), a OOS-optimal variira 25→55. Kar je bilo najboljše na preteklosti NI najboljše na naslednjem oknu.
+- **H1 (regime) je mehanizem:** train okna = ogromen bull (+271% do +786%, vol 67-76%); OOS bloki = tamer (+30-80%, vol 38-56%). Param nastavljen na divje bull nihanje je mis-sized za mirnejši ETF-era režim.
+- **Regret povprečno 1.24 Sortino točk** (2024-07: best-possible 3.76 vs realized 0.98!) — boljši config JE obstajal a le vidno PO testu = hindsight.
+- **Zakaj defaults zmagajo:** so kompromis ki ni nikoli per-period optimum a nikoli daleč — robusten sredina platoja čez režime.
+- **Zaključek:** optimalni parametri so NESTACIONARNI (BTC režim se spremenil), zato train-optimal je sistematično napačen za naslednje obdobje. Vrednost dodaš z regime-switch / rotacijo (adaptirata čez režime), ne s finejšim tuningom.
+- Poročilo: `testing/reports/wfo_diagnosis_report.md`.
