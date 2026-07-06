@@ -388,6 +388,66 @@ def tsmom_sizing(asset: str, variant_name: str, lookback: int = 90, floor: float
     return base * size.shift(1).fillna(1.0)
 
 
+def hmm_regime_switch(asset: str, n_states: int = 2) -> pd.Series:
+    """D3: fit a Markov-switching model on BTC returns (train only), infer the
+    smoothed high-mean state forward, and switch Momentum↔Lean by it."""
+    import statsmodels.api as sm
+    rl, _, _ = variant(asset, "lean")
+    rm, _, _ = variant(asset, "momentum")
+    btc = dataio.load_btc(split="all")["close"]
+    ret = np.log(btc / btc.shift(1)).dropna()
+    train = ret[ret.index <= pd.Timestamp("2023-06-30", tz="UTC")]
+    try:
+        mod = sm.tsa.MarkovRegression(train.values, k_regimes=n_states, switching_variance=True)
+        res = mod.fit(disp=False)
+        full = sm.tsa.MarkovRegression(ret.values, k_regimes=n_states, switching_variance=True)
+        sm_prob = full.smooth(res.params).smoothed_marginal_probabilities
+        hi = int(np.argmax(res.params[:n_states]))            # highest-mean regime
+        risk_on = pd.Series(sm_prob[:, hi] > 0.5, index=ret.index)
+    except Exception:
+        risk_on = pd.Series(True, index=ret.index)
+    det = risk_on.shift(1).fillna(False)
+    al = pd.concat([rl.rename("l"), rm.rename("m")], axis=1).fillna(0.0)
+    d = det.reindex(al.index).fillna(False)
+    return pd.Series(np.where(d.values, al["m"].values, al["l"].values), index=al.index)
+
+
+def ensemble_vote(asset: str, mode: str = "vote") -> pd.Series:
+    """D4: combine Lean, Momentum, Donchian-55, TSMOM-120 into one position by
+    majority vote (size = fraction of signals that are BULL) or unanimous."""
+    _, dl, sbl = variant(asset, "lean")
+    _, dm, sbm = variant(asset, "momentum")
+    ret = asset_returns(asset)
+    daily = dataio.load(asset, split="all")
+    lb = (dl["signal_state"].shift(1) == sbl).reindex(ret.index).fillna(False).astype(float)
+    mb = (dm["signal_state"].shift(1) == sbm).reindex(ret.index).fillna(False).astype(float)
+    hi = daily["high"].rolling(55).max(); lo = daily["low"].rolling(55).min()
+    don = (((daily["close"] - lo) / (hi - lo).replace(0, np.nan)) > 0.75).reindex(ret.index).fillna(False).astype(float)
+    ts = ((daily["close"] / daily["close"].shift(120) - 1) > 0).reindex(ret.index).fillna(False).astype(float)
+    votes = (lb + mb + don + ts) / 4.0
+    if mode == "unanimous":
+        size = (votes >= 0.99).astype(float)
+    elif mode == "majority":
+        size = (votes >= 0.5).astype(float)
+    else:                                    # graded by vote fraction
+        size = votes
+    return ret * size.shift(1).fillna(0.0)
+
+
+def leadlag(asset: str, variant_name: str = "momentum", lag: int = 1) -> pd.Series:
+    """D5: gate altcoin entries by BTC's trend state lagged `lag` days
+    (BTC leads alts). No effect on BTC itself."""
+    daily, btc = _daily_btc(asset)
+    df = engine.run(variant_name, daily, btc=btc)
+    sb = engine.s_bull(variant_name)
+    base = engine.strat_returns(df, s_bull_code=sb)
+    if asset == "BTC":
+        return base
+    btc_c = dataio.load_btc(split="all")["close"]
+    btc_bull = (btc_c > ind.sma(btc_c, 100)).shift(lag).reindex(df.index).fillna(True)
+    return base * btc_bull.astype(float).shift(1).fillna(1.0)
+
+
 def donchian_filter(asset: str, variant_name: str, period: int = 55) -> pd.Series:
     """Donchian breakout confirmation: only enter when close is within the top
     band of its `period`-day range (classic turtle trend filter), ANDed onto entry."""

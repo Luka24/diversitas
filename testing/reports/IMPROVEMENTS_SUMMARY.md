@@ -68,6 +68,23 @@ the crypto backtesting literature (`coverage_and_methodology.md`, sources therei
   favours Lean and defensive overlays. Rotation is the one change that helped in
   both — which is why it is the headline recommendation.
 
+## Advanced techniques (Part D) — tested, none displaces rotation
+
+Web research pointed to ML/portfolio methods beyond rule tweaks; all tested under the
+leakage-safe split (meta-labeling with **purged K-fold CV**):
+
+| Technique | Result vs baseline | Verdict |
+|---|---|---|
+| **Meta-labeling** (triple-barrier + ML sizing) | de-risks weak signals → lower bull Calmar; one config val 1.61 but hold-out −0.37 (overfit) | SKIP as return-booster; possible drawdown tool |
+| **Hierarchical Risk Parity** | val 2.51 ≈ rotation 2.48 but hold-out −0.34 vs +0.64 | SKIP (doesn't beat rotation) |
+| **HMM regime (2/3-state)** | 2-state ≈ baseline; 3-state defensive | SKIP (defensive only) |
+| **Ensemble / stacking** | majority val 1.54 ≈ baseline, hold-out +0.01 | SKIP (marginal) |
+| **Cross-asset lead-lag** | val ≤ baseline | SKIP |
+
+**Takeaway:** the sophisticated techniques do **not** beat the simple structural edge
+(rotation). Meta-labeling is a *drawdown-reduction* lever, not a return booster, on this
+universe. Details: `advanced_report.md`.
+
 ## Report index
 - `coverage_and_methodology.md` — every Q&A idea + parameters + overfitting protocol
 - `feature_matrix_results.md` — 185 configs, each parameter value, design + hold-out
