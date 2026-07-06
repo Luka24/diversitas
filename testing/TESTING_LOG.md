@@ -198,3 +198,14 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - **Zaključek: eksterni pipe-i so obrambni context filtri z majhnim učinkom** — konsistentno z doc-ovim pričakovanjem — NISO med izboljšavami vrednimi dodajanja.
 - **Coverage complete:** vse iz Q&A dokumenta testabilno na free podatkih je zdaj testirano. Ostaja le MVRV (plačljivo).
 - Poročilo: `testing/reports/external_report.md`.
+
+## 2026-07-06 — Napredne tehnike (Part D): meta-labeling, HRP, HMM, ensemble, lead-lag ✅
+
+- Spletna raziskava → ML/portfolio tehnike onkraj rule-tweakov. `ml.py` (triple-barrier + Purged K-Fold CV), `portfolio.py` (HRP), D3-D5 v improvements.py. Vse pod leakage-safe 3-way split.
+- **D1 Meta-labeling:** sekundarni model zmanjša exposure (filtrira šibke signale) → nižji bull Calmar. NE premaga baseline. **Poučen overfit:** lean_logit_thr0.5 val 1.61 a holdout -0.37 — val-lucky config, purged CV sam ne zadošča ker še vedno selektiramo threshold na validation.
+- **D2 HRP:** val 2.51 ≈ rotation 2.48 a holdout -0.34 vs +0.64 → NE premaga rotacije (skladno z literaturo).
+- **D3 HMM (2/3-state):** 2-state ≈ baseline, 3-state obrambno.
+- **D4 Ensemble majority:** val 1.54 ≈ baseline, holdout +0.01 (marginalno).
+- **D5 Lead-lag:** ≤ baseline.
+- **Zaključek: nobena napredna tehnika ne izpodrine rotacije.** Meta-labeling = drawdown-reduction vzvod, ne return-booster.
+- 6 novih unit testov (triple-barrier, PurgedKFold, HRP). Poročilo: `advanced_report.md`; summary posodobljen.
