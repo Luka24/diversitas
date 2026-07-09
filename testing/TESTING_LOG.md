@@ -239,3 +239,15 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - **Profesionalne rešitve za "en del cikla":** (1) rolling okna [demonstrirano], (2) CPCV [imamo PBO], (3) regime-switching [Part D/A], (4) test čez ≥1 boom-bust cikel, (5) parameter/model ensembli.
 - **Zaključek: durable edge = adaptacija čez režime (rotacija/regime-switch), NE finejši tuning parametrov.**
 - Poročilo: `testing/reports/wfo_rolling_report.md`.
+
+## 2026-07-10 — Aggressive-tier tuning (reviewer's 3 predlogi) ✅
+
+- `run_aggressive_tuning.py`: testira 3 vzvode za več upside/exposure (wider trail, faster re-entry, higher bear-cut), pooled 5 core assetov, leakage-safe (design + hold-out).
+- **Baseline:** design CAGR 39%, exp 19%, MaxDD -38%, Sortino 1.83; hold-out CAGR -11%.
+- **1) Wider trail (→18): ✓ modest win** — exp 19→22%, MaxDD nespremenjen, hold-out -11%→-5%. 12% je bil res malo pretesen.
+- **2) Faster re-entry (→2): ✓ najboljši vzvod** — CAGR 39→41%, Calmar 1.02→1.19, MaxDD isti, hold-out boljši.
+- **3) Higher bear-cut (60/70/80): ✗ BACKFIRE** — Calmar pade (1.02→0.87), bear hold-out slabši (-11%→-14%). DD kontrola PRIHAJA iz bear-cuta; rahljanje jo uniči. Premisa "DD je kontroliran, lahko si privoščimo več bear exposure" je obrnjena.
+- **RECOMMENDED (trail18/reentry2/bear50):** design CAGR 40%, exp 22%, MaxDD -38%, Calmar 1.08, hold-out -5% — čist hold-out-potrjen win, dominira AGGRESSIVE (bear70) ki ima MaxDD -42%.
+- Pošteno: dobiček je inkrementalen (exp 19→22%), ne transformativen. Za dramatično večji exposure je treba rahljati ENTRY logiko, ne le exit/sizing.
+- **Pine-parity caveat:** privzeti trail=12/reentry=4 sta iz Pine; sprememba defaults bi razšla Python od Pine → glej priporočilo.
+- Poročilo: `testing/reports/aggressive_tuning_report.md`.
