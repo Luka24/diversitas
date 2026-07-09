@@ -1,0 +1,256 @@
+//@version=6
+indicator("Diversitas Momentum", shorttitle="DIV-MOM", overlay=true, max_bars_back=5000, max_labels_count=100, max_lines_count=50)
+
+// ============================================================================
+// DIVERSITAS MOMENTUM — AGGRESSIVE VARIANT
+//
+// A deliberately faster, more active sibling to Diversitas. Where the core
+// product is "slow to enter, drawdown-averse, ~12 trades over 3 years," this
+// one targets SHORT UPTRENDS and accepts more trades, more whipsaws, and more
+// drawdown as the price of catching moves the conservative model skips.
+//
+// Key differences from conservative Diversitas:
+//   - Faster trackline (35 vs 75) — reacts in weeks, not months
+//   - 1-bar confirmation, short re-entry lock — re-engages quickly
+//   - 200MA is a SOFT context (cuts size) not a hard block — so it can ride
+//     bear-market rallies at reduced size instead of sitting them out
+//   - Trailing stop — locks gains on short moves
+//   - Vol-targeted sizing still applies (aggression != recklessness)
+//
+// NOTE: this WILL trade more and draw down more than the core product.
+// That is the point — it is the high-octane tier, not a replacement.
+// ============================================================================
+
+// === TRACKLINE (fast) ===
+trackPeriod = input.int(35, "Trackline Period", minval=15, maxval=80, group="Core")
+trackBuf = input.float(2.0, "Trackline Buffer %", minval=0.0, maxval=5.0, step=0.25, group="Core")
+trackSlopeBars = input.int(7, "Trackline Slope Lookback", minval=1, maxval=20, group="Core")
+
+// === MOVING AVERAGES ===
+maFastLen = input.int(20, "Trend MA (fast)", minval=10, maxval=60, group="Moving Averages")
+maRegLen = input.int(100, "Regime MA", minval=50, maxval=250, group="Moving Averages")
+maSlope = input.int(5, "Regime MA Slope Lookback", minval=1, maxval=20, group="Moving Averages")
+bearSizeCut = input.float(50.0, "Bear-Regime Size %", minval=0.0, maxval=100.0, step=10.0, group="Moving Averages", tooltip="Position size when below a falling regime MA. 0 = block entirely (like the core product). 50 = half size — rides bear rallies with reduced risk.")
+
+// === MOMENTUM ===
+rsiLen = input.int(14, "RSI Length", group="Momentum")
+emaSlowLen = input.int(55, "Slow EMA", group="Momentum")
+useER = input.bool(true, "Use Efficiency Ratio Filter", group="Momentum")
+erLen = input.int(10, "Efficiency Ratio Length", group="Momentum")
+erThresh = input.float(0.25, "Efficiency Ratio Threshold", minval=0.1, maxval=0.6, step=0.05, group="Momentum")
+
+// === EXITS ===
+useTrail = input.bool(true, "Trailing Stop", group="Exits", tooltip="Locks gains on short moves. Exit if price falls this % from the highest close since entry.")
+trailPct = input.float(12.0, "Trailing Stop %", minval=5.0, maxval=25.0, step=1.0, group="Exits")
+blowoffDist = input.float(20.0, "Blow-off Distance %", minval=10.0, maxval=40.0, step=1.0, group="Exits")
+volShockMul = input.float(1.5, "Vol Shock Multiplier", minval=1.2, maxval=3.0, step=0.1, group="Exits")
+volLookback = input.int(20, "Vol Lookback Days", minval=5, maxval=60, group="Exits")
+
+// === ANTI-CHURN (loosened) ===
+confirmBars = input.int(1, "Confirmation Bars", minval=1, maxval=5, group="Anti-Churn")
+reentryHold = input.int(4, "Re-entry Hold Lock", minval=1, maxval=20, group="Anti-Churn")
+exitGraceBars = input.int(1, "Exit Grace", minval=1, maxval=5, group="Anti-Churn")
+
+// === SIZING ===
+useVolSizing = input.bool(true, "Volatility-Targeted Sizing", group="Sizing")
+targetVol = input.float(60.0, "Target Vol %", minval=20.0, maxval=120.0, step=5.0, group="Sizing")
+
+// === DISPLAY ===
+showDots = input.bool(true, "Show Dots", group="Display")
+showBG = input.bool(true, "Show Background", group="Display")
+showLabels = input.bool(true, "Show Labels", group="Display")
+
+// ============================================================================
+// INDICATORS
+// ============================================================================
+
+trackHigh = ta.highest(high, trackPeriod)
+trackLow = ta.lowest(low, trackPeriod)
+trackline = (trackHigh + trackLow) / 2.0
+trackRising = trackline > trackline[1]
+trackRisingWindow = trackline > trackline[trackSlopeBars]
+bufAmt = trackline * (trackBuf / 100.0)
+aboveTL = close > (trackline + bufAmt)
+belowTL = close < (trackline - bufAmt)
+distPct = (close - trackline) / trackline * 100
+
+maFast = ta.sma(close, maFastLen)
+maReg = ta.sma(close, maRegLen)
+maRegFalling = maReg < maReg[maSlope]
+aboveMaReg = close > maReg
+bearRegime = not aboveMaReg and maRegFalling
+
+rsiVal = ta.rsi(close, rsiLen)
+sEMA = ta.ema(close, emaSlowLen)
+momentumOK = rsiVal > 50 and close > sEMA
+
+// Efficiency ratio
+erChange = math.abs(close - close[erLen])
+erVol = math.sum(math.abs(close - close[1]), erLen)
+er = erVol > 0 ? erChange / erVol : 0.0
+erOK = not useER or er > erThresh
+
+// Volatility
+logRet = math.log(close / close[1])
+dailyStd = ta.stdev(logRet, volLookback)
+annualVol = dailyStd * math.sqrt(365) * 100
+
+// ============================================================================
+// ENTRY — aggressive: fast trackline + momentum + rising trackline + ER
+//   Bear regime does NOT block (only cuts size), unless bearSizeCut = 0
+// ============================================================================
+
+regimeBlocks = bearRegime and bearSizeCut <= 0.0
+bullCondition = aboveTL and close > maFast and momentumOK and trackRisingWindow and erOK and not regimeBlocks
+
+// ============================================================================
+// EXITS — fast, with trailing stop to lock short-move gains
+// ============================================================================
+
+var float entryPeak = na
+trendBreak = belowTL
+blowoff = distPct > blowoffDist and rsiVal > 80
+volShock = annualVol > ta.sma(annualVol, 50) * volShockMul and belowTL
+
+// ============================================================================
+// STATE MACHINE
+// ============================================================================
+
+greenDot = bullCondition
+redDot = belowTL
+
+var int signalState = 3
+var int barsSinceSignal = 999
+var int belowCount = 0
+var int bullHoldCount = 0
+barsSinceSignal := barsSinceSignal + 1
+
+if belowTL
+    belowCount := belowCount + 1
+else
+    belowCount := 0
+if bullCondition
+    bullHoldCount := bullHoldCount + 1
+else
+    bullHoldCount := 0
+
+// Track peak since entry for trailing stop
+if signalState == 1
+    entryPeak := na(entryPeak) ? close : math.max(entryPeak, close)
+else
+    entryPeak := na
+
+trailStop = na(entryPeak) ? na : entryPeak * (1 - trailPct / 100.0)
+trailExit = useTrail and signalState == 1 and not na(trailStop) and close < trailStop
+
+// BEAR exits — immediate
+if signalState == 1
+    if trendBreak and belowCount >= exitGraceBars
+        signalState := 3
+        barsSinceSignal := 0
+    else if trailExit
+        signalState := 3
+        barsSinceSignal := 0
+    else if blowoff
+        signalState := 3
+        barsSinceSignal := 0
+    else if volShock
+        signalState := 3
+        barsSinceSignal := 0
+
+// BULL entry
+if signalState == 3
+    if bullCondition and bullHoldCount >= confirmBars and barsSinceSignal >= reentryHold
+        signalState := 1
+        barsSinceSignal := 0
+
+var int prevSignal = 3
+signalChanged = signalState != prevSignal
+prevSignal := signalState
+
+var int displayState = 3
+if belowTL and belowCount >= exitGraceBars
+    displayState := 3
+else if aboveTL and bullCondition
+    displayState := 1
+else if aboveTL and not bullCondition
+    displayState := 2
+
+// ============================================================================
+// SIZING — vol target, reduced in bear regime
+// ============================================================================
+
+volScale = (useVolSizing and annualVol > 0) ? math.min(1.0, targetVol / annualVol) : 1.0
+regimeScale = bearRegime ? (bearSizeCut / 100.0) : 1.0
+targetAlloc = signalState == 1 ? math.round(math.max(0.0, math.min(100.0, 100.0 * volScale * regimeScale))) : 0
+
+// ============================================================================
+// PLOTS
+// ============================================================================
+
+plot(trackline, "Trackline", color=trackRising ? color.new(#00E676, 0) : color.new(#FF5252, 0), linewidth=2)
+plot(maReg, "Regime MA", color=maRegFalling ? color.new(#FF1744, 40) : color.new(#00C853, 40), linewidth=2)
+plot(signalState == 1 and useTrail ? trailStop : na, "Trailing Stop", color=color.new(#FF9900, 0), linewidth=1, style=plot.style_linebr)
+plot(targetAlloc, "Allocation %", color=color.new(#42A5F5, 0), linewidth=2, style=plot.style_stepline, display=display.pane + display.data_window)
+
+plotshape(showDots and greenDot, title="Green Dot", style=shape.circle, location=location.belowbar, color=color.new(#00E676, 0), size=size.tiny)
+plotshape(showDots and redDot, title="Red Dot", style=shape.circle, location=location.abovebar, color=color.new(#FF5252, 0), size=size.tiny)
+
+var color bg = na
+if showBG
+    bg := displayState == 1 ? color.new(#00C853, 92) : displayState == 2 ? color.new(#FFD600, 93) : color.new(#FF1744, 94)
+else
+    bg := na
+bgcolor(bg)
+
+if showLabels and signalChanged
+    if signalState == 1
+        label.new(bar_index, low, "BUY", style=label.style_label_up, color=color.new(#00C853, 0), textcolor=color.white, size=size.small)
+    else
+        label.new(bar_index, high, "SELL", style=label.style_label_down, color=color.new(#FF1744, 0), textcolor=color.white, size=size.small)
+
+// ============================================================================
+// STATUS TABLE
+// ============================================================================
+
+var table tbl = table.new(position.top_right, 2, 7, bgcolor=color.new(#0D1117, 0), border_width=1, border_color=color.new(#30363D, 0))
+
+if barstate.islast
+    sigStr = signalState == 1 ? "LONG" : "FLAT"
+    sigClr = signalState == 1 ? color.new(#00C853, 0) : color.new(#FF1744, 0)
+
+    table.cell(tbl, 0, 0, "DIV MOMENTUM", text_color=color.white, text_size=size.normal, bgcolor=color.new(#161B22, 0))
+    table.cell(tbl, 1, 0, sigStr, text_color=color.white, text_size=size.normal, bgcolor=sigClr)
+
+    table.cell(tbl, 0, 1, "Allocation", text_color=color.gray, text_size=size.small)
+    allClr = targetAlloc >= 75 ? color.new(#00E676, 0) : targetAlloc >= 40 ? color.new(#EF9F27, 0) : targetAlloc > 0 ? color.new(#FFD600, 0) : color.new(#FF5252, 0)
+    table.cell(tbl, 1, 1, str.tostring(targetAlloc) + "%", text_color=allClr, text_size=size.small)
+
+    table.cell(tbl, 0, 2, "Regime", text_color=color.gray, text_size=size.small)
+    maStr = bearRegime ? "BEAR (cut size)" : aboveMaReg ? "BULL" : "NEUTRAL"
+    maClr = bearRegime ? color.new(#FF1744, 0) : aboveMaReg ? color.new(#00E676, 0) : color.new(#EF9F27, 0)
+    table.cell(tbl, 1, 2, maStr, text_color=maClr, text_size=size.small)
+
+    table.cell(tbl, 0, 3, "Efficiency", text_color=color.gray, text_size=size.small)
+    erClr = er > erThresh ? color.new(#00E676, 0) : color.new(#FF5252, 0)
+    table.cell(tbl, 1, 3, str.tostring(er, "#.00") + (er > erThresh ? " TREND" : " CHOP"), text_color=erClr, text_size=size.small)
+
+    table.cell(tbl, 0, 4, "Trailing Stop", text_color=color.gray, text_size=size.small)
+    tsStr = (signalState == 1 and not na(trailStop)) ? str.tostring(trailStop, "#.00") : "—"
+    table.cell(tbl, 1, 4, tsStr, text_color=color.new(#FF9900, 0), text_size=size.small)
+
+    table.cell(tbl, 0, 5, "Trackline", text_color=color.gray, text_size=size.small)
+    tClr = trackRisingWindow ? color.new(#00E676, 0) : color.new(#FF5252, 0)
+    table.cell(tbl, 1, 5, str.tostring(trackline, "#.00") + (trackRisingWindow ? " RISING" : " FLAT/DN"), text_color=tClr, text_size=size.small)
+
+    table.cell(tbl, 0, 6, "Price vs TL", text_color=color.gray, text_size=size.small)
+    dClr = distPct > 0 ? color.new(#00E676, 0) : color.new(#FF5252, 0)
+    table.cell(tbl, 1, 6, (distPct > 0 ? "+" : "") + str.tostring(distPct, "#.1") + "%", text_color=dClr, text_size=size.small)
+
+// ============================================================================
+// ALERTS
+// ============================================================================
+
+alertcondition(signalChanged and signalState == 1, title="LONG", message="DIVERSITAS MOMENTUM: LONG - {{ticker}} at {{close}}")
+alertcondition(signalChanged and signalState == 3, title="FLAT", message="DIVERSITAS MOMENTUM: FLAT - {{ticker}} at {{close}}")
+alertcondition(trailExit, title="TRAIL STOP", message="DIVERSITAS MOMENTUM: trailing stop hit - {{ticker}} at {{close}}")
