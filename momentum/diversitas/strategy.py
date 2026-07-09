@@ -203,7 +203,10 @@ def run_state_machine(df: pd.DataFrame, cfg: MomentumConfig) -> pd.DataFrame:
                     and bars_since_sig >= cfg.reentry_hold):
                 cur_sig = S_BULL
                 bars_since_sig = 0
-                entry_peak = close_arr[i]
+                # Pine parity: entryPeak is NOT set on the entry bar — the trailing-stop
+                # peak only starts tracking from the *next* bar (via the top-of-loop block).
+                # Setting it to the entry close here would move the trail reference 1 bar
+                # early and trip the stop a bar sooner than the reference strategy.
 
         # --- Display state ---
         if below_arr[i] and below_c >= cfg.exit_grace_bars:
