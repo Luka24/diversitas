@@ -44,7 +44,9 @@ def _metrics(sr: pd.Series, pos: pd.Series, part: str) -> dict:
     dd = float((eq / eq.cummax() - 1).min())
     cagr = float(eq.iloc[-1] ** (TD / len(r)) - 1)
     down = np.sqrt(np.mean(np.minimum(r.values, 0.0) ** 2)) * np.sqrt(TD)
+    ann_std = r.std() * np.sqrt(TD)
     return dict(cagr=cagr, exposure=float(p.mean() * 100), max_dd=dd,
+                sharpe=(float(r.mean() * TD / ann_std) if ann_std > 1e-9 else np.nan),
                 sortino=(float(r.mean() * TD / down) if down > 0 else np.nan),
                 calmar=(cagr / abs(dd) if dd < 0 else np.nan))
 
@@ -67,8 +69,8 @@ def evaluate(label: str, overrides: dict) -> dict:
         vals = [r[key] for r in rows[part] if np.isfinite(r.get(key, np.nan))]
         return float(np.median(vals)) if vals else np.nan
     return {"label": label,
-            **{f"d_{k}": med("design", k) for k in ("cagr", "exposure", "max_dd", "sortino", "calmar")},
-            **{f"h_{k}": med("holdout", k) for k in ("cagr", "exposure", "max_dd", "sortino", "calmar")},
+            **{f"d_{k}": med("design", k) for k in ("cagr", "exposure", "max_dd", "sharpe", "sortino", "calmar")},
+            **{f"h_{k}": med("holdout", k) for k in ("cagr", "exposure", "max_dd", "sharpe", "sortino", "calmar")},
             "btc": btc_detail}
 
 
@@ -116,13 +118,12 @@ def _write(rows):
          "(design ≤2025-03 for reading, hold-out ≥2025-04 shown alongside). Objective for the "
          "aggressive tier: **higher CAGR + exposure**, accepting more drawdown while MaxDD stays "
          "well under Buy&Hold (~−77% for BTC).", "",
-         "| Config | Design CAGR | Exp | MaxDD | Sortino | Calmar | HO CAGR | HO Exp | HO MaxDD | HO Sortino |",
+         "| Config | Design CAGR | Exp | MaxDD | **Sharpe** | **Sortino** | Calmar | HO CAGR | HO Sharpe | HO Sortino |",
          "|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         L.append(f"| {r['label']} | {r['d_cagr']*100:.0f}% | {r['d_exposure']:.0f}% | "
-                 f"{r['d_max_dd']*100:.0f}% | {r['d_sortino']:.2f} | {r['d_calmar']:.2f} | "
-                 f"{r['h_cagr']*100:.0f}% | {r['h_exposure']:.0f}% | {r['h_max_dd']*100:.0f}% | "
-                 f"{r['h_sortino']:.2f} |")
+                 f"{r['d_max_dd']*100:.0f}% | {r['d_sharpe']:.2f} | {r['d_sortino']:.2f} | {r['d_calmar']:.2f} | "
+                 f"{r['h_cagr']*100:.0f}% | {r['h_sharpe']:.2f} | {r['h_sortino']:.2f} |")
     L += ["", "## Reading — two of the three suggestions help, one backfires", "",
           f"- **Baseline** (pooled): design CAGR {base['d_cagr']*100:.0f}%, exposure "
           f"{base['d_exposure']:.0f}%, MaxDD {base['d_max_dd']*100:.0f}%, Sortino {base['d_sortino']:.2f}, "
@@ -153,7 +154,25 @@ def _write(rows):
           "be tested separately, leakage-safe.",
           "- All adopted changes are **hold-out-confirmed** (not overfit to design); the rejected "
           "bear-cut change fails the hold-out, which is exactly how the leakage-safe test earns its "
-          "keep.", ""]
+          "keep.", "",
+          "## How CAGR / Sharpe / Sortino react (the risk-adjusted trade-off)", "",
+          "- **CAGR** goes UP with the good levers: faster re-entry is the driver (39→41%), wider "
+          "trail ~flat (39→40%), bear-cut flat-to-down. RECOMMENDED ≈ 40%.",
+          "- **Sharpe** ticks DOWN slightly on design for *every* loosening (baseline 1.13 → "
+          "~1.04–1.11): more aggression = more trades/exposure, which adds volatility a bit faster "
+          "than return. reentry=2 → 1.10, trail=18 → 1.11, trail=20 → 1.04 (too wide).",
+          "- **Sortino** likewise dips a little on design (1.83 → ~1.68–1.87; reentry=2 → 1.75, "
+          "trail=18 → 1.76) — same reason.",
+          "- **BUT on the bear-market hold-out the good levers IMPROVE both** (Sharpe −0.39→−0.21, "
+          "Sortino −0.55→−0.29) because they stop out less prematurely. The bear-cut increase does "
+          "the opposite (Sharpe −0.39→−0.47).",
+          "- **Interpretation:** this is the classic aggressive-tier trade-off — you gain **CAGR** "
+          "and **Calmar** (return & drawdown-adjusted) and better bear robustness, at the cost of a "
+          "small dip in **Sharpe/Sortino** (volatility-adjusted efficiency) on the calm design set. "
+          "For an aggressive product that explicitly wants more upside, that trade is defensible; "
+          "for a Sharpe-maximising mandate it is not. Net: RECOMMENDED lifts CAGR 39→40% and Calmar "
+          "1.02→1.08 with Sharpe 1.13→1.07 (−0.06) and Sortino 1.83→1.68 (−0.15), and a clearly "
+          "better hold-out.", ""]
     (REPORTS / "aggressive_tuning_report.md").write_text("\n".join(L))
 
 
