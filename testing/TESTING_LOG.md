@@ -260,3 +260,13 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - **Trailing: šibek** — 15/18/20 ≈ baseline, nasiti se nad 20.
 - **Najboljša kombinacija: reentry2+bear25** — CAGR 43%, Calmar 1.11, MaxDD -33%, holdout -4%/-0.20 (najboljši). Drawdown se celo izboljša.
 - Poročilo: `testing/reports/{aggressive_tuning_report.md, porocilo_agresivno_tuning.md}`.
+
+## 2026-07-10 — Robustnost aggressive tuninga (BTC): regime + CPCV + bootstrap ✅
+
+- `run_aggressive_robustness.py`: kandidat re-entry2+bear25 vs baseline preverjen proti overfittingu na 3 načine (ne le en holdout).
+- **Per leto: boljši/enak v 7/8 letih** (2021 bull 1.44→2.23, 2022 bear -2.76→-2.53; edino 2023 -0.04). Pomaga v bull, manj slab v bear, ne razbije nikjer.
+- **Per režim (200MA):** bull 2.32→2.70, bear -1.64→-1.52, sideways 3.35→3.20. Net pozitivno.
+- **CPCV-lite:** premaga baseline v **98% od 252 mešanih pod-obdobij** (median ΔSortino +0.29).
+- **Block-bootstrap:** ΔSortino 95% CI [-0.05, +0.74], pozitiven v 95% resamplov.
+- **Zaključek: NI overfit na en režim** — zdrži čez bull/bear/recovery/chop. Pošteno: majhna sprememba, en coin → paper trading pred živo.
+- Poročilo: `testing/reports/aggressive_robustness_btc.md`.
