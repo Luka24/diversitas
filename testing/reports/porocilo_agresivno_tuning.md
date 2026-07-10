@@ -1,77 +1,66 @@
 # Momentum — testiranje predlogov za več upside-a
 
-## Slovarček (na hitro)
+Pripomba je bila: risk management dela (drawdown ~−38 % proti −77 % buy&hold), a exposure je
+nizek (~35 % na BTC) in preveč zaostajamo v rasti — za agresiven produkt bi radi ujeli več.
+Testiral sem tri predloge: širši trailing stop, hitrejši re-entry, večji bear-cut.
 
-- **Exposure** — kolikšen del kapitala je v povprečju v coinu (ostalo v cashu/stablecoinu).
-  35 % = v povprečju 35 % v BTC. Nizko, ker strategija večino časa čaka ali drži zmanjšano
-  pozicijo. Nizek exposure = ujameš manj rasti, a manj tvegaš.
-- **Trailing stop** — stop-loss ki sledi ceni navzgor. Zapomni si najvišjo ceno od vstopa;
-  če cena pade za X % pod ta vrh, izstopiš. Zaklene dobiček. Primer (12 %): vstop 100,
-  vrh 150 → stop na 132; pade na 132 → izstop. Širši = daš več prostora, izstopiš kasneje.
-- **Re-entry lock** — koliko dni po izstopu moraš počakati preden lahko spet vstopiš. Manjši
-  = hitreje nazaj v trend.
-- **Bear-cut** — kolikšno pozicijo držiš, ko je trg v medvedjem režimu (pod padajočo 200MA).
-  50 = pol pozicije. Nižji = manj izpostavljen v bear trgu.
-- **Holdout (HO)** — obdobje 2025+ ki ga pri nastavljanju NISMO gledali. Ločen test na
-  svežih podatkih (proti overfittingu). CAGR tam je negativen, ker je bilo bear obdobje —
-  pomembna je relativna primerjava med variantami.
-- **CAGR** letni donos · **Sharpe** donos/volatilnost · **Sortino** donos/negativna
-  volatilnost · **Calmar** CAGR/max drawdown · **MaxDD** največji padec od vrha.
+## Slovarček
 
-Vsaka vrstica spodaj = **cela baseline strategija, spremenjen samo tisti en parameter** (razen
-kombinacij "Agresivno"/"Priporočeno", kjer sta 2–3). Baseline = trailing 12, re-entry 4,
-bear-cut 50 (kot v Pine).
+- **Exposure** — koliko kapitala je v povprečju v coinu (ostalo v cashu). Nizek = manj ujameš, manj tvegaš.
+- **Trailing stop** — stop ki sledi ceni navzgor; izstopiš če cena pade X % z najvišjega vrha od vstopa. Zaklene dobiček.
+- **Re-entry lock** — koliko dni po izstopu čakaš do novega vstopa. Manjši = hitreje nazaj.
+- **Bear-cut** — kolikšno pozicijo držiš v medvedjem režimu (50 = pol). Nižji = manj izpostavljen.
+- **Holdout** — obdobje 2025+ ki ga pri nastavljanju nismo videli (test proti overfittingu; bilo je bear, zato negativen — šteje relativna primerjava).
+- CAGR = letni donos · Sharpe = donos/volatilnost · Sortino = donos/negativna volatilnost · Calmar = CAGR/drawdown.
 
----
+## Kje vsak vzvod dejansko premakne (BTC, širok sweep)
 
-## Kje se parameter sploh premakne (širok sweep, BTC, cela zgodovina)
+Prva ugotovitev: nekatere vrednosti sploh nič ne premaknejo — nima jih smisla testirati.
 
-Prva stvar ki jo je treba vedeti: **ne testiraj vrednosti kjer se nič ne premakne.** Tu je
-kje ima vsak vzvod dejanski učinek:
-
-**Trailing stop** — nad 20 se **nasiti** (20 = 25 = 30 identično; tako širok stop nikoli ne
-sproži, prej izstopiš iz drugih razlogov). Med 12 in 20 je skoraj ravno. Akcija je pri
-**tesnem koncu**:
+**Trailing stop — nad 20 se nasiti (mrtva cona):**
 | trailing | 8 | 10 | 12 | 15 | 20 | 25 | 30 |
 |---|---|---|---|---|---|---|---|
 | Calmar | 0.80 | **0.85** | 0.78 | 0.76 | 0.81 | 0.81 | 0.81 |
-| MaxDD | −33% | −37% | −38% | −38% | −38% | −38% | −38% |
 
-→ tvoji 15/18/20 so bili ravno v ravni coni — zato skoraj brez razlike. Smiselno testirati:
-**8, 10, 12, 15** (in ne nič nad 20). Iskreno: to je **šibek vzvod**, premika malo.
+→ predlog 15/18/20 je bil ravno v ravni coni, zato skoraj brez razlike. Šibek vzvod; testiraj kvečjemu 8–12, nič nad 20.
 
-**Re-entry lock** — oster prelom med 2 in 4:
-| re-entry | 1 | 2 | 4 | 6 | 8 | 12 |
-|---|---|---|---|---|---|---|
-| CAGR | 36% | **36%** | 30% | 31% | 30% | 28% |
-| Calmar | 0.94 | **0.95** | 0.78 | 0.82 | 0.80 | 0.75 |
+**Re-entry lock — oster prelom pri 2 vs 4:**
+| re-entry | 1 | 2 | 4 | 6 | 8 |
+|---|---|---|---|---|---|
+| CAGR | 36% | **36%** | 30% | 31% | 30% |
+| Calmar | 0.94 | **0.95** | 0.78 | 0.82 | 0.80 |
 
-→ to je **pravi vzvod**. Hitro (1–2) je jasno boljše od 4. Smiselno testirati: **1, 2, 3, 4**
-(nad 4 je ravno in slabše).
+→ pravi vzvod. Hitro (1–2) jasno boljše. Testiraj 1, 2, 3, 4.
 
-**Bear-cut** — monotono, **nižje je bolje**:
+**Bear-cut — nižje je bolje (monotono):**
 | bear-cut | 0 | 25 | 50 | 75 | 100 |
 |---|---|---|---|---|---|
 | Calmar | 0.83 | **0.92** | 0.78 | 0.67 | 0.59 |
 | MaxDD | −36% | **−33%** | −38% | −43% | −48% |
 
-→ **25 % je sweet spot** (višji Calmar, nižji drawdown). Kolegov predlog (60–70) je točno
-narobe — več bear-exposure = večji drawdown. Smiselno testirati: **0, 25, 50** (in NE višje).
+→ 25 % je sweet spot. Predlog "višje (60–70)" je točno narobe: več bear-exposure = večji drawdown. Testiraj 0, 25, 50, ne višje.
 
----
+## Zaključek
 
-## Priporočilo (popravljeno glede na širok sweep)
+**Splača se:**
+- **Re-entry 4 → 2** — glavni win. CAGR 30 → 36 %, Calmar 0.78 → 0.95, drawdown isti, drži tudi na holdoutu.
+- **Bear-cut 50 → 25** — Calmar 0.78 → 0.92, drawdown se celo izboljša (−38 → −33 %).
 
-1. **Re-entry lock 4 → 2** — glavna sprememba. CAGR 30 → 36 %, Calmar 0.78 → 0.95, drawdown
-   isti. Jasen win na BTC in drži tudi na holdoutu.
-2. **Bear-cut 50 → 25** — vredno resno pogledati. Calmar 0.78 → 0.92, drawdown se celo
-   izboljša (−38 → −33 %). Obratna smer od kolegovega predloga, a številke so jasne.
-3. **Trailing stop** — pusti pri miru ali daj 10. Šibek vzvod, nad 20 mrtev. Ne izgubljaj
-   časa s 15/18/20 (ravna cona).
+**Ne splača se:**
+- Širši trailing (ravna cona nad 12).
+- Večji bear-cut (poslabša vse: Calmar dol, drawdown gor).
 
-Torej: **re-entry 2 + bear-cut 25** je bolj obetavna kombinacija kot karkoli s širšim trailing
-stopom. Naslednji korak — testiram to kombinacijo pooled + holdout, da potrdim da drži čez
-vse coine, ne le BTC.
+**Priporočena kombinacija: re-entry 2 + bear-cut 25** (trailing pusti ali daj 10).
 
-Opomba: vse te številke so BTC/cela zgodovina za jasnost učinka; končno odločitev vzamemo iz
-pooled + holdout. In 12/4/50 so iz Pine — če kaj sprejmemo, popravim še Pine.
+Ena poštena opomba glede metrik: te spremembe dvignejo CAGR in Calmar, drawdown pa držijo ali
+znižajo — **Sharpe in Sortino pa gresta rahlo dol** (npr. pri re-entry 2 Sortino 1.62 → 1.87 je
+sicer višji, a pri kombinacijah z več tradanja pade za ~0.1). Logika: več agresije = več tradov
+in izpostavljenosti, kar doda volatilnost malo hitreje kot donos. Za agresiven tier je to
+smiselna menjava; za Sharpe-maksimiranje ne.
+
+Realno je skok inkrementalen — exposure ostane ~35 %. Za bistveno večjo izpostavljenost bi
+morali rahljati **entry pogoje** (trackline/momentum), ne le exit in sizing; to je večja
+sprememba, testiram jo posebej če hočeš.
+
+*(Vse številke so BTC/cela zgodovina za jasnost učinka; končno vzamemo iz pooled + holdout čez
+vse coine. Trenutni 12/4/50 so iz Pine scripta — če kaj sprejmemo, popravim še Pine.)*
