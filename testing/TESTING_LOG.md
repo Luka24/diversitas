@@ -270,3 +270,12 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - **Block-bootstrap:** ΔSortino 95% CI [-0.05, +0.74], pozitiven v 95% resamplov.
 - **Zaključek: NI overfit na en režim** — zdrži čez bull/bear/recovery/chop. Pošteno: majhna sprememba, en coin → paper trading pred živo.
 - Poročilo: `testing/reports/aggressive_robustness_btc.md`.
+
+## 2026-07-10 — Nested walk-forward: aggressive tuning je bil selection bias ✅ (pošten popravek)
+
+- Vprašanje: brez ločenega train/test-a per-leto/CPCV/bootstrap ne odpravijo selection biasa (kandidat izbran na istih podatkih kot meritev).
+- `run_aggressive_nested.py`: v vsakem foldu izberem re-entry×bear-cut SAMO iz train dela, uporabim na neviden test, zlepim.
+- **Rezultat: izberi-iz-train OOS Sortino 1.16 = fiksni baseline 1.16 (Δ 0.00).** Prednost IZGINE ko izbira ne vidi testa.
+- Bear-cut izbran nestabilno: 75/75/0/0/25 po foldih (nestacionaren trg — train-optimal ≠ test-optimal). Re-entry bolj stabilen (večinoma 2) a sam ne dvigne OOS.
+- **Zaključek: full-sample "win" (1.62→1.92) je bil selection bias. Nested WF (edini ki to odpravi) pokaže da tuning ne prinese zanesljive OOS prednosti → ostani pri Pine baseline.**
+- Poročilo: `testing/reports/aggressive_nested_btc.md`.
