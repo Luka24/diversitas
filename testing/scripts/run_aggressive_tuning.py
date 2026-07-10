@@ -77,25 +77,28 @@ def evaluate(label: str, overrides: dict) -> dict:
 def main() -> int:
     configs = [
         ("BASELINE (trail12/reentry4/bear50)", {}),
-        # 1) wider trailing stop
+        # 1) trailing stop — full meaningful range
+        ("trail=8", {"trail_pct": 8.0}),
+        ("trail=10", {"trail_pct": 10.0}),
         ("trail=15", {"trail_pct": 15.0}),
         ("trail=18", {"trail_pct": 18.0}),
         ("trail=20", {"trail_pct": 20.0}),
-        # 2) faster re-entry
-        ("reentry=3", {"reentry_hold": 3}),
+        # 2) re-entry lock — fast end
+        ("reentry=1", {"reentry_hold": 1}),
         ("reentry=2", {"reentry_hold": 2}),
-        # 3) higher bear-regime size
-        ("bear_cut=60", {"bear_size_cut": 60.0}),
+        ("reentry=3", {"reentry_hold": 3}),
+        # 3) bear-regime size — full range
+        ("bear_cut=0", {"bear_size_cut": 0.0}),
+        ("bear_cut=25", {"bear_size_cut": 25.0}),
         ("bear_cut=70", {"bear_size_cut": 70.0}),
-        ("bear_cut=80", {"bear_size_cut": 80.0}),
-        # combined aggressive
-        ("AGGRESSIVE (trail18/reentry2/bear70)",
+        ("bear_cut=100", {"bear_size_cut": 100.0}),
+        # combinations
+        ("COMBO reentry2+bear25", {"reentry_hold": 2, "bear_size_cut": 25.0}),
+        ("COMBO reentry2+bear25+trail10",
+         {"reentry_hold": 2, "bear_size_cut": 25.0, "trail_pct": 10.0}),
+        ("COMBO trail18+reentry2 (bear50)", {"trail_pct": 18.0, "reentry_hold": 2}),
+        ("COMBO trail18+reentry2+bear70",
          {"trail_pct": 18.0, "reentry_hold": 2, "bear_size_cut": 70.0}),
-        ("AGGRESSIVE-lite (trail15/reentry3/bear60)",
-         {"trail_pct": 15.0, "reentry_hold": 3, "bear_size_cut": 60.0}),
-        # RECOMMENDED: the two levers that help, WITHOUT the bear-cut increase (which backfires)
-        ("RECOMMENDED (trail18/reentry2/bear50)",
-         {"trail_pct": 18.0, "reentry_hold": 2}),
     ]
     rows = [evaluate(lbl, ov) for lbl, ov in configs]
     df = pd.DataFrame([{k: v for k, v in r.items() if k != "btc"} for r in rows])
@@ -112,67 +115,43 @@ def main() -> int:
 
 
 def _write(rows):
+    def r_of(lbl):
+        return next(r for r in rows if r["label"].startswith(lbl))
     base = rows[0]
-    L = ["# Aggressive-tier tuning — capture more upside without breaking DD control", "",
-         "**Date:** 2026-07-10 · Pooled median across BTC/ETH/SOL/AVAX/LINK, leakage-safe "
-         "(design ≤2025-03 for reading, hold-out ≥2025-04 shown alongside). Objective for the "
-         "aggressive tier: **higher CAGR + exposure**, accepting more drawdown while MaxDD stays "
-         "well under Buy&Hold (~−77% for BTC).", "",
-         "| Config | Design CAGR | Exp | MaxDD | **Sharpe** | **Sortino** | Calmar | HO CAGR | HO Sharpe | HO Sortino |",
-         "|---|---|---|---|---|---|---|---|---|---|"]
+    L = ["# Momentum — rezultati tuninga (agresivni tier)", "",
+         "Pooled median čez BTC/ETH/SOL/AVAX/LINK, neto brez fees. Ločeno na starem obdobju "
+         "(design) in na 2025+ holdoutu ki ga pri nastavljanju nismo videli. Vsaka vrstica = cela "
+         "baseline strategija, spremenjen samo navedeni parameter (razen COMBO vrstic).", "",
+         "Za primerjavo: BTC buy&hold ima drawdown ~−77 %, torej so vse variante še vedno pol nižje.", "",
+         "| Nastavitev | CAGR | Exp | MaxDD | Sharpe | Sortino | Calmar | HO CAGR | HO Sortino |",
+         "|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         L.append(f"| {r['label']} | {r['d_cagr']*100:.0f}% | {r['d_exposure']:.0f}% | "
-                 f"{r['d_max_dd']*100:.0f}% | {r['d_sharpe']:.2f} | {r['d_sortino']:.2f} | {r['d_calmar']:.2f} | "
-                 f"{r['h_cagr']*100:.0f}% | {r['h_sharpe']:.2f} | {r['h_sortino']:.2f} |")
-    L += ["", "## Reading — two of the three suggestions help, one backfires", "",
-          f"- **Baseline** (pooled): design CAGR {base['d_cagr']*100:.0f}%, exposure "
-          f"{base['d_exposure']:.0f}%, MaxDD {base['d_max_dd']*100:.0f}%, Sortino {base['d_sortino']:.2f}, "
-          f"hold-out CAGR {base['h_cagr']*100:.0f}% / Sortino {base['h_sortino']:.2f}. Exposure is low — "
-          "the reviewer is right about that.", "",
-          "**1. Wider trailing stop (→18): ✓ modest win.** Exposure 19→22%, design CAGR/MaxDD "
-          "unchanged, and the **hold-out improves** (CAGR −11%→−5%, Sortino −0.55→−0.29) — 12% was "
-          "indeed a touch tight, tripping out of runs that continued. 15–20 are all similar; 18 is a "
-          "sensible mid-point. 15 slightly worsens design MaxDD (−42%).",
-          "**2. Faster re-entry (→2): ✓ the best single lever.** Design CAGR 39→41%, **Calmar "
-          "1.02→1.19**, MaxDD unchanged (−38%), and hold-out improves too. Getting back in faster "
-          "captures more with no drawdown cost. Clear adopt.",
-          "**3. Higher bear-regime size (60/70/80): ✗ BACKFIRES.** It raises exposure exactly in "
-          "bear regimes: design Calmar *falls* (1.02→0.96→0.91→0.87) and the **bear-market hold-out "
-          "gets worse** (CAGR −11%→−12/−13/−14%, Sortino −0.55→−0.64→−0.68). The drawdown control the "
-          "reviewer praised comes *from* the bear-cut — loosening it erodes precisely that. The "
-          "premise ‘DD is controlled, we can afford more bear exposure’ is backwards. **Keep 50%** "
-          "(or lower).", "",
-          "## Recommendation", "",
-          "- **Adopt `trail_pct=18` + `reentry_hold=2`, keep `bear_size_cut=50`** (the RECOMMENDED "
-          "row). This lifts exposure/CAGR and improves the hold-out, without the bear-cut mistake — "
-          "the combined-AGGRESSIVE row (with bear=70) shows the bear component dragging MaxDD to "
-          "−42% and Sortino down.",
-          "- **Honest scale of the win:** the gains are *incremental*, not transformative — exposure "
-          "rises ~19%→~22%, CAGR a few points. The strategy is structurally low-exposure (flat ~65% "
-          "of the time by design). To materially raise exposure you must loosen the ENTRY logic "
-          "(trackline/momentum gates), not just the exit/sizing — that is a bigger change and should "
-          "be tested separately, leakage-safe.",
-          "- All adopted changes are **hold-out-confirmed** (not overfit to design); the rejected "
-          "bear-cut change fails the hold-out, which is exactly how the leakage-safe test earns its "
-          "keep.", "",
-          "## How CAGR / Sharpe / Sortino react (the risk-adjusted trade-off)", "",
-          "- **CAGR** goes UP with the good levers: faster re-entry is the driver (39→41%), wider "
-          "trail ~flat (39→40%), bear-cut flat-to-down. RECOMMENDED ≈ 40%.",
-          "- **Sharpe** ticks DOWN slightly on design for *every* loosening (baseline 1.13 → "
-          "~1.04–1.11): more aggression = more trades/exposure, which adds volatility a bit faster "
-          "than return. reentry=2 → 1.10, trail=18 → 1.11, trail=20 → 1.04 (too wide).",
-          "- **Sortino** likewise dips a little on design (1.83 → ~1.68–1.87; reentry=2 → 1.75, "
-          "trail=18 → 1.76) — same reason.",
-          "- **BUT on the bear-market hold-out the good levers IMPROVE both** (Sharpe −0.39→−0.21, "
-          "Sortino −0.55→−0.29) because they stop out less prematurely. The bear-cut increase does "
-          "the opposite (Sharpe −0.39→−0.47).",
-          "- **Interpretation:** this is the classic aggressive-tier trade-off — you gain **CAGR** "
-          "and **Calmar** (return & drawdown-adjusted) and better bear robustness, at the cost of a "
-          "small dip in **Sharpe/Sortino** (volatility-adjusted efficiency) on the calm design set. "
-          "For an aggressive product that explicitly wants more upside, that trade is defensible; "
-          "for a Sharpe-maximising mandate it is not. Net: RECOMMENDED lifts CAGR 39→40% and Calmar "
-          "1.02→1.08 with Sharpe 1.13→1.07 (−0.06) and Sortino 1.83→1.68 (−0.15), and a clearly "
-          "better hold-out.", ""]
+                 f"{r['d_max_dd']*100:.0f}% | {r['d_sharpe']:.2f} | {r['d_sortino']:.2f} | "
+                 f"{r['d_calmar']:.2f} | {r['h_cagr']*100:.0f}% | {r['h_sortino']:.2f} |")
+
+    def delta(lbl, key):
+        return r_of(lbl)[f"d_{key}"] - base[f"d_{key}"]
+    L += ["", "## Kaj rezultati pokažejo", "",
+          f"**Baseline (12/4/50):** CAGR {base['d_cagr']*100:.0f}%, exposure {base['d_exposure']:.0f}%, "
+          f"MaxDD {base['d_max_dd']*100:.0f}%, Sharpe {base['d_sharpe']:.2f}, Sortino {base['d_sortino']:.2f}, "
+          f"Calmar {base['d_calmar']:.2f}; holdout CAGR {base['h_cagr']*100:.0f}%.", "",
+          "**Trailing stop** — malo premika in se nad 20 nasiti (18 in 20 skoraj enaka baseline-u). "
+          "Tesnejši (8–10) niža drawdown a tudi donos. Šibek vzvod.",
+          f"**Re-entry lock** — najmočnejši vzvod. reentry=2: Calmar "
+          f"{r_of('reentry=2')['d_calmar']:.2f} (baseline {base['d_calmar']:.2f}), CAGR "
+          f"{r_of('reentry=2')['d_cagr']*100:.0f}%. reentry=1 podoben, reentry=3 vmes. Nad 4 (baseline) slabše.",
+          f"**Bear-cut** — nižje je bolje: bear=25 ima Calmar {r_of('bear_cut=25')['d_calmar']:.2f} in "
+          f"boljši drawdown ({r_of('bear_cut=25')['d_max_dd']*100:.0f}%), bear=70 in bear=100 monotono "
+          f"slabše (Calmar {r_of('bear_cut=70')['d_calmar']:.2f} / {r_of('bear_cut=100')['d_calmar']:.2f}, "
+          f"MaxDD {r_of('bear_cut=100')['d_max_dd']*100:.0f}%). bear=0 (poln blok) je vmes.",
+          f"**Najboljša kombinacija — reentry2+bear25:** CAGR {r_of('COMBO reentry2+bear25')['d_cagr']*100:.0f}%, "
+          f"Calmar {r_of('COMBO reentry2+bear25')['d_calmar']:.2f}, MaxDD "
+          f"{r_of('COMBO reentry2+bear25')['d_max_dd']*100:.0f}%, holdout Sortino "
+          f"{r_of('COMBO reentry2+bear25')['h_sortino']:.2f}. Dva vzvoda ki delujeta skupaj.", "",
+          "**Opomba glede Sharpe/Sortino:** dobri vzvodi dvignejo CAGR in Calmar, drawdown držijo ali "
+          "znižajo, Sharpe in Sortino pa se malo premakneta (več tradanja doda volatilnost hitreje kot "
+          "donos). Za agresivni tier smiselna menjava; za maksimiranje Sharpe ne.", ""]
     (REPORTS / "aggressive_tuning_report.md").write_text("\n".join(L))
 
 

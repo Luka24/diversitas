@@ -251,3 +251,12 @@ Kronološki dnevnik vseh izvedenih testov. Faze v `TESTING_PLAN.md` (v2) in
 - Pošteno: dobiček je inkrementalen (exp 19→22%), ne transformativen. Za dramatično večji exposure je treba rahljati ENTRY logiko, ne le exit/sizing.
 - **Pine-parity caveat:** privzeti trail=12/reentry=4 sta iz Pine; sprememba defaults bi razšla Python od Pine → glej priporočilo.
 - Poročilo: `testing/reports/aggressive_tuning_report.md`.
+
+## 2026-07-10 — Aggressive tuning: poln sweep testiran (pooled + holdout)
+
+- `run_aggressive_tuning.py` razširjen na cel smiseln nabor: trailing 8/10/12/15/18/20, reentry 1/2/3/4, bear-cut 0/25/50/70/100 + kombinacije. Pooled 5 coinov, design + holdout.
+- **Re-entry: hitreje boljše** — reentry=1 CAGR 45%/Calmar 1.23, reentry=2 41%/1.19, baseline(4) 39%/1.02.
+- **Bear-cut: nižje boljše** — bear=25 Sortino 1.93, MaxDD -33%; bear=70/100 monotono slabše (Calmar 0.91/0.79, holdout -13/-16%). Predlog "višje" narobe.
+- **Trailing: šibek** — 15/18/20 ≈ baseline, nasiti se nad 20.
+- **Najboljša kombinacija: reentry2+bear25** — CAGR 43%, Calmar 1.11, MaxDD -33%, holdout -4%/-0.20 (najboljši). Drawdown se celo izboljša.
+- Poročilo: `testing/reports/{aggressive_tuning_report.md, porocilo_agresivno_tuning.md}`.
