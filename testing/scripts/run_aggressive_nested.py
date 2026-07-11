@@ -33,6 +33,7 @@ RESULTS = _ROOT / "testing" / "results" / "aggressive"
 RESULTS.mkdir(parents=True, exist_ok=True)
 TD = 365
 EMBARGO = 21
+FEE = 0.15  # % na stran (fee ~0.05-0.10 % + slippage), round-trip ~0.30 %. NETO rezultati.
 
 REENTRY = [1, 2, 3, 4]
 BEARCUT = [0.0, 25.0, 50.0, 75.0]
@@ -59,9 +60,10 @@ def _sortino(r):
 def main() -> int:
     daily = dataio.load("BTC", "all")
     # precompute returns for every grid config + baseline once
-    ret = {tuple(sorted(c.items())): engine.strat_returns(engine.run("momentum", daily, **c), s_bull_code=1)
+    ret = {tuple(sorted(c.items())): engine.strat_returns(engine.run("momentum", daily, **c),
+                                                          fee_per_side_pct=FEE, s_bull_code=1)
            for c in GRID}
-    base = engine.strat_returns(engine.run("momentum", daily), s_bull_code=1)
+    base = engine.strat_returns(engine.run("momentum", daily), fee_per_side_pct=FEE, s_bull_code=1)
 
     data_start = daily.index.min()
     print(f"BTC podatki: {data_start.date()} … {daily.index.max().date()}\n")
@@ -113,6 +115,10 @@ def _write(rows, ss, sb, sbh):
          "## Train / test obdobja (anchored — train raste, test je naslednje leto)", "",
          "Train se vedno začne na začetku podatkov (2019-05-23) in raste; med train in test je "
          "21-dnevni embargo (luknja, da drseči indikatorji ne pogledajo v test).", "",
+         f"**Stroški: vključeni** — {FEE:.2f} % na stran (fee + slippage), round-trip ~{2*FEE:.2f} %. "
+         "Opomba: model zaračuna strošek le ob menjavi signala (vstop/izstop), ne pa ob dnevnem "
+         "graded rebalansiranju pozicije (vol-targeting + bear-cut). Realni obrat je zato višji in "
+         "realni stroški še malenkost večji — kar bolj obremeni agresivnejše (bolj aktivne) confige.", "",
          "| Fold | TRAIN | TEST | izbran iz train (re-entry / bear / trail) | OOS Sortino izbran | OOS Sortino baseline |",
          "|---|---|---|---|---|---|"]
     for lab, ts_, te_, tr_end, cfg, s, b in rows:
