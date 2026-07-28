@@ -63,19 +63,39 @@ def _snapshot_path(key: str) -> Path:
 
 
 def freeze(key: str, fetcher) -> pd.DataFrame:
-    """Return frozen snapshot for `key`; fetch + persist on first access."""
+    """Return frozen snapshot for `key`; fetch + persist on first access.
+
+    Records the venue and the fetch time. Both matter: the venues agree on price
+    to ~0.1 %, but entry is a threshold, so that is enough to move whole trades —
+    3 percentage points of CAGR between Binance and Yahoo on BTC. A snapshot
+    without a recorded source cannot be compared to anything. (The pre-2026-07-27
+    snapshots carry `"source": "unknown"`; the BTC one was identified as Binance
+    only by matching daily volume.)
+
+    A final bar dated today is dropped: it is a candle still forming, not a close.
+    """
     path = _snapshot_path(key)
     if path.exists():
         return pd.read_parquet(path)
     df = fetcher()
     if df is None or len(df) == 0:
         raise RuntimeError(f"fetch for {key} returned no data")
+    source = df.attrs.get("source", "unknown") if hasattr(df, "attrs") else "unknown"
     if not isinstance(df, pd.DataFrame):        # SPX comes back as a Series
         df = df.to_frame("close")
+    dropped = None
+    today = pd.Timestamp.now(tz="UTC").normalize()
+    idx_utc = df.index if df.index.tz is not None else df.index.tz_localize("UTC")
+    if len(df) and idx_utc[-1] >= today:
+        dropped = str(df.index[-1].date())
+        df = df.iloc[:-1]
     df.to_parquet(path)
     man = _read_manifest()
     man[key] = {"rows": int(len(df)),
                 "first": str(df.index[0]), "last": str(df.index[-1]),
+                "source": source,
+                "fetched_utc": pd.Timestamp.now(tz="UTC").isoformat(timespec="seconds"),
+                "dropped_incomplete_bar": dropped,
                 "sha16": _sha256(df)}
     _write_manifest(man)
     return df

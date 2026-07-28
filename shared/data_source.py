@@ -336,6 +336,7 @@ def fetch_candles(
     bars: int = 500,
     config: Any = None,
     prefer: str = "binance",
+    strict: bool = False,
 ) -> pd.DataFrame:
     """Public entry point.
 
@@ -348,9 +349,19 @@ def fetch_candles(
         prefer: which source to try FIRST. Accepts 'binance' (default),
                 'coinbase', or 'yahoo'. The other two are tried in order
                 as fallbacks if the preferred one fails.
+        strict: when True, do NOT fall back — raise if `prefer` fails.
 
     Returns:
         DataFrame indexed by UTC timestamp, columns [open, high, low, close, volume].
+        `df.attrs["source"]` names the venue the data actually came from.
+
+    Why `strict` exists: the venues agree on price to ~0.1 %, but the strategy's
+    entry is a *threshold* (`close > trackline × 1.03`). When price sits next to
+    it, a tenth of a percent decides whether a trade fires today, three days
+    later, or not at all — measured at 3 percentage points of CAGR between
+    Binance and Yahoo on BTC. A silent fallback therefore silently changes every
+    number on the page. Anything whose output gets written down should pass
+    `strict=True`.
     """
     symbol_map = _resolve_symbol_map(config)
     symbol = symbol.upper()
@@ -370,41 +381,45 @@ def fetch_candles(
         sources = ["coinbase", "binance", "yahoo"]
     else:  # default / "binance"
         sources = ["binance", "coinbase", "yahoo"]
+    if strict:
+        sources = sources[:1]
+
+    def _one(src: str) -> pd.DataFrame:
+        if src == "binance":
+            if "binance" not in symbol_map[symbol]:
+                raise DataSourceError(f"No Binance id for {symbol}")
+            return _binance_fetch(symbol_map[symbol]["binance"],
+                                  _INTERVAL_MAP[interval]["binance"], bars)
+        if src == "coinbase":
+            if "coinbase" not in symbol_map[symbol]:
+                raise DataSourceError(f"No Coinbase product for {symbol}")
+            return _coinbase_fetch(symbol_map[symbol]["coinbase"], interval, bars)
+        if src == "yahoo":
+            if "yahoo" not in symbol_map[symbol]:
+                raise DataSourceError(f"No Yahoo ticker for {symbol}")
+            ticker_yf = symbol_map[symbol]["yahoo"]
+            # Try direct HTTP first (no websockets dependency), then yfinance.
+            try:
+                return _yahoo_direct_fetch(ticker_yf, bars)
+            except Exception:
+                return _yf_fetch(ticker_yf, interval, bars)
+        raise DataSourceError(f"Unknown source {src!r}")
 
     last_err: Optional[Exception] = None
     for src in sources:
         try:
-            if src == "binance":
-                if "binance" not in symbol_map[symbol]:
-                    raise DataSourceError(f"No Binance id for {symbol}")
-                return _binance_fetch(
-                    symbol_map[symbol]["binance"],
-                    _INTERVAL_MAP[interval]["binance"],
-                    bars,
-                )
-            if src == "coinbase":
-                if "coinbase" not in symbol_map[symbol]:
-                    raise DataSourceError(f"No Coinbase product for {symbol}")
-                return _coinbase_fetch(
-                    symbol_map[symbol]["coinbase"],
-                    interval,
-                    bars,
-                )
-            if src == "yahoo":
-                if "yahoo" not in symbol_map[symbol]:
-                    raise DataSourceError(f"No Yahoo ticker for {symbol}")
-                ticker_yf = symbol_map[symbol]["yahoo"]
-                # Try direct HTTP first (no websockets dependency), then yfinance.
-                try:
-                    return _yahoo_direct_fetch(ticker_yf, bars)
-                except Exception as _e_direct:
-                    return _yf_fetch(ticker_yf, interval, bars)
+            df = _one(src)
         except Exception as e:  # noqa: BLE001
             last_err = e
             continue
-    raise DataSourceError(
-        f"All sources failed for {symbol} {interval}: {last_err}"
-    )
+        df.attrs["source"] = src          # so callers can report what they got
+        return df
+    if strict:
+        raise DataSourceError(
+            f"{symbol} {interval}: source {sources[0]!r} failed and strict=True, so no "
+            f"fallback was used. Falling back to another venue would silently change "
+            f"every number computed from this data. Original error: {last_err}")
+    raise DataSourceError(f"All sources failed for {symbol} {interval}: {last_err}")
 
 
 def fetch_btc_daily(bars: int = 500, config: Any = None) -> pd.DataFrame:

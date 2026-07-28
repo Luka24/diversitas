@@ -18,6 +18,8 @@ import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
 from shared.data_source import fetch_candles, fetch_btc_daily, fetch_spx_daily
+from shared.warmup import trim_warmup, warmup_bars
+from shared.costs import turnover as shared_turnover
 from diversitas.config import LeanConfig, DEFAULT_CONFIG
 from diversitas.strategy import run_strategy, build_summary, S_BULL, S_NEUTRAL, S_BEAR
 
@@ -62,31 +64,57 @@ def _set_theme(dark: bool) -> None:
 
 # ── caching ───────────────────────────────────────────────────────────────────
 
+PRICE_SOURCE = "binance"        # pinned; see below
+
+
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_candles(symbol: str, bars: int) -> pd.DataFrame:
-    return fetch_candles(symbol, "1d", bars=bars, config=DEFAULT_CONFIG)
+    """Pinned to one venue; falls back only if it must, and never quietly.
+
+    The venues agree on price to about 0.1 %, but entry is a threshold, so a
+    tenth of a percent decides whether a trade fires today, three days later, or
+    not at all. On BTC that is 3 percentage points of CAGR between Binance and
+    Yahoo. A silent fallback therefore changes every figure on this page without
+    saying so — which is exactly what used to happen. A fallback is still better
+    than a blank dashboard, so it is allowed, but the caller must surface it.
+    """
+    try:
+        return fetch_candles(symbol, "1d", bars=bars, config=DEFAULT_CONFIG,
+                             prefer=PRICE_SOURCE, strict=True)
+    except Exception:
+        df = fetch_candles(symbol, "1d", bars=bars, config=DEFAULT_CONFIG,
+                           prefer=PRICE_SOURCE)          # fallback chain allowed
+        df.attrs["fell_back_from"] = PRICE_SOURCE
+        return df
 
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_btc(bars: int) -> pd.DataFrame:
-    return fetch_btc_daily(bars=bars, config=DEFAULT_CONFIG)
+    return _load_candles("BTC", bars)
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def _run(symbol: str, bars: int, use_btc_filter: bool, use_er: bool):
+def _run(symbol: str, bars: int, use_btc_filter: bool):
     _td   = 252 if symbol in STOCK_SYMBOLS else TRADING_DAYS
-    cfg   = LeanConfig(use_btc_filter=use_btc_filter, use_er=use_er, trading_days=_td)
+    cfg   = LeanConfig(use_btc_filter=use_btc_filter, trading_days=_td)
     daily = _load_candles(symbol, bars)
     btc   = _load_btc(bars) if use_btc_filter else None
-    return cfg, daily, run_strategy(daily, btc_daily=btc, config=cfg)
+    res   = run_strategy(daily, btc_daily=btc, config=cfg)
+    # Drop the bars on which the 200-day MA does not exist yet. Without this the
+    # regime block is silently disabled there (see shared/warmup.py) and the
+    # dashboard reports trades the strategy would never have taken.
+    res.df = trim_warmup(res.df)
+    return cfg, daily, res          # `daily` stays raw so the footer can show what was dropped
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def _run_b(symbol: str, bars: int, use_er: bool):
+def _run_b(symbol: str, bars: int):
     _td   = 252 if symbol in STOCK_SYMBOLS else TRADING_DAYS
-    cfg   = LeanConfig(use_btc_filter=False, use_er=use_er, trading_days=_td)
+    cfg   = LeanConfig(use_btc_filter=False, trading_days=_td)
     daily = _load_candles(symbol, bars)
-    return cfg, run_strategy(daily, config=cfg)
+    res   = run_strategy(daily, config=cfg)
+    res.df = trim_warmup(res.df)
+    return cfg, res
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -116,6 +144,19 @@ def _stats(r: pd.Series, td: int = TRADING_DAYS) -> dict:
                 max_dd=max_dd, calmar=calmar, eq=eq, dd=dd)
 
 
+def _prev_state(df: pd.DataFrame) -> pd.Series:
+    """Yesterday's signal. `trim_warmup` materialises this before slicing, so a
+    trimmed frame keeps the right position on its first bar (shared/warmup.py)."""
+    if "prev_signal_state" in df.columns:
+        return df["prev_signal_state"]
+    return df["signal_state"].shift(1)
+
+
+# The cost model lives in shared/costs.py so the dashboard and the reports cannot
+# use two different ones. See that module for why turnover, not `signal_changed`.
+_turnover = shared_turnover
+
+
 def _compute_metrics(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
                      td: int = TRADING_DAYS,
                      df_full: "pd.DataFrame | None" = None,
@@ -124,15 +165,19 @@ def _compute_metrics(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
     # window has the correct return instead of NaN→0.
     src          = df_full if df_full is not None else df
     ret_full     = src["close"].pct_change().fillna(0.0)
-    ib_full      = (src["signal_state"].shift(1) == S_BULL).astype(float)
+    ib_full      = (_prev_state(src) == S_BULL).astype(float)
     sig_ch_full  = src["signal_changed"].fillna(False)
     ret          = ret_full.reindex(df.index).fillna(0.0)
     is_bull      = ib_full.reindex(df.index).fillna(0.0)
     sig_ch       = sig_ch_full.reindex(df.index).fillna(False)
-    pos          = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
-    strat_ret    = pd.Series(ret.values * pos, index=ret.index)
+    pos          = pd.Series(np.where(is_bull, 1.0, bear_alloc_pct / 100.0),
+                             index=ret.index)
+    strat_ret    = pos * ret
     if fee_per_side_pct > 0:
-        strat_ret -= sig_ch.astype(float) * (fee_per_side_pct / 100.0)
+        # Charge on the bar the position actually moves, not on the bar the signal
+        # flips — trading happens the day after the signal. `signal_changed` is one
+        # bar early, which made the dashboard disagree with the reports.
+        strat_ret = strat_ret - _turnover(pos) * (fee_per_side_pct / 100.0)
     return {"strategy": _stats(strat_ret, td), "bh": _stats(ret, td)}
 
 
@@ -151,28 +196,28 @@ def _compute_portfolio_metrics(df_a: pd.DataFrame, df_b: pd.DataFrame,
     src_a = df_a_full if df_a_full is not None else df_a
     src_b = df_b_full if df_b_full is not None else df_b
     r_a_full      = src_a["close"].pct_change().fillna(0.0)
-    pos_a_full    = (src_a["signal_state"].shift(1) == S_BULL).astype(float)
+    pos_a_full    = (_prev_state(src_a) == S_BULL).astype(float)
     sig_ch_a_full = src_a["signal_changed"].fillna(False)
     r_b_full      = src_b["close"].pct_change().fillna(0.0)
-    pos_b_full    = (src_b["signal_state"].shift(1) == S_BULL).astype(float)
+    pos_b_full    = (_prev_state(src_b) == S_BULL).astype(float)
     sig_ch_b_full = src_b["signal_changed"].fillna(False)
 
     r_a      = r_a_full.reindex(idx).fillna(0.0)
     ib_a     = pos_a_full.reindex(idx).fillna(0.0)
     sig_ch_a = sig_ch_a_full.reindex(idx).fillna(False)
-    pos_a    = np.where(ib_a, 1.0, bear_alloc_pct / 100.0)
-    sr_a     = pd.Series(r_a.values * pos_a, index=idx)
+    pos_a    = pd.Series(np.where(ib_a, 1.0, bear_alloc_pct / 100.0), index=idx)
+    sr_a     = pos_a * r_a
 
     r_b      = r_b_full.reindex(idx).fillna(0.0)
     ib_b     = pos_b_full.reindex(idx).fillna(0.0)
     sig_ch_b = sig_ch_b_full.reindex(idx).fillna(False)
-    pos_b    = np.where(ib_b, 1.0, bear_alloc_pct / 100.0)
-    sr_b     = pd.Series(r_b.values * pos_b, index=idx)
+    pos_b    = pd.Series(np.where(ib_b, 1.0, bear_alloc_pct / 100.0), index=idx)
+    sr_b     = pos_b * r_b
 
     if fee_per_side_pct > 0:
         fee   = fee_per_side_pct / 100.0
-        sr_a -= sig_ch_a.astype(float) * fee
-        sr_b -= sig_ch_b.astype(float) * fee
+        sr_a  = sr_a - _turnover(pos_a) * fee
+        sr_b  = sr_b - _turnover(pos_b) * fee
 
     wa, wb     = w_a / 100.0, w_b / 100.0
     port_strat = wa * sr_a + wb * sr_b
@@ -265,23 +310,22 @@ def _worst_windows_from_sr(sr: pd.Series, td: int, window: int = 365) -> dict:
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _compute_worst_window(symbol: str, bars: int, use_btc_filter: bool,
-                           use_er: bool, bear_alloc_pct: float,
+                           bear_alloc_pct: float,
                            td: int, window: int = 365,
                            fee_per_side_pct: float = 0.0) -> dict:
     """Cached entry point — derives sr from a fresh strategy run."""
-    cfg    = LeanConfig(use_btc_filter=use_btc_filter, use_er=use_er, trading_days=td)
+    cfg    = LeanConfig(use_btc_filter=use_btc_filter, trading_days=td)
     daily  = _load_candles(symbol, bars)
     btc    = _load_btc(bars) if use_btc_filter else None
     result = run_strategy(daily, btc_daily=btc, config=cfg)
-    df     = result.df
+    df     = trim_warmup(result.df)
     ret    = df["close"].pct_change().fillna(0.0)
-    pos    = np.where(
-        (df["signal_state"].shift(1) == S_BULL), 1.0, bear_alloc_pct / 100.0
-    )
-    sr = pd.Series(ret.values * pos, index=ret.index)
+    pos    = pd.Series(np.where(
+        (_prev_state(df) == S_BULL), 1.0, bear_alloc_pct / 100.0
+    ), index=ret.index)
+    sr = pos * ret
     if fee_per_side_pct > 0:
-        sig_ch = df["signal_changed"].fillna(False)
-        sr -= sig_ch.astype(float) * (fee_per_side_pct / 100.0)
+        sr = sr - _turnover(pos) * (fee_per_side_pct / 100.0)
     return _worst_windows_from_sr(sr, td, window)
 
 
@@ -298,9 +342,6 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
     avg_d = sum(t["duration_days"] for t in closed) / n if n else None
     best = max(closed, key=lambda t: t["pnl_pct"])["pnl_pct"] if closed else None
     worst = min(closed, key=lambda t: t["pnl_pct"])["pnl_pct"] if closed else None
-    gross_profit = sum(t["pnl_pct"] for t in closed if t["pnl_pct"] > 0)
-    gross_loss = abs(sum(t["pnl_pct"] for t in closed if t["pnl_pct"] < 0))
-    pf = gross_profit / gross_loss if gross_loss > 1e-9 else None
 
     def _delta(sv, bv, is_pct: bool = True, positive_good: bool = True):
         """Returns (text, color) for strategy-vs-B&H delta badge."""
@@ -429,10 +470,6 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
               tip="Winning trades / total trades"),
     ]
     row2 = [
-        _card("Profit Factor",
-              _fmt_ratio(pf) if pf is not None else "—",
-              _val_col(pf) if pf is not None else COL_TEXT,
-              tip="Gross profit / gross loss"),
         _card("Trades", str(n) if n else "—", COL_TEXT,
               tip="Completed round-trip trades"),
         _card("Avg P&L",
@@ -738,8 +775,10 @@ def _build_price_chart(df: pd.DataFrame, symbol: str,
         line=dict(width=1), name="Price", showlegend=False,
     ), row=1, col=1)
 
-    # Trackline coloured by slope filter
-    rising = df["track_rising_window"].fillna(False).to_numpy()
+    # Trackline coloured by 1-bar slope — matches Pine `plot(trackline,
+    # color=trackRising ? green : red)` (diversitas_lean.pine:173). The status
+    # table separately uses the 10-bar `track_rising_window`, as Pine does at :226.
+    rising = df["track_rising"].fillna(False).to_numpy()
     tl     = df["trackline"].to_numpy()
     xs     = df.index
     seg_start, first = 0, True
@@ -763,8 +802,9 @@ def _build_price_chart(df: pd.DataFrame, symbol: str,
         name="50 MA (trend)", hovertemplate="50 MA %{y:,.2f}<extra></extra>",
     ), row=1, col=1)
 
-    # 200 MA coloured by direction
-    rising_long = (df["ma_long"] > df["ma_long"].shift(5)).fillna(False).to_numpy()
+    # 200 MA coloured by direction — reuse the column the strategy already computed
+    # (it honours cfg.ma_slope; the previous inline expression hard-coded 5).
+    rising_long = df["ma_long_rising"].fillna(False).to_numpy()
     ml          = df["ma_long"].to_numpy()
     seg2, fl2   = 0, True
     for i in range(1, len(df) + 1):
@@ -1035,7 +1075,7 @@ def _build_monthly_heatmap(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
         strat_ret = port_ret
     else:
         ret = df["close"].pct_change().fillna(0.0)
-        is_bull = (df["signal_state"].shift(1) == S_BULL).astype(float)
+        is_bull = (_prev_state(df) == S_BULL).astype(float)
         pos = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
         strat_ret = pd.Series(ret.values * pos, index=ret.index)
     monthly = strat_ret.resample("ME").apply(lambda x: (1 + x).prod() - 1) * 100
@@ -1146,7 +1186,7 @@ def _build_rolling_sharpe(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
         strat_ret = port_ret
     else:
         ret = df["close"].pct_change().fillna(0.0)
-        is_bull = (df["signal_state"].shift(1) == S_BULL).astype(float)
+        is_bull = (_prev_state(df) == S_BULL).astype(float)
         pos = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
         strat_ret = pd.Series(ret.values * pos, index=ret.index)
     bh_ret = df["close"].pct_change().fillna(0.0)
@@ -1509,8 +1549,6 @@ def _render_gates_and_status(df: pd.DataFrame, s: dict, cfg: LeanConfig,
             f'Entry gates · {symbol} · all must PASS for BULL</div>',
             unsafe_allow_html=True,
         )
-        er_val = float(last["er"]) if pd.notna(last["er"]) else 0.0
-        er_txt = f"ER {er_val:.2f} {'TREND' if s['er_ok'] else 'CHOP'}"
         gates = [
             ("Above trackline + buffer",
              bool(last["above_tl"]),
@@ -1527,9 +1565,6 @@ def _render_gates_and_status(df: pd.DataFrame, s: dict, cfg: LeanConfig,
             ("Regime OK (not bear block)",
              bool(last["regime_ok"]),
              "The 200-day MA regime must not be in a confirmed bear market."),
-            (er_txt if cfg.use_er else "ER filter (OFF)",
-             bool(last["er_ok"]),
-             f"Efficiency Ratio threshold: {cfg.er_thresh:.2f}. Entry blocked in chop."),
         ]
         if cfg.use_btc_filter:
             gates.append((
@@ -1612,9 +1647,6 @@ def _render_gates_and_status(df: pd.DataFrame, s: dict, cfg: LeanConfig,
             _row("Trackline slope", tl_dir, tl_col),
             _row("RSI", rsi_fmt, rsi_col),
             _row("Annual vol", f'{s["annual_vol"]:.1f}%', COL_NEUTRAL),
-            _row("Efficiency Ratio",
-                 f'{s["er"]:.2f}  {"TREND" if s["er_ok"] else "CHOP"}',
-                 COL_BULL if s["er_ok"] else COL_BEAR),
         ]
         if cfg.use_btc_filter:
             detail.append(_row("BTC filter",
@@ -1696,12 +1728,6 @@ def main() -> None:
                 "BTC cross-asset filter", value=False,
                 help="When ON the strategy only signals BULL if BTC is also in a bull regime. "
                      "Reduces false entries during broad crypto downturns. OFF by default in Lean.",
-            )
-            use_er = st.checkbox(
-                "Efficiency Ratio filter", value=True,
-                help="Kaufman Efficiency Ratio: ER = |net change over N bars| / sum(|daily changes|). "
-                     "Near 1 = clean trend, near 0 = sideways chop. "
-                     "When ON, entries are blocked during choppy markets (ER < 0.30).",
             )
             bear_alloc = st.slider(
                 "Min BEAR allocation %", min_value=0, max_value=50, value=0, step=5,
@@ -1822,10 +1848,25 @@ def main() -> None:
     td = 252 if symbol in STOCK_SYMBOLS else TRADING_DAYS
 
     try:
-        cfg, daily, result = _run(symbol, bars, use_btc_filter, use_er)
+        cfg, daily, result = _run(symbol, bars, use_btc_filter)
     except Exception as e:
         st.error(f"Data load failed for {symbol}: {e}")
         st.stop()
+
+    # A fallback venue is usable but the numbers are NOT comparable to anything
+    # computed on the pinned one — entry is a threshold, so ~0.1 % of price
+    # difference moves whole trades (3 pp of CAGR between Binance and Yahoo on
+    # BTC). Say so loudly rather than let the page look normal.
+    if daily.attrs.get("fell_back_from"):
+        st.error(
+            f"⚠️ **{daily.attrs['fell_back_from'].upper()} ni bil dosegljiv — "
+            f"prikazani podatki so z vira `{daily.attrs.get('source', '?')}`.**  \n"
+            f"Številke na tej strani **niso primerljive** s poročili, ki so "
+            f"računana na `{daily.attrs['fell_back_from']}`. Na BTC znaša razlika "
+            f"med viroma do 3 odstotne točke CAGR, ker je vstopni pogoj prag in "
+            f"že desetinka odstotka premakne cel posel. Za primerjavo s poročilom "
+            f"počakaj, da je `{daily.attrs['fell_back_from']}` spet dosegljiv."
+        )
 
     df_full = result.df
     df = df_full
@@ -1841,7 +1882,7 @@ def main() -> None:
     trades   = _build_trade_ledger(df)
     metrics  = _compute_metrics(df, bear_alloc_pct=bear_alloc, td=td, df_full=df_full,
                                 fee_per_side_pct=fee_per_side)
-    is_bull  = (df["signal_state"].shift(1) == S_BULL).astype(float)
+    is_bull  = (_prev_state(df) == S_BULL).astype(float)
     exposure = (is_bull * 100 + (1 - is_bull) * bear_alloc).mean()
 
     # ── portfolio mode: load & compute Asset B ────────────────────────────────
@@ -1852,7 +1893,7 @@ def main() -> None:
     trades_b: list[dict] = []
     if portfolio_mode:
         try:
-            cfg_b, result_b = _run_b(sym_b, bars, use_er)
+            cfg_b, result_b = _run_b(sym_b, bars)
         except Exception as e:
             st.error(f"Data load failed for {sym_b}: {e}")
             st.stop()
@@ -1871,7 +1912,7 @@ def main() -> None:
             df, df_b, w_a, w_b, bear_alloc, td_a=td, td_b=td_b_val,
             df_a_full=df_full, df_b_full=df_b_full,
             fee_per_side_pct=fee_per_side)
-        is_bull_b = (df_b_al["signal_state"].shift(1) == S_BULL).astype(float)
+        is_bull_b = (_prev_state(df_b_al) == S_BULL).astype(float)
         exp_b = (is_bull_b * 100 + (1 - is_bull_b) * bear_alloc).mean()
         trades_b = _build_trade_ledger(df_b)
 
@@ -1896,7 +1937,7 @@ def main() -> None:
     worst_w = worst_w_b = {}
     try:
         worst_w = _compute_worst_window(
-            symbol, bars, use_btc_filter, use_er, float(bear_alloc), td,
+            symbol, bars, use_btc_filter, float(bear_alloc), td,
             window=td, fee_per_side_pct=fee_per_side)
     except Exception:
         pass
@@ -1904,7 +1945,7 @@ def main() -> None:
         try:
             td_b_worst = 252 if sym_b in STOCK_SYMBOLS else TRADING_DAYS
             worst_w_b = _compute_worst_window(
-                sym_b, bars, False, use_er, float(bear_alloc), td_b_worst,
+                sym_b, bars, False, float(bear_alloc), td_b_worst,
                 window=td_b_worst, fee_per_side_pct=fee_per_side)
         except Exception:
             pass
@@ -2163,10 +2204,18 @@ def main() -> None:
             st.plotly_chart(_build_trade_scatter(trades),
                             use_container_width=True, key="tscat_single")
 
+    # Spell out the exact window the numbers above were computed on. Without this
+    # the dashboard (live data, rolling `bars` fetch) and a written report (frozen
+    # snapshot, fixed dates) silently disagree and neither side can tell why.
+    _w_from, _w_to = df.index[0].date(), df.index[-1].date()
+    _raw_from = daily.index[0].date()
+    _src = daily.attrs.get("source", "?")
     st.markdown(
         f'<div style="color:{COL_VERY_DIM};font-size:10px;margin-top:8px;'
         f'font-family:monospace;text-align:right">'
-        f'Backtest · fee+slip {fee_per_side:.2f}%/stran ({fee_per_side*2:.2f}% RT) · Lean</div>',
+        f'Vir cen: {_src} · Okno: {_w_from} → {_w_to} ({len(df)} barov) · '
+        f'ogrevanje zavrženo od {_raw_from} · '
+        f'fee+slip {fee_per_side:.2f}%/stran ({fee_per_side*2:.2f}% RT) · Lean</div>',
         unsafe_allow_html=True,
     )
 

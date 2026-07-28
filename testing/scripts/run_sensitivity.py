@@ -57,7 +57,7 @@ GRIDS = {
         "confirm_bars":     [1, 2, 3, 4, 5],
         "reentry_hold":     [5, 8, 10, 12, 15, 18, 20, 25],
         "exit_grace_bars":  [1, 2, 3, 4, 5],
-        "er_thresh":        _frange(0.10, 0.40, 0.05),
+        # er_thresh dropped 2026-07-27 — the ER gate no longer exists in Lean.
         "blowoff_dist_pct": [15, 20, 25, 30, 35, 40],
         "vol_shock_mul":    [1.2, 1.5, 1.8, 2.0, 2.5],
         "track_slope_bars": [5, 8, 10, 12, 15],

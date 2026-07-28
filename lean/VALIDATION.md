@@ -1,103 +1,98 @@
 # Validation — Diversitas Lean (Python port)
 
+_Zadnja osvežitev: 2026-07-27, po odstranitvi ER gatea._
+
 ## 1. Unit tests
+
 ```
-$ cd lean && ../.venv/bin/python -m pytest diversitas/tests/ -v
-======================== 21 passed in 1.18s =========================
+$ cd lean && ../.venv/Scripts/python.exe -m pytest diversitas/tests/ -q
+======================== 14 passed in 2.86s =========================
 ```
 
-| Test | What it checks |
+| Test | Kaj preverja |
 |---|---|
-| `test_sma_matches_mean` | SMA basic |
-| `test_ema_first_valid_equals_sma_seed` | EMA seeding |
-| `test_rma_alpha_one_over_n` | Wilder smoothing |
-| `test_rsi_in_range_and_extremes` | RSI ∈ [0,100], saturates on uptrend |
-| `test_rsi_downtrend_low` | RSI < 5 on pure downtrend |
-| `test_adx_responds_to_trend` | ADX > 30 on strong move |
-| `test_highest_lowest` | rolling extremes |
-| `test_bars_since_counts_correctly` | Pine barssince semantics |
-| `test_stdev_pop_matches_numpy` | population stdev |
-| `test_bull_condition_requires_all_components` | bull_condition is hard AND |
-| `test_bear_regime_blocks_bull` | hard regime block works |
-| `test_uptrend_triggers_bull` | strategy emits BULL on uptrend |
-| `test_downtrend_stays_bear` | strategy stays BEAR on downtrend |
-| `test_state_codes_valid` | states ∈ {1,2,3} |
-| `test_blowoff_triggers_bear_from_bull` | blowoff exit fires |
-| `test_reentry_lock_respected` | ≥ reentry_hold days between BULL re-entries |
-| `test_confirm_bars_enforced` | BULL needs bull_hold ≥ confirm_bars |
-| `test_bars_since_signal_resets_on_both_directions` | **Lean-specific:** reset on BOTH BULL and BEAR (Full only resets on BULL) |
-| `test_alloc_zero_when_bear` | alloc = 0 when BEAR |
-| `test_alloc_capped_at_100` | alloc ≤ 100 always |
-| `test_summary_has_required_keys` | summary dict complete |
+| `test_default_is_donchian_off_and_identical` | `use_donchian=False` da identičen signal → Pine parity |
+| `test_donchian_on_is_a_stricter_filter` | vklopljen Donchian samo zaostri, nikoli ne doda vstopov |
+| `test_bull_condition_requires_all_components` | `bull_condition` je trdi AND |
+| `test_bear_regime_blocks_bull` | trda regime blokada deluje |
+| `test_uptrend_triggers_bull` | strategija odda BULL v trendu navzgor |
+| `test_downtrend_stays_bear` | ostane BEAR v trendu navzdol |
+| `test_state_codes_valid` | stanja ∈ {1,2,3} |
+| `test_blowoff_triggers_bear_from_bull` | blow-off izhod se sproži |
+| `test_reentry_lock_respected` | ≥ `reentry_hold` dni med ponovnimi vstopi |
+| `test_confirm_bars_enforced` | BULL zahteva `bull_hold ≥ confirm_bars` |
+| `test_bars_since_signal_resets_on_both_directions` | **lean-specifično:** reset na BULL IN BEAR |
+| `test_alloc_zero_when_bear` | alokacija 0 ko BEAR |
+| `test_alloc_capped_at_100` | alokacija ≤ 100 |
+| `test_summary_has_required_keys` | summary dict popoln |
 
-## 2. Backtest sanity (live Binance)
+> Prejšnja različica tega dokumenta je navajala 21 testov. Indikatorski testi
+> (SMA/EMA/RSI/ADX/stdev) so se preselili v `shared/tests/test_indicators.py`,
+> ko je bil `shared/` izločen. V `lean/` jih je 14.
 
-### BTC, 1500 daily bars
+## 2. Backtest na zamrznjenih podatkih
+
+Vir: `testing/data/BTC.parquet` in `ETH.parquet` (SHA v `manifest.json`).
+Ogrevanje 199 barov izključeno, zato je prvi uporabni dan **2019-12-24**.
+
+### BTC, 2019-12-24 → 2026-07-20 (2401 dni)
+
 ```
-BULL bars : 590 (45.3%)
-BEAR bars : 711 (54.7%)
-Transitions: 18
+CAGR            36.0 %
+Sortino          1.61
+MaxDD          -39.1 %   (dno 2023-03-10)
+izpostavljenost 43.4 %
+tradov            17
 
-Naive equity:
-  Buy & hold       : +276.0%
-  Diversitas Lean  : +193.8%
-  Exposure         : 45.3%
-```
-**Lean captures 70 % of buy-and-hold while only being in market 45 % of the time.**
-
-### Visual spot-check of transitions
-- 2023-01-19 BULL at $21K — bottom of 2022 bear
-- 2023-12-05 BEAR at $44K (blow-off) — caught the December top
-- 2024-03-04 BEAR at $68K (blow-off) — caught the March top
-- 2024-11-21 BEAR at $98K (blow-off) — caught the post-election top
-- 2025-09-27 BEAR at $109K — currently in BEAR
-
-All three blow-off exits triggered at actual local tops. The strategy is doing its job.
-
-## 3. Dashboard (Streamlit)
-
-Launched with:
-```
-.venv/bin/streamlit run lean/diversitas/dashboard.py --server.headless true --server.port 8502
-```
-Health probe:
-```
-GET http://localhost:8502/_stcore/health -> "ok"
-GET http://localhost:8502/                -> HTTP 200
+Buy & hold:  CAGR 39.2 %,  MaxDD -76.6 %
 ```
 
-Pipeline render simulation:
-```
-price chart traces: 35
-vol chart traces: 2
-trades: 6
-OK
-```
+**Drawdown je prepolovljen pri primerljivem donosu — to je jedro izdelka.**
+Razlika v MaxDD proti buy & hold je +37,5 odstotne točke.
 
-Dashboard sections:
-- **Hero row** (5 cards): Signal · Regime · Close · Price vs TL · Allocation
-- **Main chart** (720 px): candles + segmented trackline (by 10-bar slope) +
-  50 MA + 200 MA (segmented by 5-bar slope) + green/red dots + BULL/BEAR triangles +
-  background by display state + allocation stepline subplot
-- **Entry gates panel** (Lean signature): PASS/FAIL row for each of the 5–6
-  conditions required for BULL — instantly shows what's missing for re-entry
-- **Status detail**: 200 MA / 50 MA / Trackline slope / RSI / Vol / (BTC filter)
-- **Performance summary**: trades, win rate, avg P&L, avg duration, best/worst,
-  cumulative strategy total vs buy-and-hold
-- **Volatility chart**: annual vol with vol-shock threshold overlay
-- **Trade ledger**: last 12 trades with exit trigger (blow-off / vol-shock / trend-break)
+### Kontrola pravilnosti
 
-Auto-refresh: 60 s. Manual refresh button clears caches.
+`(1 + CAGR)^leta` natanko reproducira končno vrednost krivulje (5,647× pri ER,
+7,553× brez), kar potrjuje, da metrike in krivulja izhajajo iz istih donosov.
+Drawdown se nikoli ne obrne v pozitivno, začne pri 0 in se resetira ob vsakem
+novem vrhu (400 takih dni od 2401).
 
-## 4. Differences vs Full (validated)
+## 3. Spremembe strategije
 
-| Property | Full | Lean |
+### 3.1 ER gate odstranjen (2026-07-27)
+
+Commit `291d9b2` (2026-06-13) je dodal Kaufmanov Efficiency Ratio kot osmi pogoj
+za vstop — v Python, ne pa v Pine. Odstranjen, ker se ni dalo pokazati, da kaj
+počne:
+
+- prag 0,30 leži na **mediani** porazdelitve ER (p50 = 0,29), torej reže polovico
+  dni ne glede na trg;
+- povprečen ER na dneh v BULL (0,35) je enak kot na dneh v BEAR (0,32) — filter
+  ne loči režimov, kar naj bi bila njegova celotna funkcija;
+- vseh 18 intervalov zaupanja (2 sredstvi × 3 okna × 3 metrike) prečka ničlo;
+- če ER izklopiš in pozicije skaliraš na **isto povprečno izpostavljenost**,
+  navadno skaliranje premaga ER na Ulcerju 6 : 0 in na MaxDD 4× (2× izenačeno).
+
+Poročilo: `testing/porocilo_ER_lean.md` (BTC + ETH), grafi
+`testing/porocilo_ER_BTC.html`.
+
+Po odstranitvi je `bull_condition` spet Pine-jevih šest členov (plus neaktivni
+`donchian_ok`) in izmerjeni signal se **natanko** ujema s tem, kar je bilo prej
+izmerjeno kot varianta »ER izklopljen«.
+
+### 3.2 Popravek ogrevanja v testnem motorju (2026-07-27)
+
+Glej `lean/AUDIT.md` §11. Vse številke v `testing/reports/`, ki so nastale prej,
+je treba brati s tem pridržkom.
+
+## 4. Razlike proti Full (preverjeno)
+
+| Lastnost | Full | Lean |
 |---|---|---|
-| Bear regime | Soft (+15 thr) | **Hard block** |
-| Entry decision | Conviction score 0–100 | Hard AND of 5–6 gates |
-| State levels | 3 (raw / display / signal) | 1 (signal) + display |
-| `barsSinceSignal` reset | On BULL only | **On BOTH BULL and BEAR** (validated by `test_bars_since_signal_resets_on_both_directions`) |
-| Allocation formula | `conv × volScale × trendPersistence` | `100 × volScale` (when BULL) |
-| Default target vol | 25 % | 50 % |
-| BTC filter default | ON | **OFF** |
-| Weekend handling | Optional skip | Always trades |
+| Bear regime | mehko (+15 prag) | **trda blokada** |
+| Odločitev o vstopu | conviction score 0–100 | trdi AND šestih pogojev |
+| Nivoji stanj | 3 (raw / display / signal) | 1 (signal) + display |
+| `barsSinceSignal` reset | samo na BULL | **na BULL IN BEAR** |
+| Alokacija | `conv × volScale × trendPersistence` | binarno 100 / 0 |
+| BTC filter privzeto | vklopljen | **izklopljen** |
+| Vikendi | opcijski preskok | vedno trguje |

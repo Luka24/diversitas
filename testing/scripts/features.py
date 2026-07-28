@@ -223,11 +223,13 @@ def _rebuild_bull(df, cfg, variant):
         df["bull_condition"] = (df["above_tl"] & df["above_ma_fast"] & df["momentum_ok"]
                                 & df["track_rising_window"] & df["er_ok"]
                                 & df["btc_filter_ok"] & ~regime_blocks).fillna(False)
-    else:  # lean — exact factors from lean/diversitas/strategy.py:98
+    else:  # lean — exact factors from lean/diversitas/strategy.py
+        # The ER gate was removed on 2026-07-27; Lean is back to Pine's six factors
+        # (donchian_ok is all-True unless `use_donchian` is on).
         df["bull_condition"] = (
             df["above_tl"] & df["above_ma_med"] & df["track_rising_window"]
             & df["dist_entry_ok"] & df["regime_ok"] & df["btc_filter_ok"]
-            & df["er_ok"]).fillna(False)
+            & df["donchian_ok"]).fillna(False)
     df["green_dot"] = df["bull_condition"]
     df["red_dot"] = df["below_tl"]
     return df

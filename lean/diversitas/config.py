@@ -38,10 +38,13 @@ class LeanConfig:
     use_vol_sizing: bool = True
     target_vol_pct: float = 50.0
 
-    # Efficiency Ratio trend filter (Kaufman)
-    use_er: bool = True
-    er_len: int = 10          # lookback bars
-    er_thresh: float = 0.30   # below this = chop, entry blocked
+    # NOTE: the Kaufman Efficiency Ratio gate (`use_er`, `er_len`, `er_thresh`) was
+    # removed on 2026-07-27. It was a Python-only addition that Pine never had, and
+    # it could not be shown to do anything: its threshold sat on the median of the ER
+    # distribution, mean ER on BULL days (0.35) matched BEAR days (0.32), every
+    # confidence interval spanned zero, and simply scaling positions to the same
+    # average exposure matched or beat it on drawdown. See
+    # `testing/porocilo_ER_lean.md` and `testing/porocilo_ER_BTC.html`.
 
     # Donchian breakout confirmation (validated improvement; OFF by default so the
     # a-priori Lean is unchanged). When ON, entry also requires the close to sit in
@@ -57,15 +60,20 @@ class LeanConfig:
     trading_days: int = 365
 
     # Symbol → per-source identifier (same map as full)
+    # NOTE: the `coinbase` ids were missing here until 2026-07-27. Because this map
+    # overrides `shared.data_source.DEFAULT_SYMBOL_MAP`, the Coinbase branch raised
+    # "No Coinbase product" and was skipped — the fallback chain was silently
+    # binance → yahoo, with no middle step and no indication in the UI.
     symbol_map: Dict[str, Dict[str, str]] = field(default_factory=lambda: {
-        "BTC": {"binance": "BTCUSDT", "yahoo": "BTC-USD", "coingecko": "bitcoin"},
-        "ETH": {"binance": "ETHUSDT", "yahoo": "ETH-USD", "coingecko": "ethereum"},
-        "SOL": {"binance": "SOLUSDT", "yahoo": "SOL-USD", "coingecko": "solana"},
+        "BTC": {"binance": "BTCUSDT", "coinbase": "BTC-USD", "yahoo": "BTC-USD", "coingecko": "bitcoin"},
+        "ETH": {"binance": "ETHUSDT", "coinbase": "ETH-USD", "yahoo": "ETH-USD", "coingecko": "ethereum"},
+        "SOL": {"binance": "SOLUSDT", "coinbase": "SOL-USD", "yahoo": "SOL-USD", "coingecko": "solana"},
+        # BNB is not listed on Coinbase — key intentionally absent.
         "BNB": {"binance": "BNBUSDT", "yahoo": "BNB-USD", "coingecko": "binancecoin"},
-        "XRP": {"binance": "XRPUSDT", "yahoo": "XRP-USD", "coingecko": "ripple"},
-        "ADA": {"binance": "ADAUSDT", "yahoo": "ADA-USD", "coingecko": "cardano"},
-        "AVAX": {"binance": "AVAXUSDT", "yahoo": "AVAX-USD", "coingecko": "avalanche-2"},
-        "LINK": {"binance": "LINKUSDT", "yahoo": "LINK-USD", "coingecko": "chainlink"},
+        "XRP": {"binance": "XRPUSDT", "coinbase": "XRP-USD", "yahoo": "XRP-USD", "coingecko": "ripple"},
+        "ADA": {"binance": "ADAUSDT", "coinbase": "ADA-USD", "yahoo": "ADA-USD", "coingecko": "cardano"},
+        "AVAX": {"binance": "AVAXUSDT", "coinbase": "AVAX-USD", "yahoo": "AVAX-USD", "coingecko": "avalanche-2"},
+        "LINK": {"binance": "LINKUSDT", "coinbase": "LINK-USD", "yahoo": "LINK-USD", "coingecko": "chainlink"},
         # ── equities / ETFs (yfinance only, 252 trading days/yr) ─────────────
         "SPY":  {"yahoo": "SPY"},    # S&P 500 ETF
         "QQQ":  {"yahoo": "QQQ"},    # Nasdaq-100 ETF

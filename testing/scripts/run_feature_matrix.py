@@ -65,7 +65,8 @@ def build_specs(variant):
         [5, 8, 10, 12, 15, 18, 20, 25] if variant == "lean" else [2, 3, 4, 6, 8, 10])
     cfg("confirm_bars", "confirm_bars", [1, 2, 3, 4, 5])
     cfg("exit_grace_bars", "exit_grace_bars", [1, 2, 3, 4, 5])
-    cfg("er_thresh", "er_thresh", [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40])
+    if variant == "momentum":       # Lean's ER gate was removed 2026-07-27
+        cfg("er_thresh", "er_thresh", [0.10, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40])
     cfg("blowoff_dist_pct", "blowoff_dist_pct", [15, 20, 25, 30, 35, 40])
     cfg("target_vol_pct", "target_vol_pct", [40, 50, 60, 70, 80, 90])
     if variant == "momentum":

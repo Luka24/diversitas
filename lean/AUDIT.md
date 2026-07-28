@@ -9,6 +9,21 @@ Dva sprejemljiva minor odstopa (oba brez vpliva na signal).**
 
 ---
 
+## 0. Zgodovina revizije
+
+| datum | sprememba |
+|---|---|
+| prvotno | ta revizija; ugotovljeno 0 napak pri 6-členskem `bullCondition` |
+| 2026-06-13 | commit `291d9b2` je dodal **ER gate** (Kaufman Efficiency Ratio) v Python, ne pa v Pine → `bullCondition` je postal 8-členski in ta dokument je nehal držati |
+| — | dodan `use_donchian` (privzeto OFF, torej no-op) |
+| **2026-07-27** | **ER odstranjen.** Python je spet 6-členski in usklajen s Pine. Utemeljitev: `testing/porocilo_ER_lean.md`, grafi `testing/porocilo_ER_BTC.html` |
+| 2026-07-27 | popravljeno ogrevanje indikatorjev v testnem motorju (`testing/scripts/engine.py`) — glej §11 |
+
+Ta dokument spet velja za trenutno kodo. Edina razlika proti Pine je neaktivna
+`donchian_ok` (glej §3).
+
+---
+
 ## 1. Inputs — Pine vrstice 23–57 vs `config.py`
 
 | # | Pine input | Default | Python (LeanConfig) | Default | Status |
@@ -90,7 +105,12 @@ Vse defaultne vrednosti se ujemajo.
 | Pine | Python | Status |
 |---|---|---|
 | `distEntryOK = distPct >= (trackBuf + minDistEntry)` | `df["dist_pct"] >= (cfg.track_buf_pct + cfg.min_dist_entry_pct)` | ✅ |
-| `bullCondition = aboveTL and close > maMed and trackRisingWindow and distEntryOK and regimeOK and btcFilterOK` | `above_tl & above_ma_med & track_rising_window & dist_entry_ok & regime_ok & btc_filter_ok` (6-way AND) | ✅ |
+| `bullCondition = aboveTL and close > maMed and trackRisingWindow and distEntryOK and regimeOK and btcFilterOK` | `above_tl & above_ma_med & track_rising_window & dist_entry_ok & regime_ok & btc_filter_ok & donchian_ok` | ⚠️ |
+
+⚠️ Python ima sedmi člen `donchian_ok`, ki pa je **privzeto vedno True**
+(`use_donchian=False`), zato je signal identičen Pine. Zaklenjeno s testom
+`test_default_is_donchian_off_and_identical`. Če se `use_donchian` kdaj vklopi,
+Python odstopi od Pine in to je treba zavestno dokumentirati.
 | `trendBreak = belowTL` | `df["trend_break"] = df["below_tl"]` | ✅ |
 | `blowoff = distPct > blowoffDist and rsiVal > 80` | `(dist_pct > cfg.blowoff_dist_pct) & (rsi > 80)` | ✅ |
 | `volShock = annualVol > ta.sma(annualVol, 50) * volShockMul and belowTL` | `(annual_vol > vol_avg50 * cfg.vol_shock_mul) & below_tl` | ✅ |
@@ -317,3 +337,29 @@ v signal generation:**
 
 **Strategija v Pythonu je pravilno (in faithfully) implementirana.**
 Nobenega popravka v `strategy.py` ali `config.py` ni potrebno.
+
+---
+
+## 11. Ogrevanje indikatorjev (dodano 2026-07-27)
+
+Ne gre za odstop Pine ↔ Python, ampak za past pri testiranju, ki je dovolj resna,
+da mora biti zapisana tukaj.
+
+200-dnevna drseča sredina prvih 199 barov ne obstaja. Ko je `ma_long` NaN, pandas
+oceni `close > NaN` in `NaN < NaN` kot `False`, zato:
+
+```
+bear_regime = (~False) & False = False   →   regime_ok = True
+```
+
+Regime blokada torej med ogrevanjem **ni nedefinirana, ampak tiho izklopljena**.
+Ni izjeme, ni NaN v signalu, nič se ne opazi. Vsi rezultati testne kampanje pred
+2026-07-27 zato vsebujejo uvodni odsek, kjer je strategija tekla brez svojega
+glavnega filtra.
+
+Popravljeno v `testing/scripts/engine.py` (`warmup_bars`, `trim_warmup`, privzeto
+vklopljeno), zaklenjeno s 7 testi v `testing/tests/test_warmup.py`. Produkcijski
+CLI `lean/diversitas/backtest.py:31` je to vedno delal pravilno
+(`dropna(subset=["ma_long"])`); manjkalo je le v testnem motorju.
+
+Za BTC to pomeni: prvi uporabni bar je **2019-12-24**, ne 2019-06-08.
