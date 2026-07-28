@@ -47,6 +47,33 @@ def warmup_bars(df: pd.DataFrame) -> int:
     return int(first)
 
 
+def required_history(config) -> int:
+    """Bars of history a caller must fetch *before* the first bar it wants to show.
+
+    Trimming alone throws data away: fetch 2000 bars, lose the first 199, and a
+    five-year window (1826 bars) no longer fits in what is left. The fix is to
+    fetch the window *plus* this much extra, so every displayed bar has fully
+    defined indicators behind it and nothing is lost.
+
+    Derived from the config rather than hard-coded, so lengthening a moving
+    average cannot silently leave the caller short of history.
+    """
+    lookbacks = []
+    for name in ("ma_long_len", "ma_med_len", "ma_reg_len", "ma_fast_len",
+                 "ema_slow_len", "track_period", "rsi_len", "donchian_period"):
+        v = getattr(config, name, None)
+        if isinstance(v, (int, float)) and v > 0:
+            lookbacks.append(int(v))
+    vol = getattr(config, "vol_lookback", 0) or 0
+    if vol:
+        lookbacks.append(int(vol) + 50)        # vol_avg50 = SMA(annual_vol, 50)
+    base = max(lookbacks) if lookbacks else 0
+    # slope comparisons look a further N bars back
+    slope = max(int(getattr(config, "ma_slope", 0) or 0),
+                int(getattr(config, "track_slope_bars", 0) or 0))
+    return base + slope + 10                   # + slack
+
+
 def trim_warmup(df: pd.DataFrame) -> pd.DataFrame:
     """Drop the warm-up prefix returned by `warmup_bars`.
 

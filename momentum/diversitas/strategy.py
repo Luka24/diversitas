@@ -68,7 +68,6 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
     df["log_ret"] = log_ret
     daily_std = ind.stdev_pop(log_ret, cfg.vol_lookback)
     df["annual_vol"] = daily_std * math.sqrt(cfg.trading_days) * 100.0
-    df["vol_avg50"]  = ind.sma(df["annual_vol"], 50)
 
     # --- BTC filter ---
     if cfg.use_btc_filter and btc_daily is not None and not btc_daily.empty:
@@ -104,7 +103,6 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
 
     df["trend_break"] = df["below_tl"]
     df["blowoff"]     = (df["dist_pct"] > cfg.blowoff_dist_pct) & (df["rsi"] > 80)
-    df["vol_shock"]   = (df["annual_vol"] > (df["vol_avg50"] * cfg.vol_shock_mul)) & df["below_tl"]
 
     df["green_dot"] = df["bull_condition"]
     df["red_dot"]   = df["below_tl"]
@@ -143,7 +141,6 @@ def run_state_machine(df: pd.DataFrame, cfg: MomentumConfig) -> pd.DataFrame:
     above_arr    = df["above_tl"].fillna(False).to_numpy()
     bull_arr     = df["bull_condition"].fillna(False).to_numpy()
     blowoff_arr  = df["blowoff"].fillna(False).to_numpy()
-    vol_shock_arr = df["vol_shock"].fillna(False).to_numpy()
     annual_vol_arr = df["annual_vol"].fillna(0.0).to_numpy()
     close_arr    = df["close"].to_numpy()
     bear_arr     = df["bear_regime"].fillna(False).to_numpy()
@@ -190,10 +187,6 @@ def run_state_machine(df: pd.DataFrame, cfg: MomentumConfig) -> pd.DataFrame:
                 entry_peak = np.nan
                 exit_reason_trail[i] = True
             elif blowoff_arr[i]:
-                cur_sig = S_BEAR
-                bars_since_sig = 0
-                entry_peak = np.nan
-            elif vol_shock_arr[i]:
                 cur_sig = S_BEAR
                 bars_since_sig = 0
                 entry_peak = np.nan
@@ -283,7 +276,6 @@ def build_summary(df: pd.DataFrame) -> dict:
         "annual_vol":       float(last["annual_vol"]),
         "target_alloc":     float(last["target_alloc"]),
         "blowoff":          bool(last["blowoff"]),
-        "vol_shock":        bool(last["vol_shock"]),
         "btc_bull":         bool(last["btc_bull"]),
         "rsi":              float(last["rsi"]) if pd.notna(last["rsi"]) else float("nan"),
         "er":               float(last["er"]) if pd.notna(last["er"]) else float("nan"),

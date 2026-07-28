@@ -73,6 +73,42 @@ def test_run_overlay_trims_too():
     assert len(raw) - len(trimmed) == 199
 
 
+def test_requested_window_survives_the_warmup_when_history_is_sized_for_it():
+    """Trimming alone loses data: fetch N bars, drop the warm-up, and a window
+    that needed all N no longer fits. A caller that adds `required_history` to
+    its fetch keeps the whole window it asked for."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lean"))
+    from diversitas.config import LeanConfig
+    from shared.warmup import required_history
+
+    cfg = LeanConfig()
+    warm = required_history(cfg)
+    assert warm >= 200, "must cover the 200-day regime MA"
+
+    want = 1826                                   # e.g. a five-year view
+    naive = _synthetic(n=want)                    # fetch only what you want to show
+    assert len(engine.run("lean", naive)) < want, "the naive fetch loses the warm-up"
+
+    sized = _synthetic(n=want + warm)             # fetch the window PLUS its history
+    got = engine.run("lean", sized)
+    assert len(got) >= want, "a correctly sized fetch keeps the whole window"
+
+
+def test_required_history_tracks_the_config_not_a_magic_number():
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lean"))
+    from dataclasses import replace
+    from diversitas.config import LeanConfig
+    from shared.warmup import required_history
+
+    base = required_history(LeanConfig())
+    longer = required_history(replace(LeanConfig(), ma_long_len=400))
+    assert longer - base == 200, "lengthening the regime MA must lengthen the warm-up"
+
+
 def test_history_shorter_than_lookback_raises():
     daily = _synthetic(n=120)                        # SMA200 never becomes valid
     raw = engine.run("lean", daily, trim_warmup=False)

@@ -18,7 +18,7 @@ import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
 from shared.data_source import fetch_candles, fetch_btc_daily, fetch_spx_daily
-from shared.warmup import trim_warmup, warmup_bars
+from shared.warmup import trim_warmup, warmup_bars, required_history
 from shared.costs import turnover as shared_turnover
 from diversitas.config import LeanConfig, DEFAULT_CONFIG
 from diversitas.strategy import run_strategy, build_summary, S_BULL, S_NEUTRAL, S_BEAR
@@ -1838,11 +1838,16 @@ def main() -> None:
 
     _set_theme(dark_mode)
 
+    # Fetch the window the user asked for PLUS the history its indicators need, so
+    # every displayed bar is fully defined and none of the requested window is lost
+    # to warm-up. `required_history` reads the lookbacks off the config, so this
+    # cannot drift if a moving average is lengthened.
+    _warm = required_history(LeanConfig())
     if date_from is not None:
-        _days = (datetime.date.today() - date_from).days + 200
+        _days = (datetime.date.today() - date_from).days + _warm
         bars  = max(600, ((_days // 100) + 1) * 100)
     else:
-        bars = 2000
+        bars = 2000 + _warm
 
     # trading-day calendar (252 for stocks/ETFs, 365 for crypto)
     td = 252 if symbol in STOCK_SYMBOLS else TRADING_DAYS

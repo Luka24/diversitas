@@ -36,7 +36,6 @@ class MomentumConfig:
     use_trail: bool = True
     trail_pct: float = 12.0    # trailing stop: exit if price falls trail_pct% from peak
     blowoff_dist_pct: float = 20.0
-    vol_shock_mul: float = 1.5
     vol_lookback: int = 20
 
     # Bear-regime soft cut (0 = full block like Lean, 50 = half size)

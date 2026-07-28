@@ -18,6 +18,7 @@ import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
 from shared.data_source import fetch_candles, fetch_btc_daily, fetch_spx_daily
+from shared.warmup import trim_warmup, required_history
 from diversitas.config import MomentumConfig, DEFAULT_CONFIG
 from diversitas.strategy import run_strategy, build_summary, S_BULL, S_NEUTRAL, S_BEAR
 from diversitas.rotation import run_rotation
@@ -62,14 +63,30 @@ def _set_theme(dark: bool) -> None:
 
 # ── caching ───────────────────────────────────────────────────────────────────
 
+PRICE_SOURCE = "binance"        # pinned; a silent venue swap changes every figure
+
+
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_candles(symbol: str, bars: int) -> pd.DataFrame:
-    return fetch_candles(symbol, "1d", bars=bars, config=DEFAULT_CONFIG)
+    """Pinned to one venue; falls back only if it must, and never quietly.
+
+    The venues agree on price to about 0.1 %, but entry is a threshold, so a
+    tenth of a percent moves whole trades — 3 percentage points of CAGR between
+    Binance and Yahoo on BTC. See shared/costs.py and shared/warmup.py.
+    """
+    try:
+        return fetch_candles(symbol, "1d", bars=bars, config=DEFAULT_CONFIG,
+                             prefer=PRICE_SOURCE, strict=True)
+    except Exception:
+        df = fetch_candles(symbol, "1d", bars=bars, config=DEFAULT_CONFIG,
+                           prefer=PRICE_SOURCE)
+        df.attrs["fell_back_from"] = PRICE_SOURCE
+        return df
 
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_btc(bars: int) -> pd.DataFrame:
-    return fetch_btc_daily(bars=bars, config=DEFAULT_CONFIG)
+    return _load_candles("BTC", bars)
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -78,7 +95,11 @@ def _run(symbol: str, bars: int, use_btc_filter: bool, use_er: bool):
     cfg   = MomentumConfig(use_btc_filter=use_btc_filter, use_er=use_er, trading_days=_td)
     daily = _load_candles(symbol, bars)
     btc   = _load_btc(bars) if use_btc_filter else None
-    return cfg, daily, run_strategy(daily, btc_daily=btc, config=cfg)
+    res   = run_strategy(daily, btc_daily=btc, config=cfg)
+    # Drop the bars on which the slowest MA does not exist yet — while it is NaN
+    # the regime comparisons silently evaluate to False (see shared/warmup.py).
+    res.df = trim_warmup(res.df)
+    return cfg, daily, res
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -86,7 +107,9 @@ def _run_b(symbol: str, bars: int, use_er: bool):
     _td   = 252 if symbol in STOCK_SYMBOLS else TRADING_DAYS
     cfg   = MomentumConfig(use_btc_filter=False, use_er=use_er, trading_days=_td)
     daily = _load_candles(symbol, bars)
-    return cfg, run_strategy(daily, config=cfg)
+    res   = run_strategy(daily, config=cfg)
+    res.df = trim_warmup(res.df)
+    return cfg, res
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -295,6 +318,153 @@ def _val_col(v, positive_good: bool = True) -> str:
     return COL_BULL if good else COL_BEAR
 
 
+# ── market-regime breakdown ────────────────────────────────────────────────────
+
+def _detect_regimes(bh_eq: pd.Series, bear_dd: float = 0.55,
+                    bull_rally: float = 0.50, chop_net: float = 0.15,
+                    chop_days: int = 150) -> list[dict]:
+    """Segment the B&H equity curve into market regimes via a drawdown state-machine.
+
+    A BEAR (crypto winter) starts at a peak once price falls >= bear_dd below it, and
+    ends at the trough once price rallies >= bull_rally off that low. The 55% depth
+    keeps real winters (2018 -84%, 2022 -77%) while leaving shallower corrections
+    (e.g. a -53% dip inside a bull) classified as BULL. A flat, long BULL leg
+    (|net| < chop_net over >= chop_days) becomes CHOP. Returns ordered segments
+    {type, s, e} where s/e are positional indices.
+    """
+    eq  = bh_eq.values.astype(float)
+    idx = bh_eq.index
+    n   = len(eq)
+    if n < 30:
+        return []
+
+    segs: list[dict] = []
+    state = "bull"
+    seg_start = 0
+    peak_i,   peak_v   = 0, eq[0]
+    trough_i, trough_v = 0, eq[0]
+
+    for i in range(1, n):
+        v = eq[i]
+        if state == "bull":
+            if v > peak_v:
+                peak_i, peak_v = i, v
+            if v <= peak_v * (1.0 - bear_dd):          # deep decline → winter began at peak
+                segs.append({"type": "bull", "s": seg_start, "e": peak_i})
+                state, seg_start = "bear", peak_i
+                trough_i, trough_v = i, v
+        else:  # bear
+            if v < trough_v:
+                trough_i, trough_v = i, v
+            if v >= trough_v * (1.0 + bull_rally):      # rally off low → new bull at trough
+                segs.append({"type": "bear", "s": seg_start, "e": trough_i})
+                state, seg_start = "bull", trough_i
+                peak_i, peak_v = i, v
+    segs.append({"type": state, "s": seg_start, "e": n - 1})
+
+    # reclassify flat, long bull legs as chop
+    for seg in segs:
+        if seg["type"] != "bull":
+            continue
+        net  = eq[seg["e"]] / eq[seg["s"]] - 1.0
+        days = (idx[seg["e"]] - idx[seg["s"]]).days
+        if abs(net) < chop_net and days >= chop_days:
+            seg["type"] = "chop"
+
+    return [s for s in segs if s["e"] > s["s"]]
+
+
+def _render_regime_table(strat_eq: pd.Series, bh_eq: pd.Series) -> str:
+    """HTML table: strategy vs B&H per detected market regime, with capture ratios."""
+    segs = _detect_regimes(bh_eq)
+    if not segs:
+        return ""
+
+    idx   = bh_eq.index
+    meta  = {"bull": ("🟢 Bull", COL_BULL),
+             "bear": ("🔴 Zima", COL_BEAR),
+             "chop": ("⚪ Chop", COL_DIM)}
+
+    def _seg_ret(eq: pd.Series, s: int, e: int) -> float:
+        return float(eq.iloc[e] / eq.iloc[s] - 1.0)
+
+    rows, up_caps, down_caps = [], [], []
+    for seg in segs:
+        s, e = seg["s"], seg["e"]
+        label, col = meta.get(seg["type"], ("• ?", COL_TEXT))
+        bh_r    = _seg_ret(bh_eq, s, e)
+        st_r    = _seg_ret(strat_eq, s, e)
+        period  = f'{idx[s].strftime("%Y-%m")} → {idx[e].strftime("%Y-%m")}'
+
+        cap_txt, cap_col = "—", COL_DIM
+        if abs(bh_r) > 0.05:
+            cap = st_r / bh_r
+            if seg["type"] == "bear":
+                down_caps.append(cap)
+                arrow   = " ↓" if cap < 0.30 else ""
+                cap_col = COL_BULL if cap < 0.30 else COL_NEUTRAL
+                cap_txt = f"{cap * 100:.0f}%{arrow}"
+            else:
+                up_caps.append(cap)
+                cap_col = COL_TEXT
+                cap_txt = f"{cap * 100:.0f}%"
+
+        rows.append(
+            f'<tr>'
+            f'<td style="padding:7px 14px;border-bottom:1px solid {COL_BORDER};'
+            f'color:{col};font-weight:600;white-space:nowrap">{label}</td>'
+            f'<td style="padding:7px 14px;border-bottom:1px solid {COL_BORDER};'
+            f'color:{COL_DIM};font-family:monospace;white-space:nowrap">{period}</td>'
+            f'<td style="padding:7px 14px;border-bottom:1px solid {COL_BORDER};'
+            f'text-align:right;font-family:monospace;color:{_val_col(bh_r)}">{bh_r * 100:+.0f}%</td>'
+            f'<td style="padding:7px 14px;border-bottom:1px solid {COL_BORDER};'
+            f'text-align:right;font-family:monospace;font-weight:600;color:{_val_col(st_r)}">{st_r * 100:+.0f}%</td>'
+            f'<td style="padding:7px 14px;border-bottom:1px solid {COL_BORDER};'
+            f'text-align:right;font-family:monospace;color:{cap_col}">{cap_txt}</td>'
+            f'</tr>'
+        )
+
+    avg_up   = float(np.mean(up_caps))   if up_caps   else None
+    avg_down = float(np.mean(down_caps)) if down_caps else None
+    if avg_up is not None and avg_down is not None:
+        summary = (f'V bikih ujame <b style="color:{COL_TEXT}">~{avg_up * 100:.0f}%</b> rasti, '
+                   f'v zimah poje le <b style="color:{COL_BULL}">~{avg_down * 100:.0f}%</b> padca.')
+    elif avg_up is not None:
+        summary = (f'V bikih ujame <b style="color:{COL_TEXT}">~{avg_up * 100:.0f}%</b> rasti. '
+                   f'<span style="color:{COL_NEUTRAL}">⚠ Ni medvedjega trga v tem obdobju — '
+                   f'izberi daljše okno (All time) za test zaščite.</span>')
+    else:
+        summary = (f'<span style="color:{COL_NEUTRAL}">⚠ Premalo podatkov za razčlenitev po režimih.</span>')
+
+    header = (
+        f'<tr>'
+        f'<th style="padding:8px 14px;text-align:left;color:{COL_DIM};'
+        f'font-size:10px;letter-spacing:.5px;border-bottom:2px solid {COL_BORDER}">REŽIM</th>'
+        f'<th style="padding:8px 14px;text-align:left;color:{COL_DIM};'
+        f'font-size:10px;letter-spacing:.5px;border-bottom:2px solid {COL_BORDER}">OBDOBJE</th>'
+        f'<th style="padding:8px 14px;text-align:right;color:{COL_DIM};'
+        f'font-size:10px;letter-spacing:.5px;border-bottom:2px solid {COL_BORDER}">B&amp;H</th>'
+        f'<th style="padding:8px 14px;text-align:right;color:{COL_DIM};'
+        f'font-size:10px;letter-spacing:.5px;border-bottom:2px solid {COL_BORDER}">STRATEGIJA</th>'
+        f'<th style="padding:8px 14px;text-align:right;color:{COL_DIM};'
+        f'font-size:10px;letter-spacing:.5px;border-bottom:2px solid {COL_BORDER}">CAPTURE</th>'
+        f'</tr>'
+    )
+
+    return (
+        f'<div style="margin:6px 0 16px 0;background:{COL_BG};border:1px solid {COL_BORDER};'
+        f'border-radius:6px;overflow:hidden">'
+        f'<div style="padding:9px 14px;color:{COL_DIM};font-size:11px;font-weight:600;'
+        f'letter-spacing:.5px;border-bottom:1px solid {COL_BORDER}">'
+        f'USPEŠNOST PO TRŽNIH REŽIMIH</div>'
+        f'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+        f'<thead>{header}</thead><tbody>{"".join(rows)}</tbody></table>'
+        f'<div style="padding:9px 14px;color:{COL_DIM};font-size:11px;'
+        f'border-top:1px solid {COL_BORDER}">{summary}</div>'
+        f'</div>'
+    )
+
+
 # ── KPI cards ─────────────────────────────────────────────────────────────────
 
 def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
@@ -310,9 +480,6 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
     avg_d  = sum(t["duration_days"] for t in closed) / n if n else None
     best   = max(closed, key=lambda t: t["pnl_pct"])["pnl_pct"] if closed else None
     worst  = min(closed, key=lambda t: t["pnl_pct"])["pnl_pct"] if closed else None
-    gross_profit = sum(t["pnl_pct"] for t in closed if t["pnl_pct"] > 0)
-    gross_loss   = abs(sum(t["pnl_pct"] for t in closed if t["pnl_pct"] < 0))
-    pf = gross_profit / gross_loss if gross_loss > 1e-9 else None
 
     def _delta(sv, bv, is_pct: bool = True, positive_good: bool = True):
         try:
@@ -453,17 +620,9 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
               COL_BULL if (wr or 0) >= 50 else COL_NEUTRAL if (wr or 0) >= 40 else COL_BEAR,
               tip="Delež dobičkonosnih trade-ov med vsemi zaključenimi. "
                   "Formula: št. trade-ov z P&L > 0 / skupno št. trade-ov. "
-                  "50% samo po sebi ne pove veliko — pomembno skupaj s Profit Factorjem. "
-                  "Sistem z 40% win rate in PF > 2 je pogosto boljši od 60% win rate z PF 1.2."),
+                  "50% samo po sebi ne pove veliko — pri malo trade-ih (< 20) statistično nezanesljivo."),
     ]
     row2 = [
-        _card("Profit Factor",
-              _fmt_ratio(pf) if pf is not None else "—",
-              _val_col(pf) if pf is not None else COL_TEXT,
-              tip="Profit Factor — vsota vseh dobičkov (%) / vsota vseh izgub (%). "
-                  "Npr. 5 dobitnih trade-ov skupaj +48% in 3 izgubni skupaj −12% → PF = 4.0. "
-                  "= 1.0 breakeven · > 1.5 sprejemljivo · > 2.0 dobro · > 3.0 odlično. "
-                  "Skupaj z Win Rate pove ali sistem zasluži z velikimi dobitki ali z visoko frekvenco."),
         _card("Trades", str(n) if n else "—", COL_TEXT,
               tip="Skupno število zaključenih round-trip trade-ov (vstop + izstop) v izbranem obdobju. "
                   "Odprt trade (brez izhoda) ni vštet. Premalo trade-ov (< 20) pomeni statistično nezanesljive metrike."),
@@ -693,8 +852,6 @@ def _status_bar(s: dict, symbol: str, cfg: MomentumConfig) -> str:
     warnings = ""
     if s.get("blowoff"):
         warnings += f'<span style="color:{COL_BEAR};font-weight:700;font-size:11px;margin-left:14px">⚠ BLOW-OFF</span>'
-    if s.get("vol_shock"):
-        warnings += f'<span style="color:{COL_BEAR};font-weight:700;font-size:11px;margin-left:8px">⚠ VOL SHOCK</span>'
 
     trail_part = ""
     if s["signal"] == "BULL" and s.get("trail_stop") is not None:
@@ -1318,8 +1475,6 @@ def _build_trade_ledger(df: pd.DataFrame) -> list[dict]:
                 reason = "trail-stop"
             elif bool(row["blowoff"]):
                 reason = "blow-off"
-            elif bool(row["vol_shock"]):
-                reason = "vol-shock"
             else:
                 reason = "trend-break"
             trades.append({**open_entry,
@@ -1462,7 +1617,6 @@ def _render_gates_and_status(df: pd.DataFrame, s: dict, cfg: MomentumConfig,
         )
         wrn = []
         if s["blowoff"]:   wrn.append("BLOW-OFF top")
-        if s["vol_shock"]: wrn.append("Volatility shock")
         if wrn:
             st.markdown(
                 f'<div style="background:{COL_PANEL};border:1px solid {COL_BEAR};'
@@ -1492,9 +1646,6 @@ def _render_gates_and_status(df: pd.DataFrame, s: dict, cfg: MomentumConfig,
             ("No blow-off top",
              not bool(last["blowoff"]),
              "Parabolic blow-off top triggers an exit."),
-            ("No volatility shock",
-             not bool(last["vol_shock"]),
-             "A sudden volatility spike (> 1.5× 50-day avg) triggers an exit."),
             (trail_lbl,
              trail_pass,
              f"Trailing stop: exit if close falls {cfg.trail_pct:.0f}% below the peak since entry. "
@@ -1860,11 +2011,16 @@ def main() -> None:
 
     _set_theme(dark_mode)
 
+    # Fetch the requested window PLUS the history its indicators need, so nothing
+    # of the window is lost to warm-up. Derived from the config (shared/warmup.py)
+    # rather than hard-coded, so lengthening a moving average cannot leave this
+    # silently short.
+    _warm = required_history(MomentumConfig())
     if date_from is not None:
-        _days = (datetime.date.today() - date_from).days + 200
+        _days = (datetime.date.today() - date_from).days + _warm
         bars  = max(600, ((_days // 100) + 1) * 100)
     else:
-        bars = 2000
+        bars = 2000 + _warm
 
     # Rotation portfolio mode takes over the whole view when enabled.
     if rotation_on and len(rot_assets) >= 2:
@@ -1971,10 +2127,14 @@ def main() -> None:
                                         worst_w_a=worst_w, worst_w_b=worst_w_b),
             unsafe_allow_html=True,
         )
+        _regime_html = _render_regime_table(m_port["strategy"]["eq"], m_port["bh"]["eq"])
     else:
         st.markdown(_render_kpi_cards(metrics, trades, exposure,
                                       spx_m=spx_m, worst_w=worst_w),
                     unsafe_allow_html=True)
+        _regime_html = _render_regime_table(metrics["strategy"]["eq"], metrics["bh"]["eq"])
+    if _regime_html:
+        st.markdown(_regime_html, unsafe_allow_html=True)
 
     _n_bars   = len(df)
     _first    = df.index[0].strftime("%Y-%m-%d")

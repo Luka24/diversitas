@@ -49,8 +49,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  Trail stop       : ${s['trail_stop']:,.2f}")
     if s["blowoff"]:
         print("  WARNING          : BLOW-OFF detected")
-    if s["vol_shock"]:
-        print("  WARNING          : VOL SHOCK detected")
 
     print(f"\nSignal distribution (analyzed bars: {len(df)}):")
     sig_vc = df["signal_state"].value_counts().sort_index()
@@ -68,8 +66,6 @@ def main(argv: list[str] | None = None) -> int:
                 reason = "  [trail-stop]"
             elif row["blowoff"]:
                 reason = "  [blow-off]"
-            elif row["vol_shock"]:
-                reason = "  [vol-shock]"
             else:
                 reason = "  [trend-break]"
         print(f"  {ts.date()}  -> {label:4}  "
