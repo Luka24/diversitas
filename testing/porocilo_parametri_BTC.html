@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="sl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lean — robustnost vsakega parametra (BTC)</title>
+<style>
+  :root{color-scheme:light;--plane:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;
+    --muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--ring:rgba(11,11,11,0.10);
+    --band:rgba(11,11,11,0.05);--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;
+    --good:#0ca30c;--warn:#fab219;--serious:#ec835a;--crit:#d03b3b;}
+  @media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])){color-scheme:dark;
+    --plane:#0d0d0d;--surface:#1a1a19;--ink:#fff;--ink2:#c3c2b7;--muted:#898781;
+    --grid:#2c2c2a;--axis:#383835;--ring:rgba(255,255,255,0.10);--band:rgba(255,255,255,0.07);
+    --s1:#3987e5;--s2:#d95926;--s3:#199e70;}}
+  :root[data-theme="dark"]{color-scheme:dark;--plane:#0d0d0d;--surface:#1a1a19;--ink:#fff;
+    --ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--ring:rgba(255,255,255,0.10);
+    --band:rgba(255,255,255,0.07);--s1:#3987e5;--s2:#d95926;--s3:#199e70;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--plane);color:var(--ink);
+       font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+  main{max-width:1120px;margin:0 auto;padding:40px 20px 80px}
+  h1{font-size:26px;line-height:1.25;margin:0 0 4px;font-weight:650}
+  .sub{color:var(--ink2);font-size:14px;margin:0 0 26px}
+  h2{font-size:16px;font-weight:650;margin:32px 0 10px}
+  p{margin:0 0 16px;max-width:74ch}
+  .cap{color:var(--ink2);font-size:13px;margin:0 0 16px;max-width:80ch}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px}
+  .card{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:14px}
+  .card h3{font:600 13.5px system-ui;margin:0 0 1px}
+  .card .d{color:var(--muted);font-size:12px;margin:0 0 8px}
+  .badge{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;
+         text-transform:uppercase;border-radius:999px;padding:2px 8px;margin-left:6px;
+         color:#fff;vertical-align:2px}
+  svg{display:block;width:100%;height:auto;overflow:visible}
+  text{font:11px system-ui;fill:var(--muted);font-variant-numeric:tabular-nums}
+  .fig{background:var(--surface);border:1px solid var(--ring);border-radius:10px;
+       padding:18px;margin:0 0 24px;overflow-x:auto}
+  table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+  th,td{text-align:right;padding:6px 9px;border-bottom:1px solid var(--grid)}
+  th{color:var(--ink2);font-weight:600;font-size:12px}
+  td.l,th.l{text-align:left;font-variant-numeric:normal}
+  #tip{position:fixed;pointer-events:none;opacity:0;transition:opacity .1s;background:var(--surface);
+       border:1px solid var(--ring);border-radius:8px;padding:7px 9px;font-size:12px;color:var(--ink);
+       z-index:9;box-shadow:0 4px 16px rgba(0,0,0,.14);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .key{display:flex;gap:18px;flex-wrap:wrap;font-size:12.5px;color:var(--ink2);margin:0 0 18px}
+  .key i{width:10px;height:10px;border-radius:3px;display:inline-block;margin-right:6px}
+</style>
+</head>
+<body>
+<div id="tip"></div>
+<main>
+  <h1>Robustnost vsakega parametra — Lean, BTC</h1>
+  <p class="sub" id="sub"></p>
+
+  <p>Vprašanje ni »katera vrednost je najboljša«, ampak <b>ali rezultat ostane podoben, če
+  vrednost malo premaknemo</b>. Če ostane, parameter opisuje nekaj, kar na trgu obstaja. Če
+  se sesuje, je nastavljen na preteklost. Zato je vsak parameter premikan posebej, vsi
+  ostali ostanejo na privzetem, in vse je merjeno <b>izven vzorca</b> ter neto stroškov.</p>
+
+  <div class="key">
+    <span><i style="background:var(--good)"></i><b>plato</b> — okolica privzete vrednosti je ravna</span>
+    <span><i style="background:var(--serious)"></i><b>ostra konica</b> — sosednja vrednost opazno pade</span>
+    <span><i style="background:var(--crit)"></i><b>rob</b> — najboljša vrednost je na robu razpona</span>
+    <span><i style="background:var(--muted)"></i><b>inerten</b> — parameter skoraj nič ne spremeni</span>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <h2>Povzetek</h2>
+  <div class="fig"><table id="tbl"></table></div>
+
+  <h2>Metoda</h2>
+  <p class="cap" id="method"></p>
+</main>
+
+<script id="data" type="application/json">{"asset": "BTC", "source": "binance", "fee": 0.3, "oos_from": "2021-07-01", "oos_to": "2026-06-30", "base": {"sortino": 1.219, "cagr": 21.647, "maxdd": -39.828, "ddgap": 36.801, "expo": 43.458}, "params": [{"name": "track_period", "desc": "okno Kijun trackline", "default": 75, "values": [45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0, 105.0, 110.0, 115.0], "sortino": [1.079, 0.86, 0.908, 0.636, 1.203, 1.044, 1.219, 1.117, 1.112, 1.278, 1.216, 0.935, 1.04, 0.994, 0.933], "ddgap": [45.3, 33.5, 34.2, 22.8, 36.8, 36.8, 36.8, 37.4, 47.7, 47.7, 47.7, 47.7, 47.7, 47.7, 47.7], "expo": [37.5, 38.8, 39.5, 41.1, 42.5, 42.4, 43.5, 46.1, 44.7, 45.0, 45.3, 45.5, 44.3, 41.4, 40.8], "kind": "plato", "rng": 0.642, "local": 0.175, "best_value": 90.0, "best_at_edge": false, "z_default": 1.11, "i_def": 6, "i_best": 9}, {"name": "track_buf_pct", "desc": "mrtvi pas okoli trackline", "default": 3.0, "values": [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0], "sortino": [0.663, 0.665, 1.048, 1.229, 1.219, 1.038, 0.918, 1.033, 1.059, 1.02, 1.003], "ddgap": [27.3, 28.4, 36.8, 36.8, 36.8, 36.8, 35.3, 35.3, 35.3, 35.3, 35.3], "expo": [42.3, 42.3, 41.8, 42.9, 43.5, 47.4, 48.0, 48.9, 49.0, 49.9, 50.0], "kind": "plato", "rng": 0.566, "local": 0.181, "best_value": 2.5, "best_at_edge": false, "z_default": 1.3, "i_def": 4, "i_best": 3}, {"name": "ma_med_len", "desc": "trendna MA", "default": 50, "values": [20.0, 30.0, 40.0, 45.0, 50.0, 55.0, 60.0, 70.0, 80.0, 100.0], "sortino": [1.118, 1.118, 1.219, 1.219, 1.219, 1.219, 1.219, 1.219, 1.219, 1.219], "ddgap": [36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [42.5, 42.6, 43.5, 43.5, 43.5, 43.5, 43.5, 43.5, 43.5, 43.5], "kind": "inerten", "rng": 0.101, "local": 0.0, "best_value": 40.0, "best_at_edge": false, "z_default": 0.5, "i_def": 4, "i_best": 2}, {"name": "ma_long_len", "desc": "režimska MA", "default": 200, "values": [100.0, 125.0, 150.0, 175.0, 200.0, 225.0, 250.0, 275.0, 300.0], "sortino": [1.002, 0.972, 0.9, 1.099, 1.219, 1.219, 1.119, 1.122, 1.091], "ddgap": [35.8, 35.8, 35.8, 47.3, 36.8, 36.8, 31.3, 31.5, 29.7], "expo": [43.2, 43.5, 43.8, 43.1, 43.5, 43.9, 43.6, 43.1, 43.1], "kind": "ostra konica", "rng": 0.319, "local": 0.12, "best_value": 200.0, "best_at_edge": false, "z_default": 1.35, "i_def": 4, "i_best": 4}, {"name": "ma_slope", "desc": "naklon režimske MA", "default": 5, "values": [1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 14.0, 20.0], "sortino": [1.199, 1.199, 1.236, 1.219, 1.216, 1.414, 1.414, 1.414], "ddgap": [35.8, 35.8, 37.8, 36.8, 36.6, 47.7, 47.7, 47.7], "expo": [43.5, 43.5, 43.5, 43.5, 43.4, 42.5, 42.5, 42.5], "kind": "plato", "rng": 0.215, "local": 0.017, "best_value": 10.0, "best_at_edge": false, "z_default": -0.72, "i_def": 3, "i_best": 5}, {"name": "track_slope_bars", "desc": "naklon trackline", "default": 10, "values": [1.0, 3.0, 5.0, 7.0, 10.0, 13.0, 16.0, 20.0, 25.0], "sortino": [1.09, 1.265, 1.058, 1.191, 1.219, 1.153, 1.398, 1.148, 1.125], "ddgap": [49.4, 47.7, 36.8, 36.8, 36.8, 36.8, 47.7, 47.7, 47.7], "expo": [33.0, 41.9, 42.8, 43.5, 43.5, 43.2, 41.9, 42.5, 42.4], "kind": "plato", "rng": 0.34, "local": 0.066, "best_value": 16.0, "best_at_edge": false, "z_default": 0.37, "i_def": 4, "i_best": 6}, {"name": "confirm_bars", "desc": "potrditvenih barov", "default": 3, "values": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0], "sortino": [1.302, 1.356, 1.219, 1.03, 1.239, 1.171, 1.229], "ddgap": [35.6, 39.0, 36.8, 33.1, 42.3, 42.5, 41.9], "expo": [44.7, 43.9, 43.5, 42.5, 41.1, 40.7, 40.3], "kind": "ostra konica", "rng": 0.326, "local": 0.189, "best_value": 2.0, "best_at_edge": false, "z_default": -0.02, "i_def": 2, "i_best": 1}, {"name": "reentry_hold", "desc": "zapora ponovnega vstopa", "default": 15, "values": [0.0, 3.0, 6.0, 9.0, 12.0, 15.0, 18.0, 21.0, 25.0, 30.0], "sortino": [1.053, 1.008, 1.074, 0.971, 1.131, 1.219, 1.2, 1.027, 0.977, 1.062], "ddgap": [36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [46.8, 46.2, 45.6, 44.8, 44.3, 43.5, 42.5, 41.1, 40.1, 38.6], "kind": "ostra konica", "rng": 0.248, "local": 0.088, "best_value": 15.0, "best_at_edge": false, "z_default": 1.79, "i_def": 5, "i_best": 5}, {"name": "exit_grace_bars", "desc": "grace pred izstopom", "default": 3, "values": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0], "sortino": [0.705, 1.022, 1.219, 1.047, 1.138, 1.045, 1.046], "ddgap": [27.1, 35.5, 36.8, 35.7, 34.1, 31.9, 33.0], "expo": [39.2, 41.1, 43.5, 46.1, 49.5, 49.8, 50.7], "kind": "ostra konica", "rng": 0.514, "local": 0.197, "best_value": 3.0, "best_at_edge": false, "z_default": 1.26, "i_def": 2, "i_best": 2}, {"name": "blowoff_dist_pct", "desc": "prag blow-off izstopa", "default": 25.0, "values": [15.0, 18.0, 20.0, 22.0, 25.0, 28.0, 30.0, 35.0, 40.0, 45.0], "sortino": [0.702, 0.781, 1.031, 1.014, 1.219, 1.085, 1.099, 1.099, 1.099, 1.099], "ddgap": [34.7, 34.7, 39.7, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [41.0, 41.6, 42.2, 43.5, 43.5, 44.7, 45.3, 46.0, 46.0, 46.0], "kind": "ostra konica", "rng": 0.517, "local": 0.205, "best_value": 25.0, "best_at_edge": false, "z_default": 1.3, "i_def": 4, "i_best": 4}, {"name": "rsi_len", "desc": "RSI za blow-off", "default": 14, "values": [7.0, 10.0, 12.0, 14.0, 16.0, 18.0, 21.0, 28.0], "sortino": [1.205, 1.205, 1.219, 1.219, 1.219, 1.21, 1.219, 1.099], "ddgap": [36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [42.2, 42.8, 42.8, 43.5, 44.1, 44.7, 45.3, 46.6], "kind": "inerten", "rng": 0.12, "local": 0.0, "best_value": 12.0, "best_at_edge": false, "z_default": 0.51, "i_def": 3, "i_best": 2}, {"name": "vol_shock_mul", "desc": "prag vol-shock izstopa", "default": 1.5, "values": [1.2, 1.35, 1.5, 1.65, 1.8, 2.0, 2.5, 3.0], "sortino": [1.201, 1.219, 1.219, 1.219, 1.219, 1.219, 1.219, 1.219], "ddgap": [35.3, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [42.8, 43.1, 43.5, 43.5, 43.5, 43.5, 43.5, 43.5], "kind": "inerten", "rng": 0.018, "local": 0.0, "best_value": 1.35, "best_at_edge": false, "z_default": 0.38, "i_def": 2, "i_best": 1}, {"name": "vol_lookback", "desc": "okno volatilnosti", "default": 20, "values": [10.0, 14.0, 17.0, 20.0, 24.0, 28.0, 34.0, 40.0], "sortino": [1.24, 1.24, 1.219, 1.219, 1.219, 1.219, 1.219, 1.219], "ddgap": [36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [43.0, 43.0, 43.4, 43.5, 43.5, 43.5, 43.5, 43.5], "kind": "inerten", "rng": 0.021, "local": 0.0, "best_value": 10.0, "best_at_edge": true, "z_default": -0.58, "i_def": 3, "i_best": 0}, {"name": "min_dist_entry_pct", "desc": "dodatna razdalja za vstop", "default": 0.0, "values": [0.0, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0], "sortino": [1.219, 1.219, 1.206, 1.206, 1.194, 1.194, 1.184], "ddgap": [36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [43.5, 43.5, 43.4, 43.4, 43.4, 43.4, 43.2], "kind": "inerten", "rng": 0.035, "local": 0.0, "best_value": 0.0, "best_at_edge": true, "z_default": 1.29, "i_def": 0, "i_best": 0}], "trials": 127, "pbo": {"value": 0.694, "paths": 924, "configs": 10, "purge_embargo": 21}, "trials_total": 137}</script>
+<script>
+const D=JSON.parse(document.getElementById('data').textContent);
+const NS='http://www.w3.org/2000/svg', tip=document.getElementById('tip');
+const el=(n,a={})=>{const e=document.createElementNS(NS,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const cv=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const sl=v=>String(v).replace('.',',');
+const KIND={'plato':['--good','plato'],'ostra konica':['--serious','ostra konica'],
+            'rob':['--crit','rob'],'inerten':['--muted','inerten']};
+function showTip(e,h){tip.innerHTML=h;tip.style.opacity=1;
+  const p=14,w=tip.offsetWidth,ht=tip.offsetHeight;let x=e.clientX+p,y=e.clientY+p;
+  if(x+w>innerWidth-8)x=e.clientX-w-p; if(y+ht>innerHeight-8)y=e.clientY-ht-p;
+  tip.style.left=x+'px';tip.style.top=y+'px';}
+const hide=()=>tip.style.opacity=0;
+
+document.getElementById('sub').innerHTML =
+ `${D.asset} · vir cen <b>${D.source}</b> · izven vzorca ${D.oos_from} → ${D.oos_to} ·
+  stroški <b>${sl(D.fee)} % na stran</b> · privzeta nastavitev: OOS Sortino
+  <b>${sl(D.base.sortino)}</b>, DD-gap <b>${sl(D.base.ddgap)}</b>`;
+
+const grid=document.getElementById('grid');
+D.params.forEach(p=>{
+  const [colVar,label]=KIND[p.kind];
+  const card=document.createElement('div'); card.className='card';
+  card.innerHTML=`<h3>${p.name}<span class="badge" style="background:${cv(colVar)}">${label}</span></h3>
+                  <div class="d">${p.desc} · privzeto ${sl(p.default)}</div>`;
+  const host=document.createElement('div'); card.appendChild(host); grid.appendChild(card);
+
+  const W=330,H=132,m={l:30,r:10,t:12,b:22};
+  const svg=el('svg',{viewBox:`0 0 ${W} ${H}`}); host.appendChild(svg);
+  const iw=W-m.l-m.r, ih=H-m.t-m.b;
+  const xs=p.values, ys=p.sortino;
+  const lo=Math.min(...ys), hi=Math.max(...ys), pad=(hi-lo||1)*0.18;
+  const y0=lo-pad, y1=hi+pad;
+  const sx=i=>m.l+(xs.length<2?iw/2:i/(xs.length-1)*iw);
+  const sy=v=>m.t+ih-(v-y0)/(y1-y0)*ih;
+  [y0+(y1-y0)*0.5].forEach(v=>{
+    svg.appendChild(el('line',{x1:m.l,x2:m.l+iw,y1:sy(v),y2:sy(v),stroke:cv('--grid'),'stroke-width':1}));});
+  // reference line = performance at the default
+  const yd=ys[p.i_def];
+  svg.appendChild(el('line',{x1:m.l,x2:m.l+iw,y1:sy(yd),y2:sy(yd),stroke:cv('--axis'),
+    'stroke-width':1,'stroke-dasharray':'3 3'}));
+  const t1=el('text',{x:m.l-5,y:sy(y1)+9,'text-anchor':'end'}); t1.textContent=sl(y1.toFixed(1));
+  const t0=el('text',{x:m.l-5,y:sy(y0)+3,'text-anchor':'end'}); t0.textContent=sl(y0.toFixed(1));
+  svg.appendChild(t1); svg.appendChild(t0);
+  svg.appendChild(el('path',{d:ys.map((v,i)=>(i?'L':'M')+sx(i).toFixed(1)+' '+sy(v).toFixed(1)).join(' '),
+    fill:'none',stroke:cv('--s1'),'stroke-width':2,'stroke-linejoin':'round','stroke-linecap':'round'}));
+  ys.forEach((v,i)=>{
+    const isD=i===p.i_def;
+    svg.appendChild(el('circle',{cx:sx(i),cy:sy(v),r:isD?5:2.6,
+      fill:isD?cv('--ink'):cv('--s1'),stroke:cv('--surface'),'stroke-width':isD?2:1}));
+    const hit=el('rect',{x:sx(i)-9,y:m.t,width:18,height:ih,fill:'transparent'});
+    hit.addEventListener('mousemove',e=>showTip(e,
+      `<b>${p.name} = ${sl(xs[i])}</b>${isD?' <i>(privzeto)</i>':''}<br>`+
+      `OOS Sortino ${sl(v.toFixed(2))}<br>DD-gap ${sl(p.ddgap[i].toFixed(1))} o. t.<br>`+
+      `izpostavljenost ${sl(p.expo[i].toFixed(1))} %`));
+    hit.addEventListener('mouseleave',hide); svg.appendChild(hit);
+  });
+  [0,xs.length-1].forEach(i=>{
+    const t=el('text',{x:sx(i),y:H-6,'text-anchor':i?'end':'start'});
+    t.textContent=sl(xs[i]); svg.appendChild(t);});
+  const td=el('text',{x:sx(p.i_def),y:H-6,'text-anchor':'middle','font-weight':600});
+  td.style.fill=cv('--ink'); td.textContent=sl(p.default); svg.appendChild(td);
+});
+
+(function(){
+  const head=['parameter','pomen','privzeto','sodba','OOS Sortino','razpon','najboljši pri','DD-gap'];
+  let h='<thead><tr>'+head.map((x,i)=>`<th class="${i<2?'l':''}">${x}</th>`).join('')+'</tr></thead><tbody>';
+  D.params.forEach(p=>{
+    const [c,l]=KIND[p.kind];
+    h+=`<tr><td class="l"><code>${p.name}</code></td><td class="l">${p.desc}</td>`+
+       `<td>${sl(p.default)}</td>`+
+       `<td style="color:${cv(c)};font-weight:600">${l}</td>`+
+       `<td>${sl(p.sortino[p.i_def].toFixed(2))}</td>`+
+       `<td>${sl(p.rng.toFixed(2))}</td>`+
+       `<td>${sl(p.best_value)}${p.best_at_edge?' ⚠':''}</td>`+
+       `<td>${sl(p.ddgap[p.i_def].toFixed(1))}</td></tr>`;
+  });
+  document.getElementById('tbl').innerHTML=h+'</tbody>';
+})();
+
+document.getElementById('method').innerHTML =
+ `Vsak parameter je premikan posebej, ostali ostanejo na privzetem (OFAT). Razpon pokriva
+  vsaj ±25 % okoli privzete vrednosti, večinoma več. Merjeno je <b>izven vzorca</b> — pet
+  anchored blokov med ${D.oos_from} in ${D.oos_to}, zlepljeno — in neto ${sl(D.fee)} %
+  stroškov na stran. Razvrstitev: <b>inerten</b>, če je celoten razpon Sortina pod 0,15;
+  <b>rob</b>, če najboljša vrednost pade na konec razpona; <b>ostra konica</b>, če sosednja
+  vrednost odstopa za več kot 35 % celotnega razpona; sicer <b>plato</b>.<br><br>
+  Ovrednotenih konfiguracij v tej analizi: <b>${D.trials_total}</b>. Vsaka šteje v števec
+  poskusov za deflacijo Sharpa — nobena ni bila izbrana kot »najboljša«.<br><br>
+  <b>PBO = ${sl(D.pbo.value)}</b> (${D.pbo.paths} poti, ${D.pbo.configs} variant, purge in
+  embargo ${D.pbo.purge_embargo} dni med učnim in testnim delom). Nad 0,5 pomeni, da
+  varianta, ki je najboljša v učnem delu, izven njega pristane pod mediano pogosteje kot ne
+  — torej je <b>izbiranje najboljše nastavitve pretežno šum</b>.`;
+</script>
+</body>
+</html>

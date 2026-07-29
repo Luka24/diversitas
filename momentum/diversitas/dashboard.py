@@ -63,30 +63,34 @@ def _set_theme(dark: bool) -> None:
 
 # ── caching ───────────────────────────────────────────────────────────────────
 
-PRICE_SOURCE = "binance"        # pinned; a silent venue swap changes every figure
+PRICE_SOURCE_CHAIN = ("binance", "coinbase", "yahoo")
 
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _load_candles(symbol: str, bars: int) -> pd.DataFrame:
-    """Pinned to one venue; falls back only if it must, and never quietly.
+    """Try the venues in order and record which one answered.
 
-    The venues agree on price to about 0.1 %, but entry is a threshold, so a
-    tenth of a percent moves whole trades — 3 percentage points of CAGR between
-    Binance and Yahoo on BTC. See shared/costs.py and shared/warmup.py.
+    Order is deliberate: Binance and Coinbase are real exchanges whose prices you
+    can actually trade at; Yahoo is a scraped composite and sits last. It matters
+    which one you get — entry is a threshold, so ~0.1 % of price difference moves
+    whole trades (3 percentage points of CAGR between Binance and Yahoo on BTC).
+    A fallback is therefore allowed, but never silent: the caller marks it and the
+    footer shows it.
     """
-    try:
-        return fetch_candles(symbol, "1d", bars=bars, config=DEFAULT_CONFIG,
-                             prefer=PRICE_SOURCE, strict=True)
-    except Exception:
-        df = fetch_candles(symbol, "1d", bars=bars, config=DEFAULT_CONFIG,
-                           prefer=PRICE_SOURCE)
-        df.attrs["fell_back_from"] = PRICE_SOURCE
+    errors = []
+    for i, src in enumerate(PRICE_SOURCE_CHAIN):
+        try:
+            df = fetch_candles(symbol, "1d", bars=bars, config=DEFAULT_CONFIG,
+                               prefer=src, strict=True)
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"{src}: {type(e).__name__}")
+            continue
+        df.attrs["source"] = src
+        if i:
+            df.attrs["fell_back_from"] = PRICE_SOURCE_CHAIN[0]
+            df.attrs["source_errors"] = "; ".join(errors)
         return df
-
-
-@st.cache_data(ttl=60, show_spinner=False)
-def _load_btc(bars: int) -> pd.DataFrame:
-    return _load_candles("BTC", bars)
+    raise RuntimeError(f"{symbol}: noben vir ni odgovoril — {'; '.join(errors)}")
 
 
 @st.cache_data(ttl=60, show_spinner=False)

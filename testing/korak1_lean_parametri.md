@@ -89,13 +89,14 @@ Učinek Pine formule pri privzetem `targetVol = 50` (cela zgodovina):
 
 | | CAGR | Sortino | MaxDD | Ulcer | izpost. |
 |---|---|---|---|---|---|
-| BTC binarno | **36,0** | **1,61** | −39,1 | 19,4 | 43,4 |
-| BTC vol-target 50 | 26,5 | 1,40 | **−37,0** | **18,4** | 39,1 |
-| ETH binarno | 27,2 | 1,05 | −65,0 | 29,4 | 36,2 |
-| ETH vol-target 50 | **28,7** | **1,38** | **−39,7** | **19,4** | 27,8 |
+| BTC binarno | **33,9** | **1,55** | −39,8 | 19,9 | 43,5 |
+| BTC vol-target 50 | 24,1 | 1,31 | **−37,9** | **19,1** | 39,1 |
+| ETH binarno | 25,2 | 1,00 | −65,3 | 29,9 | 36,2 |
+| ETH vol-target 50 | **26,3** | **1,29** | **−40,1** | **20,2** | 27,8 |
 
 Na ETH zreže drawdown za 25 odstotnih točk **in** dvigne donos. Na BTC stane
-donos za skromen prihranek pri tveganju.
+donos brez sorazmerne koristi. Podrobna obravnava z odločilno kontrolo (ista
+izpostavljenost, dosežena z navadno konstanto) je v §2.4.
 
 **Odprto vprašanje:** ali naj Python sledi Pine (skaliranje po volatilnosti), ali
 naj Pine sledi Pythonu (binarno). Ena od obeh strani se mora premakniti.
@@ -121,18 +122,18 @@ odziv obraten in nemonotón:
 
 | perioda | BTC Sortino | BTC MaxDD | ETH Sortino | ETH MaxDD |
 |---|---|---|---|---|
-| izklopljen | 1,61 | −39,1 | 1,05 | −65,0 |
-| 20 | **1,79** | **−29,1** | **1,97** | **−41,6** |
-| 34 | 1,56 | −39,1 | 1,21 | −65,0 |
-| **55 (privzeta)** | 1,54 | −39,1 | 1,25 | −65,0 |
-| 90 | 1,54 | −39,1 | 1,35 | −65,0 |
+| izklopljen | 1,55 | −39,8 | 1,00 | −65,3 |
+| 20 | **1,72** | **−29,6** | **1,92** | **−42,3** |
+| 34 | 1,50 | −39,8 | 1,17 | −65,3 |
+| **55 (privzeta)** | 1,47 | −39,8 | 1,21 | −65,3 |
+| 90 | 1,47 | −39,8 | 1,31 | −65,3 |
 
-Zapisana privzeta perioda 55 je **slabša od izklopljenega** na obeh sredstvih.
-Perioda 20 je opazno boljša na obeh, a je rob testiranega razpona in osamljena
-konica — natanko vzorec, pred katerim je kampanja sama svarila.
+Zapisana privzeta perioda 55 je **slabša od izklopljenega** na BTC. Skeniranje
+sosednjih vrednosti (§2.3) pokaže, da kratke periode na BTC tvorijo **plato**, ne
+konice — kar je bilo v prvi različici tega dokumenta napačno zapisano.
 
 **Odprto vprašanje:** odstraniti speči feature (in s tem doseči popolno Pine
-skladnost) ali periodo 20 pošteno testirati v nested walk-forwardu.
+skladnost) ali kratke periode pošteno testirati v nested walk-forwardu — glej §2.3.
 
 ### 1.6 Izračunani stolpci
 
@@ -216,15 +217,99 @@ poročati kot lastnost izdelka, ne skriti za eno številko.
 merili, so bile manjše od te občutljivosti. Nima smisla iskati +0,1 Sortino
 točke, dokler izbira borze premakne rezultat za 0,1.
 
-### 2.3 Vol-sizing — odločitev, ne test
+### 2.3 Donchian — kratke periode ⭐ *(razširjeno 2026-07-29)*
 
-Glej §1.4. Ni vprašanje meritve, ampak vprašanje, katera specifikacija velja.
+**Kaj je:** pogledaš najvišjo in najnižjo ceno zadnjih N dni (»kanal«) in zahtevaš,
+da je cena ob vstopu v zgornji četrtini tega kanala. Kupuješ torej ob preboju
+navzgor, ne kjer koli sredi razpona.
 
-### 2.4 Donchian perioda 20
+```
+kje v kanalu = (cena − najnižji low N dni) ÷ (najvišji high N dni − najnižji low N dni)
+vstop dovoljen, če je > 0,75
+```
+
+Primer, BTC 19. 3. 2024: cena 61.937, zadnjih dvajset dni razpon 59.005–73.777,
+torej **20 % od dna kanala** — kupovala bi po padcu s 73.777, ne ob preboju.
+Donchian(20) tak vstop zavrne. Od sedemnajstih vstopov na BTC bi jih zavrnil štiri.
+
+**Popravek prejšnje ocene.** V prvi različici tega dokumenta je pisalo, da je
+perioda 20 »osamljena konica«. **To ne drži.** Skeniranje sosednjih vrednosti
+(Sortino, čist Binance, neto 0,30 %/stran):
+
+| perioda | 12 | 15 | 18 | **20** | 22 | 25 | 30 | 55 (privzeta) |
+|---|---|---|---|---|---|---|---|---|
+| BTC | 1,76 | 1,72 | 1,72 | **1,72** | 1,70 | 1,64 | 1,36 | 1,47 |
+| ETH | 1,64 | 1,84 | 1,92 | **1,92** | **1,20** | 1,18 | 1,17 | 1,21 |
+
+Na **BTC je to plato** od 12 do 22 — natanko oblika, ki jo metodologija projekta
+šteje za robustno, in 20 sploh ni rob. Na **ETH je plato 15–20, nato prepad**
+(1,92 → 1,20 med 20 in 22); tak skok pomeni, da se prevrne en sam posel, in temu
+ne gre zaupati.
+
+Za primerjavo izklopljeno stanje: BTC Sortino 1,55, ETH 1,00.
+
+**Zakaj je bil sploh vključen:** commit `eb89558` na podlagi ugotovitve, da
+validacijski Calmar **monotono raste s periodo** (20/34/55 → +0,27/+0,38/+0,52).
+Na popravljenih podatkih je odziv **obraten** — pada s periodo. Prvotna
+utemeljitev je torej ovržena, kar pa ne pomeni, da je učinek pri kratkih periodah
+ničeln; pomeni le, da o njem ne vemo nič zanesljivega.
+
+**Kaj testirati:** `donchian_period` v razponu 10–30 (tam je plato), pod nested
+walk-forwardom, z izbiro periode **samo iz train dela**. Če prednost preživi,
+vklopimo; če izpuhti kot pri agresivnem tuningu (1,62 → 1,92 → Δ 0,00), feature
+odstranimo dokončno in bomo imeli za to dokaz.
+
+**Ne glede na izid testa:** privzeto `donchian_period = 55` je treba popraviti ali
+odstraniti. Leži v najslabšem območju in bi vsakogar, ki zastavico vklopi,
+zavedla — na BTC je slabša od izklopljenega (1,47 proti 1,55).
+
+### 2.4 Vol-sizing — najprej uskladitev, šele nato test
 
 Glej §1.5. Samo pod nested walk-forwardom; sicer odstraniti.
 
-### 2.5 Česa NE testiramo
+### 2.5 Blow-off izstop — odstraniti ali skrajšati ⭐ *(najdeno v Koraku 5)*
+
+Ablacija je pokazala, da izklop blow-off izstopa (`blowoff_dist_pct = 999`)
+**izboljša donos na obeh sredstvih in ne poslabša drawdowna**:
+
+| | CAGR | Sortino | MaxDD | DD-gap |
+|---|---|---|---|---|
+| BTC cel Lean | 30,9 | 1,43 | −38,9 | 37,7 |
+| BTC brez blow-offa | **40,0** | **1,64** | −38,9 | 37,7 |
+| ETH cel Lean | 35,8 | 1,39 | −40,9 | 38,4 |
+| ETH brez blow-offa | **67,3** | **2,02** | −40,9 | 38,4 |
+
+Blow-off izstop torej **proda pred vrhom in ne kupi nič pri tveganju** — DD-gap se
+ne premakne niti za desetinko. Na ETH stane 31 odstotnih točk CAGR.
+
+Pozor pri branju: to je meritev na celotnem vzorcu, torej ista vrsta ugotovitve,
+ki je pri agresivnem tuningu izpuhtela pod nested WF. A za razliko od tistih je ta
+**konsistentna čez obe sredstvi in ima jasen mehanizem** (izstop ob RSI > 80 in
++25 % nad trackline pomeni prodati sredi najmočnejšega dela trenda).
+
+**Kaj testirati:** `blowoff_dist_pct` 15/20/25/35/999 in RSI prag 70/75/80/85, pod
+nested walk-forwardom. Hipoteza za zavrnitev: blow-off ne izboljša nobene mere
+tveganja, torej ga ni treba imeti.
+
+### 2.6 Vol-shock izstop — asimetričen med sredstvi *(najdeno v Koraku 5)*
+
+| | CAGR | Sortino | MaxDD |
+|---|---|---|---|
+| BTC cel Lean | 30,9 | 1,43 | −38,9 |
+| BTC brez vol-shocka | 30,9 | 1,43 | −38,9 |
+| ETH cel Lean | 35,8 | 1,39 | −40,9 |
+| ETH brez vol-shocka | **18,4** | **0,83** | **−62,7** |
+
+Na BTC je **popolnoma brez učinka** — številke so identične do decimalke. Na ETH
+je **bistven**: brez njega drawdown pade s −40,9 na −62,7 %.
+
+To je pomembno, ker je ravno obratno od blow-offa. Dve izstopni pravili, eno je
+odveč na BTC in nujno na ETH, drugo škodi na obeh.
+
+**Kaj testirati:** ali je vol-shock nujen tudi na sredstvih, ki jih nismo
+uporabljali za nastavljanje (XRP, BNB, ADA), ali je le ETH-specifičen.
+
+### 2.7 Česa NE testiramo
 
 - vstopnih filtrov — dokazano ne premaknejo primarnega KPI;
 - novih indikatorjev (ATR buffer, SuperTrend, dinamični trailing) — vsi so že
