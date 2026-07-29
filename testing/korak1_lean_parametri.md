@@ -1,6 +1,13 @@
 # Korak 1 — popis parametrov Lean in seznam za testiranje
 
-_2026-07-27 · BTC in ETH · zamrznjeni podatki, ogrevanje izključeno_
+_Zadnja osvežitev 2026-07-29 · zamrznjeni podatki Binance, ogrevanje izključeno,
+vse neto 0,30 % na stran_
+
+> **Kako brati ta dokument.** Del ugotovitev v §1 je bil izmerjen na celotnem
+> vzorcu in je bil pozneje ob poštenem izvenvzorčnem testu **ovržen**. Kjer se to
+> zgodi, je popravek zapisan v obliki citata pri tisti ugotovitvi, izvirno besedilo
+> pa ostane — da je vidno, kaj smo mislili in zakaj je bilo narobe. Najnovejši
+> povzetek je v §2.7 in §2.8.
 
 Namen koraka ni bil izboljšati strategijo, ampak **vedeti, kaj vsak parameter
 dejansko počne** — kateri so živi, kateri so konvencija, kateri ne naredijo nič.
@@ -167,8 +174,17 @@ Isto so pokazale tri neodvisne meritve:
    iz **zamude izstopa** na cikličnem vrhu.
 3. Sprememba `exit_grace_bars` premakne MaxDD, sprememba vstopnih filtrov ne.
 
-**Kaj testirati:** `track_buf_pct` (izstopna stran), `exit_grace_bars`,
-`blowoff_dist_pct` — kot izstopne vzvode, ne kot vstopne.
+> **Popravek 2026-07-29.** Točki 1 in 2 zdržita. Smer pri `exit_grace_bars` pa se je
+> ob poštenem testu **obrnila**, in to trikrat zapored: na celotnem vzorcu je
+> skrajšanje s 3 na 1 izgledalo boljše, izven vzorca na petih sredstvih je bilo
+> slabše na štirih, na BTC pod polnim protokolom pa je edina sprememba, katere
+> interval **ne zajema ničle** — Sortino 1,22 → 0,70, MaxDD −39,8 → −49,6 %,
+> interval [−1,23, −0,01]. **Tri-barna potrpežljivost pred izstopom je torej
+> potrebna, ne odveč.** Izstopna stran ostaja prava smer za raziskovanje; ta
+> konkretni parameter pa ni kandidat za spremembo, ampak edina komponenta z dokazom.
+
+**Kaj testirati:** `track_buf_pct` (izstopna stran) in `blowoff_dist_pct` kot
+izstopna vzvoda. `exit_grace_bars` je iz tega seznama umaknjen — glej popravek zgoraj.
 
 **Kako:** obvezno **nested walk-forward** (izbira samo iz train dela). Vrednosti,
 najdene na celotnem vzorcu, so brez vrednosti — to je pokazal `aggressive_nested_btc.md`,
@@ -267,7 +283,7 @@ zavedla — na BTC je slabša od izklopljenega (1,47 proti 1,55).
 
 Glej §1.5. Samo pod nested walk-forwardom; sicer odstraniti.
 
-### 2.5 Blow-off izstop — odstraniti ali skrajšati ⭐ *(najdeno v Koraku 5)*
+### 2.5 Blow-off izstop — ugotovitev iz Koraka 5 je bila ovržena
 
 Ablacija je pokazala, da izklop blow-off izstopa (`blowoff_dist_pct = 999`)
 **izboljša donos na obeh sredstvih in ne poslabša drawdowna**:
@@ -282,16 +298,26 @@ Ablacija je pokazala, da izklop blow-off izstopa (`blowoff_dist_pct = 999`)
 Blow-off izstop torej **proda pred vrhom in ne kupi nič pri tveganju** — DD-gap se
 ne premakne niti za desetinko. Na ETH stane 31 odstotnih točk CAGR.
 
-Pozor pri branju: to je meritev na celotnem vzorcu, torej ista vrsta ugotovitve,
-ki je pri agresivnem tuningu izpuhtela pod nested WF. A za razliko od tistih je ta
-**konsistentna čez obe sredstvi in ima jasen mehanizem** (izstop ob RSI > 80 in
-+25 % nad trackline pomeni prodati sredi najmočnejšega dela trenda).
+> **Popravek 2026-07-29 — zgornja ugotovitev NE zdrži.** Tabela je bila merjena na
+> celotnem vzorcu. Ob merjenju izven vzorca se sesuje:
+>
+> | | BTC | ETH | XRP | BNB | ADA | poolan CI ΔSortino |
+> |---|---|---|---|---|---|---|
+> | izklop blow-offa | −0,12 | +0,01 | +0,63 | −0,06 | +0,60 | [−0,05, +0,54] |
+>
+> Dve sredstvi škoda, dve korist, interval čez ničlo. Na BTC pod polnim protokolom
+> izklop Sortino celo **poslabša** (1,22 → 1,10). Torej: blow-off **ni dokazano
+> škodljiv**, in moje priporočilo za odstranitev je bilo napačno. Ostane nedokazan,
+> tako kot skoraj vse ostalo.
+>
+> Poučno je, zakaj sem se zmotil: ugotovitev je bila konsistentna čez obe sredstvi
+> in imela je prepričljiv mehanizem. Oboje se je zdelo dovolj. Ni bilo — merjena je
+> bila na podatkih, na katerih so bili privzetki nastavljeni.
 
-**Kaj testirati:** `blowoff_dist_pct` 15/20/25/35/999 in RSI prag 70/75/80/85, pod
-nested walk-forwardom. Hipoteza za zavrnitev: blow-off ne izboljša nobene mere
-tveganja, torej ga ni treba imeti.
+**Kaj testirati, če se kdaj vrnemo:** `blowoff_dist_pct` in RSI prag pod nested
+walk-forwardom. Zaenkrat **ne spreminjati ničesar**.
 
-### 2.6 Vol-shock izstop — asimetričen med sredstvi *(najdeno v Koraku 5)*
+### 2.6 Vol-shock izstop — na BTC dokazljivo mrtev
 
 | | CAGR | Sortino | MaxDD |
 |---|---|---|---|
@@ -306,10 +332,64 @@ je **bistven**: brez njega drawdown pade s −40,9 na −62,7 %.
 To je pomembno, ker je ravno obratno od blow-offa. Dve izstopni pravili, eno je
 odveč na BTC in nujno na ETH, drugo škodi na obeh.
 
-**Kaj testirati:** ali je vol-shock nujen tudi na sredstvih, ki jih nismo
-uporabljali za nastavljanje (XRP, BNB, ADA), ali je le ETH-specifičen.
+> **Popravek 2026-07-29.** Odvisnost na ETH je bila prav tako artefakt celotnega
+> vzorca. Izven vzorca je učinek izklopa na ETH **točno 0,00**, na vseh petih
+> sredstvih pa v razponu 0,00 do 0,08. Sweep na BTC potrdi isto z druge strani:
+> `vol_shock_mul` premakne Sortino za **0,02 čez celoten razpon od 1,2 do 3,0**.
+>
+> **Vol-shock je na BTC dokazljivo mrtev** — ne le pri privzeti vrednosti, ampak pri
+> vseh. Odvisnost na ETH izvira iz obdobja pred julijem 2021.
 
-### 2.7 Česa NE testiramo
+**Kaj narediti:** kandidat za odstranitev, a šele po preverbi na sredstvih, ki jih
+nismo uporabljali za nastavljanje.
+
+
+### 2.7 Zemljevid parametrov — kaj sploh smemo premikati *(2026-07-29)*
+
+Vseh štirinajst nastavljivih parametrov je bilo prečesanih posamično čez razpon
+vsaj ±25 % okoli privzete vrednosti, ostali pri miru, merjeno **izven vzorca** in
+neto 0,30 % na stran. Poln zapis z grafom za vsak parameter:
+`testing/porocilo_parametri_BTC.html`.
+
+| razvrstitev | parametri | pomen |
+|---|---|---|
+| **plato** | `track_period`, `track_buf_pct`, `ma_slope`, `track_slope_bars` | okolica privzete vrednosti je ravna — nastavitev ni kritična |
+| **ostra konica** | `ma_long_len`, `confirm_bars`, `reentry_hold`, `exit_grace_bars`, `blowoff_dist_pct` | sosednja vrednost opazno pade |
+| **inerten** | `ma_med_len`, `rsi_len`, `vol_shock_mul`, `vol_lookback`, `min_dist_entry_pct` | parameter skoraj nič ne spremeni |
+
+**Dobra novica:** jedro strategije — dolžina trackline in mrtvi pas — je na platoju.
+
+**Slaba novica, ki jo je treba povedati na glas:** **štirje od petih parametrov z
+ostro konico imajo vrh natanko na privzeti vrednosti** — `ma_long_len` pri 200,
+`reentry_hold` pri 15, `exit_grace_bars` pri 3, `blowoff_dist_pct` pri 25.
+
+To ni razlog za veselje. Privzetki prihajajo iz Pine skripte, ki je bila napisana ob
+gledanju zgodovine bitcoina. Da so štirje hkrati na lokalnem vrhu z ostrim padcem ob
+strani, je bolj skladno s tem, da so bili nekoč nastavljeni na te podatke, kot s
+srečnim naključjem. **Iz enega sredstva tega ni mogoče ločiti** — potrebna bi bila
+sredstva, ki na nastavitev niso mogla vplivati.
+
+### 2.8 Kje strategija stoji po vseh testih *(2026-07-29)*
+
+| test | rezultat | branje |
+|---|---|---|
+| permutacija, popolnoma premešan trg | p = 0,032 | **edge obstaja** proti čistemu naključju |
+| permutacija, 20-dnevni bloki | p = 0,081 | edge **izgine**, ko ohranimo večtedenski moment |
+| White's Reality Check (13 nastavitev) | p = 0,911 | po donosu ne premaga kupi-in-drži |
+| PBO s purgom in embargom | 0,694 | izbiranje najboljše nastavitve je pretežno šum |
+| deflated Sharpe (10 poskusov) | p = 0,075 | najboljša varianta ni značilna pri 5 % |
+
+Skupaj: strategija **lovi moment na lestvici nekaj tednov**, kar je znan tržni pojav,
+in ne dosti več. Na povsem naključnem trgu doseže povprečen Sortino **+0,61** —
+precejšen del videza uspešnosti pride že iz tega, da bitcoin dolgoročno raste.
+
+**Strukturna omejitev, ki je z več računanja ni mogoče odpraviti:** literatura za
+zanesljivo oceno priporoča 100 do 200 poslov čez več režimov. Lean jih ima v šestih
+letih in pol **sedemnajst**. Vsi testi tu merijo na robu svoje moči — zaznati je
+mogoče šele razliko okoli pol Sortino točke, kar je več, kot znaša katerakoli
+obravnavana izboljšava.
+
+### 2.9 Česa NE testiramo
 
 - vstopnih filtrov — dokazano ne premaknejo primarnega KPI;
 - novih indikatorjev (ATR buffer, SuperTrend, dinamični trailing) — vsi so že
