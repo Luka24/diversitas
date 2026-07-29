@@ -128,18 +128,20 @@ def test_position_survives_the_trim_boundary(frozen):
     assert float((on_trimmed - on_full).abs().max()) == pytest.approx(0.0, abs=1e-12)
 
 
-def test_price_source_is_pinned_and_never_falls_back_silently():
+def test_price_source_chain_is_ordered_and_never_falls_back_silently():
     """The venues agree on price to ~0.1 %, but entry is a threshold, so that is
     enough to move whole trades — 3 pp of CAGR between Binance and Yahoo on BTC.
-    The dashboard must therefore pin one venue and fail loudly, never swap."""
+    So the order is fixed (real exchanges first, the scraped composite last), each
+    venue is tried strictly in turn, and any fallback is surfaced."""
     import inspect
     from diversitas import dashboard as dash
+    assert dash.PRICE_SOURCE_CHAIN == ("binance", "coinbase", "yahoo"), \
+        "exchanges before the scraper, and the order must be explicit"
     src = inspect.getsource(dash._load_candles)
-    assert "strict=True" in src, "the pinned venue must be tried without fallback first"
-    assert "prefer=PRICE_SOURCE" in src, "the venue must be named, not left to a default"
+    assert "strict=True" in src, "each venue must be tried without a hidden fallback"
+    assert "PRICE_SOURCE_CHAIN" in src, "the order must come from the named chain"
+    assert 'attrs["source"]' in src, "the venue that answered must be recorded"
     assert "fell_back_from" in src, "a fallback must be marked so the UI can warn"
-    assert dash.PRICE_SOURCE in ("binance", "coinbase", "yahoo")
-    # and the warning must actually be rendered
     main = inspect.getsource(dash)
     assert 'attrs.get("fell_back_from")' in main and "st.error(" in main, \
         "a fallback must surface as a visible error, not pass silently"
