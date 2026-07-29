@@ -25,10 +25,13 @@
   h2{font-size:16px;font-weight:650;margin:32px 0 10px}
   p{margin:0 0 16px;max-width:74ch}
   .cap{color:var(--ink2);font-size:13px;margin:0 0 16px;max-width:80ch}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:16px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:16px}
   .card{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:14px}
   .card h3{font:600 13.5px system-ui;margin:0 0 1px}
   .card .d{color:var(--muted);font-size:12px;margin:0 0 8px}
+  .card .long{font-size:12.5px;color:var(--ink2);margin:8px 0 0;line-height:1.55}
+  .card .read{font-size:12.5px;margin:8px 0 0;padding:8px 10px;border-radius:7px;
+              background:var(--band);color:var(--ink2)}
   .badge{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;
          text-transform:uppercase;border-radius:999px;padding:2px 8px;margin-left:6px;
          color:#fff;vertical-align:2px}
@@ -65,16 +68,25 @@
     <span><i style="background:var(--muted)"></i><b>inerten</b> — parameter skoraj nič ne spremeni</span>
   </div>
 
+  <h2>Kako je to testirano — brez zargona</h2>
+  <div class="fig" id="plain"></div>
+
+  <h2>Ali je strategija sploh boljsa od nakljucja?</h2>
+  <div class="fig" id="mc"></div>
+
   <div class="grid" id="grid"></div>
 
   <h2>Povzetek</h2>
   <div class="fig"><table id="tbl"></table></div>
 
-  <h2>Metoda</h2>
+  <h2>Cesa ta analiza ne more dokazati</h2>
+  <div class="fig" id="limits"></div>
+
+  <h2>Metoda - tehnicno</h2>
   <p class="cap" id="method"></p>
 </main>
 
-<script id="data" type="application/json">{"asset": "BTC", "source": "binance", "fee": 0.3, "oos_from": "2021-07-01", "oos_to": "2026-06-30", "base": {"sortino": 1.219, "cagr": 21.647, "maxdd": -39.828, "ddgap": 36.801, "expo": 43.458}, "params": [{"name": "track_period", "desc": "okno Kijun trackline", "default": 75, "values": [45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0, 105.0, 110.0, 115.0], "sortino": [1.079, 0.86, 0.908, 0.636, 1.203, 1.044, 1.219, 1.117, 1.112, 1.278, 1.216, 0.935, 1.04, 0.994, 0.933], "ddgap": [45.3, 33.5, 34.2, 22.8, 36.8, 36.8, 36.8, 37.4, 47.7, 47.7, 47.7, 47.7, 47.7, 47.7, 47.7], "expo": [37.5, 38.8, 39.5, 41.1, 42.5, 42.4, 43.5, 46.1, 44.7, 45.0, 45.3, 45.5, 44.3, 41.4, 40.8], "kind": "plato", "rng": 0.642, "local": 0.175, "best_value": 90.0, "best_at_edge": false, "z_default": 1.11, "i_def": 6, "i_best": 9}, {"name": "track_buf_pct", "desc": "mrtvi pas okoli trackline", "default": 3.0, "values": [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0], "sortino": [0.663, 0.665, 1.048, 1.229, 1.219, 1.038, 0.918, 1.033, 1.059, 1.02, 1.003], "ddgap": [27.3, 28.4, 36.8, 36.8, 36.8, 36.8, 35.3, 35.3, 35.3, 35.3, 35.3], "expo": [42.3, 42.3, 41.8, 42.9, 43.5, 47.4, 48.0, 48.9, 49.0, 49.9, 50.0], "kind": "plato", "rng": 0.566, "local": 0.181, "best_value": 2.5, "best_at_edge": false, "z_default": 1.3, "i_def": 4, "i_best": 3}, {"name": "ma_med_len", "desc": "trendna MA", "default": 50, "values": [20.0, 30.0, 40.0, 45.0, 50.0, 55.0, 60.0, 70.0, 80.0, 100.0], "sortino": [1.118, 1.118, 1.219, 1.219, 1.219, 1.219, 1.219, 1.219, 1.219, 1.219], "ddgap": [36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [42.5, 42.6, 43.5, 43.5, 43.5, 43.5, 43.5, 43.5, 43.5, 43.5], "kind": "inerten", "rng": 0.101, "local": 0.0, "best_value": 40.0, "best_at_edge": false, "z_default": 0.5, "i_def": 4, "i_best": 2}, {"name": "ma_long_len", "desc": "režimska MA", "default": 200, "values": [100.0, 125.0, 150.0, 175.0, 200.0, 225.0, 250.0, 275.0, 300.0], "sortino": [1.002, 0.972, 0.9, 1.099, 1.219, 1.219, 1.119, 1.122, 1.091], "ddgap": [35.8, 35.8, 35.8, 47.3, 36.8, 36.8, 31.3, 31.5, 29.7], "expo": [43.2, 43.5, 43.8, 43.1, 43.5, 43.9, 43.6, 43.1, 43.1], "kind": "ostra konica", "rng": 0.319, "local": 0.12, "best_value": 200.0, "best_at_edge": false, "z_default": 1.35, "i_def": 4, "i_best": 4}, {"name": "ma_slope", "desc": "naklon režimske MA", "default": 5, "values": [1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 14.0, 20.0], "sortino": [1.199, 1.199, 1.236, 1.219, 1.216, 1.414, 1.414, 1.414], "ddgap": [35.8, 35.8, 37.8, 36.8, 36.6, 47.7, 47.7, 47.7], "expo": [43.5, 43.5, 43.5, 43.5, 43.4, 42.5, 42.5, 42.5], "kind": "plato", "rng": 0.215, "local": 0.017, "best_value": 10.0, "best_at_edge": false, "z_default": -0.72, "i_def": 3, "i_best": 5}, {"name": "track_slope_bars", "desc": "naklon trackline", "default": 10, "values": [1.0, 3.0, 5.0, 7.0, 10.0, 13.0, 16.0, 20.0, 25.0], "sortino": [1.09, 1.265, 1.058, 1.191, 1.219, 1.153, 1.398, 1.148, 1.125], "ddgap": [49.4, 47.7, 36.8, 36.8, 36.8, 36.8, 47.7, 47.7, 47.7], "expo": [33.0, 41.9, 42.8, 43.5, 43.5, 43.2, 41.9, 42.5, 42.4], "kind": "plato", "rng": 0.34, "local": 0.066, "best_value": 16.0, "best_at_edge": false, "z_default": 0.37, "i_def": 4, "i_best": 6}, {"name": "confirm_bars", "desc": "potrditvenih barov", "default": 3, "values": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0], "sortino": [1.302, 1.356, 1.219, 1.03, 1.239, 1.171, 1.229], "ddgap": [35.6, 39.0, 36.8, 33.1, 42.3, 42.5, 41.9], "expo": [44.7, 43.9, 43.5, 42.5, 41.1, 40.7, 40.3], "kind": "ostra konica", "rng": 0.326, "local": 0.189, "best_value": 2.0, "best_at_edge": false, "z_default": -0.02, "i_def": 2, "i_best": 1}, {"name": "reentry_hold", "desc": "zapora ponovnega vstopa", "default": 15, "values": [0.0, 3.0, 6.0, 9.0, 12.0, 15.0, 18.0, 21.0, 25.0, 30.0], "sortino": [1.053, 1.008, 1.074, 0.971, 1.131, 1.219, 1.2, 1.027, 0.977, 1.062], "ddgap": [36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [46.8, 46.2, 45.6, 44.8, 44.3, 43.5, 42.5, 41.1, 40.1, 38.6], "kind": "ostra konica", "rng": 0.248, "local": 0.088, "best_value": 15.0, "best_at_edge": false, "z_default": 1.79, "i_def": 5, "i_best": 5}, {"name": "exit_grace_bars", "desc": "grace pred izstopom", "default": 3, "values": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0], "sortino": [0.705, 1.022, 1.219, 1.047, 1.138, 1.045, 1.046], "ddgap": [27.1, 35.5, 36.8, 35.7, 34.1, 31.9, 33.0], "expo": [39.2, 41.1, 43.5, 46.1, 49.5, 49.8, 50.7], "kind": "ostra konica", "rng": 0.514, "local": 0.197, "best_value": 3.0, "best_at_edge": false, "z_default": 1.26, "i_def": 2, "i_best": 2}, {"name": "blowoff_dist_pct", "desc": "prag blow-off izstopa", "default": 25.0, "values": [15.0, 18.0, 20.0, 22.0, 25.0, 28.0, 30.0, 35.0, 40.0, 45.0], "sortino": [0.702, 0.781, 1.031, 1.014, 1.219, 1.085, 1.099, 1.099, 1.099, 1.099], "ddgap": [34.7, 34.7, 39.7, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [41.0, 41.6, 42.2, 43.5, 43.5, 44.7, 45.3, 46.0, 46.0, 46.0], "kind": "ostra konica", "rng": 0.517, "local": 0.205, "best_value": 25.0, "best_at_edge": false, "z_default": 1.3, "i_def": 4, "i_best": 4}, {"name": "rsi_len", "desc": "RSI za blow-off", "default": 14, "values": [7.0, 10.0, 12.0, 14.0, 16.0, 18.0, 21.0, 28.0], "sortino": [1.205, 1.205, 1.219, 1.219, 1.219, 1.21, 1.219, 1.099], "ddgap": [36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [42.2, 42.8, 42.8, 43.5, 44.1, 44.7, 45.3, 46.6], "kind": "inerten", "rng": 0.12, "local": 0.0, "best_value": 12.0, "best_at_edge": false, "z_default": 0.51, "i_def": 3, "i_best": 2}, {"name": "vol_shock_mul", "desc": "prag vol-shock izstopa", "default": 1.5, "values": [1.2, 1.35, 1.5, 1.65, 1.8, 2.0, 2.5, 3.0], "sortino": [1.201, 1.219, 1.219, 1.219, 1.219, 1.219, 1.219, 1.219], "ddgap": [35.3, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [42.8, 43.1, 43.5, 43.5, 43.5, 43.5, 43.5, 43.5], "kind": "inerten", "rng": 0.018, "local": 0.0, "best_value": 1.35, "best_at_edge": false, "z_default": 0.38, "i_def": 2, "i_best": 1}, {"name": "vol_lookback", "desc": "okno volatilnosti", "default": 20, "values": [10.0, 14.0, 17.0, 20.0, 24.0, 28.0, 34.0, 40.0], "sortino": [1.24, 1.24, 1.219, 1.219, 1.219, 1.219, 1.219, 1.219], "ddgap": [36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [43.0, 43.0, 43.4, 43.5, 43.5, 43.5, 43.5, 43.5], "kind": "inerten", "rng": 0.021, "local": 0.0, "best_value": 10.0, "best_at_edge": true, "z_default": -0.58, "i_def": 3, "i_best": 0}, {"name": "min_dist_entry_pct", "desc": "dodatna razdalja za vstop", "default": 0.0, "values": [0.0, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0], "sortino": [1.219, 1.219, 1.206, 1.206, 1.194, 1.194, 1.184], "ddgap": [36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [43.5, 43.5, 43.4, 43.4, 43.4, 43.4, 43.2], "kind": "inerten", "rng": 0.035, "local": 0.0, "best_value": 0.0, "best_at_edge": true, "z_default": 1.29, "i_def": 0, "i_best": 0}], "trials": 127, "pbo": {"value": 0.694, "paths": 924, "configs": 10, "purge_embargo": 21}, "trials_total": 137}</script>
+<script id="data" type="application/json">{"asset": "BTC", "source": "binance", "fee": 0.3, "oos_from": "2021-07-01", "oos_to": "2026-06-30", "base": {"sortino": 1.219, "cagr": 21.647, "maxdd": -39.828, "ddgap": 36.801, "expo": 43.458}, "params": [{"name": "track_period", "desc": "okno Kijun trackline", "default": 75, "values": [45.0, 50.0, 55.0, 60.0, 65.0, 70.0, 75.0, 80.0, 85.0, 90.0, 95.0, 100.0, 105.0, 110.0, 115.0], "sortino": [1.079, 0.86, 0.908, 0.636, 1.203, 1.044, 1.219, 1.117, 1.112, 1.278, 1.216, 0.935, 1.04, 0.994, 0.933], "ddgap": [45.3, 33.5, 34.2, 22.8, 36.8, 36.8, 36.8, 37.4, 47.7, 47.7, 47.7, 47.7, 47.7, 47.7, 47.7], "expo": [37.5, 38.8, 39.5, 41.1, 42.5, 42.4, 43.5, 46.1, 44.7, 45.0, 45.3, 45.5, 44.3, 41.4, 40.8], "kind": "plato", "rng": 0.642, "local": 0.175, "best_value": 90.0, "best_at_edge": false, "z_default": 1.11, "i_def": 6, "i_best": 9, "long": "Trackline je sredina med najvišjo in najnižjo ceno zadnjih 75 dni. Če je bil BTC v tem obdobju med 50.000 in 70.000, je trackline 60.000. Daljše okno pomeni bolj lenobno črto, ki se počasneje obrne.", "reading": "Ravna okolica pomeni, da je vseeno, ali gledaš 65 ali 85 dni — strategija ne visi na natanko 75."}, {"name": "track_buf_pct", "desc": "mrtvi pas okoli trackline", "default": 3.0, "values": [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0], "sortino": [0.663, 0.665, 1.048, 1.229, 1.219, 1.038, 0.918, 1.033, 1.059, 1.02, 1.003], "ddgap": [27.3, 28.4, 36.8, 36.8, 36.8, 36.8, 35.3, 35.3, 35.3, 35.3, 35.3], "expo": [42.3, 42.3, 41.8, 42.9, 43.5, 47.4, 48.0, 48.9, 49.0, 49.9, 50.0], "kind": "plato", "rng": 0.566, "local": 0.181, "best_value": 2.5, "best_at_edge": false, "z_default": 1.3, "i_def": 4, "i_best": 3, "long": "Simetričen mrtvi pas okoli trackline. Vstop šele 3 % nad njim, izstop 3 % pod njim. Pri tracklineu 60.000 to pomeni vstop nad 61.800 in izstop pod 58.200; med tema številkama se ne zgodi nič. Brez pasu bi cena, ki se lepi na trackline, sprožala signale sem in tja.", "reading": "Plato tu je pomemben, ker pas nastavlja tudi izstop — če bi bil na konici, bi bila izstopna disciplina naključna."}, {"name": "ma_med_len", "desc": "trendna MA", "default": 50, "values": [20.0, 30.0, 40.0, 45.0, 50.0, 55.0, 60.0, 70.0, 80.0, 100.0], "sortino": [1.118, 1.118, 1.219, 1.219, 1.219, 1.219, 1.219, 1.219, 1.219, 1.219], "ddgap": [36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [42.5, 42.6, 43.5, 43.5, 43.5, 43.5, 43.5, 43.5, 43.5, 43.5], "kind": "inerten", "rng": 0.101, "local": 0.0, "best_value": 40.0, "best_at_edge": false, "z_default": 0.5, "i_def": 4, "i_best": 2, "long": "Cena mora biti nad 50-dnevnim drsečim povprečjem, da je vstop sploh mogoč. Grob filter smeri.", "reading": "Inerten pomeni, da ta pogoj skoraj nikoli ne odloči — kadar so izpolnjeni ostali pogoji, je cena tako ali tako nad njim."}, {"name": "ma_long_len", "desc": "režimska MA", "default": 200, "values": [100.0, 125.0, 150.0, 175.0, 200.0, 225.0, 250.0, 275.0, 300.0], "sortino": [1.002, 0.972, 0.9, 1.099, 1.219, 1.219, 1.119, 1.122, 1.091], "ddgap": [35.8, 35.8, 35.8, 47.3, 36.8, 36.8, 31.3, 31.5, 29.7], "expo": [43.2, 43.5, 43.8, 43.1, 43.5, 43.9, 43.6, 43.1, 43.1], "kind": "ostra konica", "rng": 0.319, "local": 0.12, "best_value": 200.0, "best_at_edge": false, "z_default": 1.35, "i_def": 4, "i_best": 4, "long": "Režimska blokada. Vstopi so prepovedani, kadar je cena pod 200-dnevnim povprečjem IN to povprečje hkrati pada. Oboje mora veljati — pod padajočo 200 MA pomeni medvedji trg, pod rastočo pa le začasen umik.", "reading": "Ostra konica natanko na 200 je opozorilo: 200 je hkrati najbolj znana vrednost v tehnični analizi in vrednost, ki na teh podatkih deluje najbolje. Kaj od tega je vzrok, iz enega sredstva ni razvidno."}, {"name": "ma_slope", "desc": "naklon režimske MA", "default": 5, "values": [1.0, 2.0, 3.0, 5.0, 7.0, 10.0, 14.0, 20.0], "sortino": [1.199, 1.199, 1.236, 1.219, 1.216, 1.414, 1.414, 1.414], "ddgap": [35.8, 35.8, 37.8, 36.8, 36.6, 47.7, 47.7, 47.7], "expo": [43.5, 43.5, 43.5, 43.5, 43.4, 42.5, 42.5, 42.5], "kind": "plato", "rng": 0.215, "local": 0.017, "best_value": 10.0, "best_at_edge": false, "z_default": -0.72, "i_def": 3, "i_best": 5, "long": "Ali 200-dnevno povprečje pada, se presodi s primerjavo z njegovo vrednostjo izpred petih dni. Krajše okno je bolj občutljivo na šum, daljše počasnejše.", "reading": "Plato pomeni, da natančna dolžina ni pomembna — pomembno je le, da se naklon sploh meri čez več kot en dan."}, {"name": "track_slope_bars", "desc": "naklon trackline", "default": 10, "values": [1.0, 3.0, 5.0, 7.0, 10.0, 13.0, 16.0, 20.0, 25.0], "sortino": [1.09, 1.265, 1.058, 1.191, 1.219, 1.153, 1.398, 1.148, 1.125], "ddgap": [49.4, 47.7, 36.8, 36.8, 36.8, 36.8, 47.7, 47.7, 47.7], "expo": [33.0, 41.9, 42.8, 43.5, 43.5, 43.2, 41.9, 42.5, 42.4], "kind": "plato", "rng": 0.34, "local": 0.066, "best_value": 16.0, "best_at_edge": false, "z_default": 0.37, "i_def": 4, "i_best": 6, "long": "Trackline mora biti višji kot pred desetimi dnevi. Ker je trackline pogosto povsem raven (nov vrh ali dno v 75 dneh se ne zgodi vsak dan), ta pogoj v praksi prepreči vstope v stranskem gibanju.", "reading": "Plato od 7 do 20 pomeni, da gre za pravo lastnost trga, ne za nastavitev."}, {"name": "confirm_bars", "desc": "potrditvenih barov", "default": 3, "values": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0], "sortino": [1.302, 1.356, 1.219, 1.03, 1.239, 1.171, 1.229], "ddgap": [35.6, 39.0, 36.8, 33.1, 42.3, 42.5, 41.9], "expo": [44.7, 43.9, 43.5, 42.5, 41.1, 40.7, 40.3], "kind": "ostra konica", "rng": 0.326, "local": 0.189, "best_value": 2.0, "best_at_edge": false, "z_default": -0.02, "i_def": 2, "i_best": 1, "long": "Vsi vstopni pogoji morajo veljati tri dni zapored. Enodnevni preblisk ne zadošča.", "reading": "Konica pomeni, da je razlika med dvema in tremi dnevi opazna — in ker je najboljša vrednost 2, privzeta 3 ni vrh."}, {"name": "reentry_hold", "desc": "zapora ponovnega vstopa", "default": 15, "values": [0.0, 3.0, 6.0, 9.0, 12.0, 15.0, 18.0, 21.0, 25.0, 30.0], "sortino": [1.053, 1.008, 1.074, 0.971, 1.131, 1.219, 1.2, 1.027, 0.977, 1.062], "ddgap": [36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [46.8, 46.2, 45.6, 44.8, 44.3, 43.5, 42.5, 41.1, 40.1, 38.6], "kind": "ostra konica", "rng": 0.248, "local": 0.088, "best_value": 15.0, "best_at_edge": false, "z_default": 1.79, "i_def": 5, "i_best": 5, "long": "Po izstopu petnajst dni ni novega vstopa, tudi če se pogoji spet izpolnijo. Prepreči, da bi strategija po izstopu takoj skočila nazaj in nihala sem in tja.", "reading": "Konica natanko na privzeti vrednosti — glej opozorilo pri metodi."}, {"name": "exit_grace_bars", "desc": "grace pred izstopom", "default": 3, "values": [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0], "sortino": [0.705, 1.022, 1.219, 1.047, 1.138, 1.045, 1.046], "ddgap": [27.1, 35.5, 36.8, 35.7, 34.1, 31.9, 33.0], "expo": [39.2, 41.1, 43.5, 46.1, 49.5, 49.8, 50.7], "kind": "ostra konica", "rng": 0.514, "local": 0.197, "best_value": 3.0, "best_at_edge": false, "z_default": 1.26, "i_def": 2, "i_best": 2, "long": "Izstop šele, ko je cena tri dni zapored pod izstopnim pragom. En sam dan pod pragom ne zadošča. To je edina komponenta, ki je v ločenem testu pokazala statistično značilnost.", "reading": "Konica na 3 z ostrim padcem na 1 je skladna z ločeno ugotovitvijo, da je ta potrpežljivost res potrebna."}, {"name": "blowoff_dist_pct", "desc": "prag blow-off izstopa", "default": 25.0, "values": [15.0, 18.0, 20.0, 22.0, 25.0, 28.0, 30.0, 35.0, 40.0, 45.0], "sortino": [0.702, 0.781, 1.031, 1.014, 1.219, 1.085, 1.099, 1.099, 1.099, 1.099], "ddgap": [34.7, 34.7, 39.7, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [41.0, 41.6, 42.2, 43.5, 43.5, 44.7, 45.3, 46.0, 46.0, 46.0], "kind": "ostra konica", "rng": 0.517, "local": 0.205, "best_value": 25.0, "best_at_edge": false, "z_default": 1.3, "i_def": 4, "i_best": 4, "long": "Izstop, ko je cena več kot 25 % nad tracklineom IN je RSI nad 80 — torej ko je rast postala pregreta. Namen je pobrati dobiček pred obratom.", "reading": "Konica pomeni, da je prag občutljiv; ločeni testi hkrati kažejo, da to pravilo ne izboljša nobene mere tveganja."}, {"name": "rsi_len", "desc": "RSI za blow-off", "default": 14, "values": [7.0, 10.0, 12.0, 14.0, 16.0, 18.0, 21.0, 28.0], "sortino": [1.205, 1.205, 1.219, 1.219, 1.219, 1.21, 1.219, 1.099], "ddgap": [36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [42.2, 42.8, 42.8, 43.5, 44.1, 44.7, 45.3, 46.6], "kind": "inerten", "rng": 0.12, "local": 0.0, "best_value": 12.0, "best_at_edge": false, "z_default": 0.51, "i_def": 3, "i_best": 2, "long": "Dolžina okna za RSI, ki se uporablja izključno v blow-off pogoju.", "reading": "Inerten — ker se blow-off sproži redko, njegova natančna nastavitev skoraj nič ne spremeni."}, {"name": "vol_shock_mul", "desc": "prag vol-shock izstopa", "default": 1.5, "values": [1.2, 1.35, 1.5, 1.65, 1.8, 2.0, 2.5, 3.0], "sortino": [1.201, 1.219, 1.219, 1.219, 1.219, 1.219, 1.219, 1.219], "ddgap": [35.3, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [42.8, 43.1, 43.5, 43.5, 43.5, 43.5, 43.5, 43.5], "kind": "inerten", "rng": 0.018, "local": 0.0, "best_value": 1.35, "best_at_edge": false, "z_default": 0.38, "i_def": 2, "i_best": 1, "long": "Izstop, ko letna volatilnost preseže svoje 50-dnevno povprečje krat 1,5 IN je cena pod tracklineom.", "reading": "Razpon Sortina čez celoten razpon je 0,02 — to pravilo se na BTC v petih letih ni sprožilo. Dokazljivo mrtvo."}, {"name": "vol_lookback", "desc": "okno volatilnosti", "default": 20, "values": [10.0, 14.0, 17.0, 20.0, 24.0, 28.0, 34.0, 40.0], "sortino": [1.24, 1.24, 1.219, 1.219, 1.219, 1.219, 1.219, 1.219], "ddgap": [36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [43.0, 43.0, 43.4, 43.5, 43.5, 43.5, 43.5, 43.5], "kind": "inerten", "rng": 0.021, "local": 0.0, "best_value": 10.0, "best_at_edge": true, "z_default": -0.58, "i_def": 3, "i_best": 0, "long": "Koliko dni se gleda nazaj pri izračunu volatilnosti, ki jo uporablja vol-shock izstop.", "reading": "Inerten, ker je pravilo, ki jo uporablja, mrtvo."}, {"name": "min_dist_entry_pct", "desc": "dodatna razdalja za vstop", "default": 0.0, "values": [0.0, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0], "sortino": [1.219, 1.219, 1.206, 1.206, 1.194, 1.194, 1.184], "ddgap": [36.8, 36.8, 36.8, 36.8, 36.8, 36.8, 36.8], "expo": [43.5, 43.5, 43.4, 43.4, 43.4, 43.4, 43.2], "kind": "inerten", "rng": 0.035, "local": 0.0, "best_value": 0.0, "best_at_edge": true, "z_default": 1.29, "i_def": 0, "i_best": 0, "long": "Dodatna zahtevana razdalja nad tracklineom pri vstopu, poleg pasu. Pri privzeti 0 ne naredi nič, ker je pogoj takrat matematično enak pogoju o pasu.", "reading": "Inerten po konstrukciji. Obdržan zato, ker obstaja tudi v Pine skripti."}], "trials": 127, "pbo": {"value": 0.694, "paths": 924, "configs": 10, "purge_embargo": 21}, "trials_total": 137, "mc": {"real_sortino": 1.545, "real_cagr": 33.9, "n": 1000, "iid": {"n": 1000, "mean": 0.61, "sd": 0.487, "p95": 1.438, "percentile": 96.8, "p_value": 0.032, "hist": [0, 0, 0, 1, 0, 5, 25, 85, 120, 180, 203, 172, 112, 55, 29, 9, 4, 0, 0, 0], "bins": [-2.0, -1.75, -1.5, -1.25, -1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75]}, "block20": {"n": 1000, "mean": 0.604, "sd": 0.643, "p95": 1.72, "percentile": 91.9, "p_value": 0.081, "hist": [0, 0, 0, 0, 6, 25, 50, 103, 117, 157, 142, 136, 109, 69, 38, 28, 10, 6, 3, 1], "bins": [-2.0, -1.75, -1.5, -1.25, -1.0, -0.75, -0.5, -0.25, 0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.25, 2.5, 2.75]}, "reality_check": {"configs": 13, "stat": -0.0194, "p_value": 0.911, "best": 5}, "trades": {"total": 17, "guideline": 100}}}</script>
 <script>
 const D=JSON.parse(document.getElementById('data').textContent);
 const NS='http://www.w3.org/2000/svg', tip=document.getElementById('tip');
@@ -100,9 +112,13 @@ D.params.forEach(p=>{
   const card=document.createElement('div'); card.className='card';
   card.innerHTML=`<h3>${p.name}<span class="badge" style="background:${cv(colVar)}">${label}</span></h3>
                   <div class="d">${p.desc} · privzeto ${sl(p.default)}</div>`;
-  const host=document.createElement('div'); card.appendChild(host); grid.appendChild(card);
+  const host=document.createElement('div'); card.appendChild(host);
+  const lg=document.createElement('p'); lg.className='long'; lg.innerHTML=p.long; card.appendChild(lg);
+  const rd=document.createElement('p'); rd.className='read';
+  rd.innerHTML='<b>Kako brati graf:</b> '+p.reading; card.appendChild(rd);
+  grid.appendChild(card);
 
-  const W=330,H=132,m={l:30,r:10,t:12,b:22};
+  const W=430,H=150,m={l:30,r:10,t:12,b:22};
   const svg=el('svg',{viewBox:`0 0 ${W} ${H}`}); host.appendChild(svg);
   const iw=W-m.l-m.r, ih=H-m.t-m.b;
   const xs=p.values, ys=p.sortino;
@@ -155,6 +171,64 @@ D.params.forEach(p=>{
   document.getElementById('tbl').innerHTML=h+'</tbody>';
 })();
 
+
+document.getElementById('plain').innerHTML = `
+<p><b>Vprasanje, ki ga postavljamo.</b> Vsak od stirinajstih parametrov je stevilka, ki jo je
+nekdo nastavil. Ce je bila nastavljena zato, ker <i>na trgu nekaj obstaja</i>, potem malenkost
+drugacna stevilka da podoben rezultat. Ce je bila nastavljena zato, ker se je <i>ta ena
+prilegala preteklosti</i>, se rezultat ob majhni spremembi sesuje.</p>
+<p><b>Primer.</b> Vzemimo dolzino trackline, privzeto 75 dni. Strategijo pozenemo s 45, 50,
+55 ... vse do 110 dni, vsakic pa <b>vse ostale nastavitve pustimo pri miru</b>. Dobimo krivuljo.
+Ce je okoli 75 ravna, pomeni, da bi 65 ali 85 dala skoraj isto - nastavitev torej ni kriticna.
+Ce je pri 75 vrh in pri 70 in 80 strm padec, potem strategija stoji na eni stevilki, kar je
+slab znak.</p>
+<p><b>Kje merimo.</b> Nikoli na istih podatkih, na katerih bi kdo lahko nastavljal. Zgodovino
+razrezemo na pet zaporednih let in vsako leto ocenimo tako, kot da ga vidimo prvic. Med ucnim
+in testnim delom pustimo tri tedne prazno, ker si dnevi blizu skupaj prevec podobni.</p>
+<p><b>Kaj stejemo.</b> Vsak posel placa 0,30 % ob vstopu in 0,30 % ob izstopu. Glavna mera ni
+donos, ampak <b>koliko plitvejsi je najhujsi padec kot pri preprostem drzanju bitcoina</b> -
+to je tisto, kar izdelek obljublja.</p>
+<p><b>Zakaj sploh preverjamo toliko stvari.</b> Ce preizkusis dovolj razlicic, bo ena vedno
+videti odlicna - tudi ce so vse skupaj brez vrednosti. Zato stejemo, koliko razlicic smo
+sploh preizkusili (<b>${D.trials_total}</b>), in vsako oceno popravimo za to stevilko.</p>`;
+
+(function(){
+  const m=D.mc; if(!m) return;
+  document.getElementById('mc').innerHTML = `
+  <p><b>Preizkus s premesanim trgom.</b> Vzamemo resnicne dnevne spremembe cene bitcoina in jih
+  <b>premesamo kot karte</b>. Nastane trg, ki ima natanko iste dnevne premike - enako povprecje,
+  enako nihanje, enake skoke - a v napacnem vrstnem redu, zato v njem ni nobenega trenda, ki bi
+  ga bilo mogoce loviti. Na tem izmisljenem trgu pozenemo isto strategijo. Ponovimo tisockrat.
+  Ce strategija na premesanem trgu doseze enako kot na resnicnem, ne lovi trendov - le pobira,
+  kar ji podari oblika porazdelitve.</p>
+  <table><thead><tr><th class="l">preizkus</th><th>povprecje na premesanem</th><th>zgornjih 5 %</th>
+  <th>resnicni rezultat</th><th>boljsi od</th><th>p</th><th>sodba</th></tr></thead><tbody>
+  <tr><td class="l">popolnoma premesano</td><td>${sl(m.iid.mean.toFixed(2))}</td>
+    <td>${sl(m.iid.p95.toFixed(2))}</td><td><b>${sl(m.real_sortino.toFixed(2))}</b></td>
+    <td>${sl(m.iid.percentile.toFixed(1))} %</td><td>${sl(m.iid.p_value.toFixed(3))}</td>
+    <td style="color:${cv('--good')};font-weight:600">znacilno</td></tr>
+  <tr><td class="l">premesano v 20-dnevnih blokih</td><td>${sl(m.block20.mean.toFixed(2))}</td>
+    <td>${sl(m.block20.p95.toFixed(2))}</td><td><b>${sl(m.real_sortino.toFixed(2))}</b></td>
+    <td>${sl(m.block20.percentile.toFixed(1))} %</td><td>${sl(m.block20.p_value.toFixed(3))}</td>
+    <td style="color:${cv('--serious')};font-weight:600">ni znacilno</td></tr>
+  </tbody></table>
+  <p><b>Kaj to pomeni.</b> Proti popolnoma nakljucnemu trgu je strategija boljsa od
+  ${sl(m.iid.percentile.toFixed(1))} % primerov (p = ${sl(m.iid.p_value.toFixed(3))}) - torej res
+  izkorisca to, da si dnevi sledijo v smiselnem vrstnem redu. Ko pa premesamo tako, da ohranimo
+  <b>vecdnevne sunke momenta</b> in unicimo le dolge zamahe, prednost izgine
+  (p = ${sl(m.block20.p_value.toFixed(3))}). Strategija torej lovi moment na lestvici nekaj tednov -
+  kar je znan trzni pojav - in ne dosti vec od tega.</p>
+  <p><b>Se eno opozorilo iz iste tabele.</b> Na povsem nakljucnem trgu strategija doseze
+  povprecen Sortino ${sl(m.iid.mean.toFixed(2))}, torej <b>pozitiven</b>. Precejsen del videza
+  uspesnosti pride ze iz tega, da bitcoin dolgorocno raste, in bi ga dosegel kdorkoli, ki je del
+  casa v trgu - ne iz izbire pravega trenutka.</p>
+  <p><b>White's Reality Check.</b> Vprasanje: med ${m.reality_check.configs} preizkusenimi
+  nastavitvami - je najboljsa res boljsa od preprostega drzanja bitcoina, ali je le najbolj
+  srecna od mnogih? Rezultat p = ${sl(m.reality_check.p_value.toFixed(3))}, torej <b>ne</b>.
+  Posteno pa je dodati, da ta test meri donos, strategija pa donosa ne obljublja - obljublja
+  plitvejsi padec. Da po donosu ne premaga drzanja bitcoina, smo vedeli od zacetka.</p>`;
+})();
+
 document.getElementById('method').innerHTML =
  `Vsak parameter je premikan posebej, ostali ostanejo na privzetem (OFAT). Razpon pokriva
   vsaj ±25 % okoli privzete vrednosti, večinoma več. Merjeno je <b>izven vzorca</b> — pet
@@ -168,6 +242,23 @@ document.getElementById('method').innerHTML =
   embargo ${D.pbo.purge_embargo} dni med učnim in testnim delom). Nad 0,5 pomeni, da
   varianta, ki je najboljša v učnem delu, izven njega pristane pod mediano pogosteje kot ne
   — torej je <b>izbiranje najboljše nastavitve pretežno šum</b>.`;
+
+document.getElementById('limits').innerHTML = `
+<p><b>Poslov je premalo, in tega ni mogoce popraviti z vec racunanja.</b> Literatura za
+zanesljivo oceno priporoca <b>100 do 200 poslov</b> cez vec trznih rezimov. Ta strategija jih
+ima v sestih letih in pol <b>${D.mc.trades.total}</b>. Vsi statisticni testi tu zato merijo na
+robu svoje moci - zaznati je mogoce sele razliko okoli pol Sortino tocke, kar je vec, kot znasa
+katerakoli izmed obravnavanih izboljsav.</p>
+<p><b>Eno samo sredstvo.</b> Vse zgoraj je BTC. Kar velja tu, ne velja nujno drugod - pri
+prejsnji analizi se je pokazalo, da je isti izstopni pogoj na BTC mrtev, na ETH pa bistven.</p>
+<p><b>Stirje parametri imajo vrh natanko na privzeti vrednosti</b> - <code>ma_long_len</code>,
+<code>reentry_hold</code>, <code>exit_grace_bars</code>, <code>blowoff_dist_pct</code>.
+To ni razlog za veselje. Privzetki prihajajo iz Pine skripte, ki je bila napisana ob gledanju
+zgodovine bitcoina - da so stirje hkrati na lokalnem vrhu z ostrim padcem ob strani, je bolj
+skladno s tem, da so bili nekoc nastavljeni na te podatke, kot s srecnim nakljucjem. Iz enega
+sredstva tega ni mogoce lociti.</p>
+<p><b>Analiza gleda po en parameter naenkrat.</b> Ne vidi, kaj se zgodi, ce dva premaknes
+hkrati. Za to bi bila potrebna povrsina, ne krivulja.</p>`;
 </script>
 </body>
 </html>
