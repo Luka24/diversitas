@@ -72,9 +72,22 @@ VOL-SHOCK — NE ODSTRANITI (sodba spremenjena 2026-08-01)
      najslabše −0,085 in padec 2,6 o. t. globlji pri track_period 45). Učinek je
      majhen, a ni nič in ni naključno usmerjen.
 
-  SODBA: vol_shock_mul in vol_lookback OSTANETA. Pravilo ni mrtvo pri nastavitvah,
-  ki jih dejansko nameravamo uporabiti. Sodi v isti predal kot blow-off:
-  premajhno in preveč odvisno od nastavitve, da bi se odločili.
+  5. RAZREŠITEV (merge_verdict.py, 2026-08-01). Odločilna meritev ni, ali pravilo
+     oživi, ampak koliko je vredno v ansamblu, ki ga nameravamo trgovati:
+
+        glasovanje 81 sosedov, z vol_shockom     Sortino 1,021 · MaxDD −43,1 %
+        glasovanje 81 sosedov, brez njega        Sortino 0,981 · MaxDD −43,1 %
+        ena točka (privzetki), z ali brez        1,219 · BITNO IDENTIČNO
+
+     ΔSortino 0,040, razpon [−0,16; +0,04] seka ničlo, padec nespremenjen.
+     Pri 12 poslih je najmanjša zaznavna razlika okoli 0,5 Sortina — izmerjenih
+     0,040 je dvanajstkrat pod tem pragom.
+
+  SODBA: PRAVILO OBDRŽATI, OBA GUMBA ZAKLENITI pri 1,5 in 20.
+  Za PBO in deflated Sharpe šteje ŠTEVILO NASTAVLJIVIH ŠTEVILK, ne število vrstic
+  kode. Zaklepanje da celotno statistično korist, ne da bi spremenilo eno samo
+  pozicijo. Brisanje bi prineslo le urejenost kode — za ceno spremembe vedenja,
+  ki je ne moremo utemeljiti.
 
   NAUK, ki ga je vredno zapisati: preleti po en parameter naenkrat so pokazali
   razpone 0,001 do 0,013 in videti je bilo, da je pravilo mrtvo. Preleti so bili
@@ -164,18 +177,33 @@ KAJ OSTANE IN JE UPRAVIČENO (za kontekst, se ne dotikamo)
 ================================================================================
 KORAK 1 — BRISANJE PRAVIL BREZ DOKAZOV
 ================================================================================
-Ocena dela: ~1 ura.  Cilj: 14 nastavljivih parametrov → 12.
-(Zaporedje popravkov: "→ 6", "→ 8", "→ 10" so bili vsi preveč
- optimistični. Po preizkusu robustnosti odpadeta samo dva.)
+Ocena dela: ~1 ura.  Cilj: 14 nastavljivih parametrov → 9.
+(Zaporedje popravkov: 6, 8, 10, 12, 9. Prvi trije so bili preveč optimistični
+ glede brisanja. Cetrti je bil preveč pesimisticen, ker je stel samo brisanja in
+ spregledal zaklepanje. Peti loci brisanje od zaklepanja in je pravilen.)
 
 1.1 lean/diversitas/config.py
     ODSTRANITI polja:
-        min_dist_entry_pct    (mrtev pri vseh 151 preizkušenih nastavitvah)
-        ma_med_len            (oživi pri 3 od 151, učinek droben, padca ne premakne)
-    NE odstraniti:
-        blowoff_dist_pct, rsi_len   — blow-off je nedokazan, ne ovržen
-        vol_shock_mul, vol_lookback — pravilo oživi pri 67 od 151 nastavitev in
-                                      pri 45 od 81 članov ansambla (glej §1)
+    ODSTRANITI (2) — pravilo je mrtvo, gumb odpade z njim:
+        min_dist_entry_pct    mrtev pri vseh 151 preizkušenih nastavitvah
+        ma_med_len            oživi pri 3 od 151, padca ne premakne
+
+    ZAKLENITI (3) — pravilo OSTANE, gumb se umakne s seznama nastavljivih:
+        rsi_len        = 14    inerten, razpon 0,120; napaja blow-off
+        vol_shock_mul  = 1,5   v ansamblu vreden 0,040 Sortina, razpon seka ničlo
+        vol_lookback   = 20    razpon 0,021
+      Zaklepanje ne spremeni NITI ENE pozicije, a zniža število nastavljivih
+      številk — in prav to vstopa v PBO in deflated Sharpe.
+
+    PREPUSTITI GLASOVANJU (4) — ostra konica, vrednost določi večina 81 sosedov:
+        ma_long_len · confirm_bars · reentry_hold · exit_grace_bars
+
+    PUSTITI PRI MIRU (5) — plato ali pravilo, ki ga ne odpiramo:
+        track_period · track_buf_pct · ma_slope · track_slope_bars · blowoff_dist_pct
+      blowoff_dist_pct je NAMENOMA izvzet iz glasovanja: nastavljati pravilo, o
+      katerem ne vemo, ali sploh koristi, bi bilo nastavljanje šuma.
+
+    Skupaj: 14 nastavljivih -> 9, od tega 5, ki jih je smiselno gledati.
     OBDRŽATI ma_med_len = 50, a dodati komentar, da je zaklenjen in ni več
     nastavljiv parameter (z razlogom in datumom, po vzoru obstoječega komentarja
     o odstranitvi ER).
@@ -653,7 +681,7 @@ R5  Kumulativno število poskusov raste in z njim PBO.
 ================================================================================
 6. DEFINICIJA DOKONČANOSTI
 ================================================================================
-[ ] Korak 1: 2 parametra odstranjena (14 → 12), vsak z zapisanim razlogom
+[ ] Korak 1: 2 odstranjena + 3 zaklenjeni (14 → 9 nastavljivih)
 [ ] Korak 1: novi testi (1.8) napisani in zeleni
 [ ] Korak 1: sprejemni kriterij 1.9 izpolnjen (Sortino 1,616 / MaxDD −39,8 / 11 poslov)
 [ ] Korak 1: dashboard se naloži brez napake

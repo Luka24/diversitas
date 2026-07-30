@@ -29,6 +29,8 @@ EX = json.loads((DD / "exit_rules_BTC.json").read_text(encoding="utf-8"))
 AU = json.loads((DD / "audit_BTC.json").read_text(encoding="utf-8"))
 AF = json.loads((DD / "ablation_full_BTC.json").read_text(encoding="utf-8"))
 DR = json.loads((DD / "dead_rules_BTC.json").read_text(encoding="utf-8"))
+MG = json.loads((DD / "merge_BTC.json").read_text(encoding="utf-8"))
+PAR = json.loads((DD / "parametri_BTC.json").read_text(encoding="utf-8"))
 OUT = ROOT / "testing" / "porocilo_pogoji_BTC.html"
 
 BASE = AF["cases"]["izhodišče"]
@@ -554,6 +556,100 @@ pri nastavitvah, ki jih dejansko nameravamo uporabiti. To je manj, kot je prej k
 razlog je pošten: prvi izračun je meril eno točko, drugi jih je meril
 {DR['settings_tested']}.</p></div>""")
 
+    A("<h2>Je vol_shock vreden svoje kompleksnosti?</h2>")
+    V = MG["variants"]
+    dv = MG["drop_vol_shock_glasovanje"]
+    A(f"""<p>Da pravilo oživi pri 45 od 81 članov ansambla, je bil razlog, da ga ne izbrišemo.
+A »spremeni ansambel« in »spremeni ansambel za toliko, da je vredno dveh nastavljivih številk«
+nista isto, in odločilna je druga trditev. Izmerjena je tako: glasovanje vseh 81 sosedov,
+enkrat z živim vol_shockom in enkrat brez njega. Kar delajo posamezni člani, ni pomembno —
+glasovanje je tisto, kar bi dejansko trgovali.</p>""")
+    A('<div class="fig"><table><tr><th>različica</th><th class="n">Sortino</th>'
+      '<th class="n">Sharpe</th><th class="n">letni donos</th>'
+      '<th class="n">največji padec</th><th class="n">končni večkratnik</th></tr>')
+    for k in ("glasovanje, z vol_shockom", "glasovanje, brez vol_shocka",
+              "ena tocka, z vol_shockom", "ena tocka, brez vol_shocka"):
+        m = V[k]
+        A(f'<tr><td>{k.replace("ena tocka", "ena točka")}</td>'
+          f'<td class="n">{m["sortino"]:.3f}</td><td class="n">{m["sharpe"]:.3f}</td>'
+          f'<td class="n">{m["cagr"]:.1f} %</td><td class="n">{m["maxdd"]:.1f} %</td>'
+          f'<td class="n">{m["final"]:.2f}×</td></tr>')
+    A("</table></div>")
+    A(f"""<div class="note" style="border-left-color:var(--good)">
+<p><b>Odgovor: pravilo obdržati, oba gumba zakleniti.</b></p>
+<p style="margin-top:8px">V ansamblu izklop vol_shocka stane <b>{abs(dv['d_sortino']):.3f}
+Sortina</b> (razpon [{dv['ci_sortino'][0]:+.2f}, {dv['ci_sortino'][1]:+.2f}] seka ničlo) in
+<b>{abs(dv['d_maxdd']):.1f} odstotne točke padca</b> — torej nič na tistem merilu, ki ga
+produkt edino obljublja. Pri eni sami točki je razlika natanko nič.</p>
+<p style="margin-top:8px">Za primerjavo: pri {V['glasovanje, z vol_shockom']['trades']} poslih
+je najmanjša razlika, ki jo sploh znamo zaznati, okoli <b>0,5 Sortina</b>. Izmerjenih 0,040 je
+dvanajstkrat pod tem pragom. <b>Trditev, da to pravilo kaj prispeva, je pod mejo merljivosti
+v obe smeri.</b></p>
+<p style="margin-top:8px"><b>Zato ni treba izbirati med brisanjem in ohranjanjem.</b> Za
+statistiko šteje <b>število nastavljivih številk</b>, ne število vrstic kode: prav to vstopa v
+PBO in deflated Sharpe. Če <code>vol_shock_mul</code> in <code>vol_lookback</code>
+<b>zakleneš</b> pri 1,5 in 20 ter ju umakneš s seznama nastavljivih, dobiš celotno statistično
+korist, <b>ne da bi spremenil eno samo pozicijo</b>. Brisanje pravila bi prineslo le urejenost
+kode — za ceno spremembe vedenja, ki je ne moremo utemeljiti.</p></div>""")
+
+    A("<h2>Združena slika: najboljše nastavitve po obeh poročilih</h2>")
+    A(f"""<p>Poročilo o parametrih pove <b>obliko</b> vsakega gumba — plato, ostra konica ali
+inerten. To poročilo pove, ali <b>pravilo</b>, ki ga gumb nastavlja, sploh kaj počne. Šele
+skupaj dasta ukrep. Spodnja tabela je sestavljena iz obeh, ne napisana na roko.</p>""")
+    ACT = {
+      "odstraniti": ("odstraniti", "var(--crit)"),
+      "zakleniti": ("zakleniti", "var(--s2)"),
+      "prepustiti glasovanju": ("prepustiti glasovanju", "var(--s1)"),
+      "pustiti pri miru": ("pustiti pri miru", "var(--good)"),
+    }
+    A('<div class="fig"><table><tr><th>parameter</th><th class="n">danes</th>'
+      '<th>oblika preleta</th><th class="n">razpon</th><th>ukrep</th>'
+      '<th>zakaj</th></tr>')
+    order = {"odstraniti": 0, "zakleniti": 1, "prepustiti glasovanju": 2,
+             "pustiti pri miru": 3}
+    for r in sorted(MG["parameter_plan"], key=lambda x: (order[x["action"]], x["name"])):
+        lab, col = ACT[r["action"]]
+        A(f'<tr><td><code>{r["name"]}</code></td>'
+          f'<td class="n">{r["default"]}</td>'
+          f'<td style="font-size:12.5px">{r["kind"]}</td>'
+          f'<td class="n">{r["range"]:.2f}</td>'
+          f'<td><span class="badge" style="background:{col};margin:0">{lab}</span></td>'
+          f'<td style="font-size:12.5px">{r["why"]}</td></tr>')
+    A("</table></div>")
+
+    n_rm = sum(1 for r in MG["parameter_plan"] if r["action"] == "odstraniti")
+    n_lk = sum(1 for r in MG["parameter_plan"] if r["action"] == "zakleniti")
+    n_vt = sum(1 for r in MG["parameter_plan"] if r["action"] == "prepustiti glasovanju")
+    n_al = sum(1 for r in MG["parameter_plan"] if r["action"] == "pustiti pri miru")
+    tot = len(MG["parameter_plan"])
+    A(f"""<div class="note" style="border-left-color:var(--good)">
+<p><b>Kaj to skupaj naredi s številom gumbov.</b></p>
+<table style="margin:9px 0">
+<tr><td><b>{tot}</b></td><td>nastavljivih številk danes</td></tr>
+<tr><td><b>−{n_rm}</b></td><td>odstranjeni, ker je pravilo mrtvo pri vseh nastavitvah
+    (<code>min_dist_entry_pct</code>, <code>ma_med_len</code>)</td></tr>
+<tr><td><b>−{n_lk}</b></td><td>zaklenjeni, ker gumb ničesar ne premakne, pravilo pa ostane
+    (<code>rsi_len</code>, <code>vol_shock_mul</code>, <code>vol_lookback</code>)</td></tr>
+<tr style="border-top:1px solid var(--axis)"><td><b>{tot-n_rm-n_lk}</b></td>
+    <td><b>nastavljivih ostane</b></td></tr>
+<tr><td><b>−{n_vt}</b></td><td>prepuščenih glasovanju 81 sosedov, ker so na ostri konici
+    (<code>ma_long_len</code>, <code>confirm_bars</code>, <code>reentry_hold</code>,
+    <code>exit_grace_bars</code>)</td></tr>
+<tr style="border-top:1px solid var(--axis)"><td><b>{n_al}</b></td>
+    <td><b>številk, ki bi jih kdo sploh še kdaj nastavljal</b> — in vse so na platoju ali
+    pripadajo pravilu, ki ga ne odpiramo</td></tr>
+</table>
+<p><b>{tot} &rarr; {tot-n_rm-n_lk} nastavljivih, od tega {n_al}, ki jih je smiselno gledati.</b>
+In vse to ne da bi spremenili eno samo pozicijo — razen tam, kjer glasovanje nadomesti izbrano
+točko. To je celoten izplen obeh poročil skupaj.</p></div>""")
+
+    A(f"""<div class="note"><p><b>Kaj namenoma NI na seznamu.</b>
+<code>blowoff_dist_pct</code> je na ostri konici z vrhom natanko na privzetku, kar bi ga
+uvrstilo med kandidate za glasovanje. Pustimo ga pri miru, ker je pravilo samo nedokazano v
+obe smeri in se njegov predznak obrne glede na okno — spreminjati nastavitev pravila, o katerem
+ne vemo, ali sploh koristi, bi bilo nastavljanje šuma. Enako velja za <code>rsi_len</code>, ki
+napaja isto pravilo: zaklenjen je, ne odstranjen.</p></div>""")
+
     A("<h2>Kaj vse to skupaj pomeni</h2>")
     A(f"""<p class="lead">Strategija ima osem pravil, a pri privzetih nastavitvah tri od njih
 ne počnejo nič — in ravno preverba, ali to drži tudi drugje, je pokazala, da je treba to
@@ -576,10 +672,12 @@ katerega je slabše na vseh štirih merilih — čeprav se je ob tem izkazalo, d
 zmanjšuje in je torej filter donosa, ne varovalka. Preostala tri so odprta vprašanja:
 <code>above_tl</code> je jedro, a backtest brez njega je rahlo boljši; <code>below_tl</code>
 nosi trinajst od enaindvajsetih poslov brez dokazane prednosti; blow-off pa se obrne glede na
-obdobje. <b>Odstranljivi sta torej dve pravili, ne tri, in razlika med njima šteje: eno je
-varno po matematiki, drugo po meritvi. Kar pa je najbolj poučno, je da je moja najbolj
-samozavestna trditev — »strukturno mrtev, ne more biti drugače« — padla prva, ko sem jo
-preizkusil pri več kot eni nastavitvi.</b></p>""")
+obdobje. <b>Odstranljivi sta torej dve pravili, ne tri — a to ni celotna zgodba: za statistiko
+šteje število nastavljivih številk, ne število pravil, in tri nadaljnje gumbe je mogoče
+zakleniti, ne da bi se premaknila ena sama pozicija. Skupaj to pomeni štirinajst nastavljivih
+številk na devet, od tega pet, ki jih je smiselno gledati. Kar pa je najbolj poučno, je da je
+moja najbolj samozavestna trditev — »strukturno mrtev, ne more biti drugače« — padla prva, ko
+sem jo preizkusil pri več kot eni nastavitvi.</b></p>""")
 
     A(f"""<footer>
 Vir cen: Binance, zamrznjen posnetek

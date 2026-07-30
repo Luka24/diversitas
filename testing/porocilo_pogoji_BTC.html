@@ -150,7 +150,52 @@ Kupi-in-drži je v istem obdobju dosegel 1.67× pri padcu
 <code>vol_shock_mul</code> in <code>vol_lookback</code> <b>ostaneta</b>, ker pravilo ni mrtvo
 pri nastavitvah, ki jih dejansko nameravamo uporabiti. To je manj, kot je prej kazalo, in
 razlog je pošten: prvi izračun je meril eno točko, drugi jih je meril
-151.</p></div><h2>Kaj vse to skupaj pomeni</h2><p class="lead">Strategija ima osem pravil, a pri privzetih nastavitvah tri od njih
+151.</p></div><h2>Je vol_shock vreden svoje kompleksnosti?</h2><p>Da pravilo oživi pri 45 od 81 članov ansambla, je bil razlog, da ga ne izbrišemo.
+A »spremeni ansambel« in »spremeni ansambel za toliko, da je vredno dveh nastavljivih številk«
+nista isto, in odločilna je druga trditev. Izmerjena je tako: glasovanje vseh 81 sosedov,
+enkrat z živim vol_shockom in enkrat brez njega. Kar delajo posamezni člani, ni pomembno —
+glasovanje je tisto, kar bi dejansko trgovali.</p><div class="fig"><table><tr><th>različica</th><th class="n">Sortino</th><th class="n">Sharpe</th><th class="n">letni donos</th><th class="n">največji padec</th><th class="n">končni večkratnik</th></tr><tr><td>glasovanje, z vol_shockom</td><td class="n">1.021</td><td class="n">0.665</td><td class="n">17.3 %</td><td class="n">-43.1 %</td><td class="n">2.22×</td></tr><tr><td>glasovanje, brez vol_shocka</td><td class="n">0.981</td><td class="n">0.639</td><td class="n">16.4 %</td><td class="n">-43.1 %</td><td class="n">2.13×</td></tr><tr><td>ena točka, z vol_shockom</td><td class="n">1.219</td><td class="n">0.783</td><td class="n">21.6 %</td><td class="n">-39.8 %</td><td class="n">2.67×</td></tr><tr><td>ena točka, brez vol_shocka</td><td class="n">1.219</td><td class="n">0.783</td><td class="n">21.6 %</td><td class="n">-39.8 %</td><td class="n">2.67×</td></tr></table></div><div class="note" style="border-left-color:var(--good)">
+<p><b>Odgovor: pravilo obdržati, oba gumba zakleniti.</b></p>
+<p style="margin-top:8px">V ansamblu izklop vol_shocka stane <b>0.040
+Sortina</b> (razpon [-0.16, +0.04] seka ničlo) in
+<b>0.0 odstotne točke padca</b> — torej nič na tistem merilu, ki ga
+produkt edino obljublja. Pri eni sami točki je razlika natanko nič.</p>
+<p style="margin-top:8px">Za primerjavo: pri 12 poslih
+je najmanjša razlika, ki jo sploh znamo zaznati, okoli <b>0,5 Sortina</b>. Izmerjenih 0,040 je
+dvanajstkrat pod tem pragom. <b>Trditev, da to pravilo kaj prispeva, je pod mejo merljivosti
+v obe smeri.</b></p>
+<p style="margin-top:8px"><b>Zato ni treba izbirati med brisanjem in ohranjanjem.</b> Za
+statistiko šteje <b>število nastavljivih številk</b>, ne število vrstic kode: prav to vstopa v
+PBO in deflated Sharpe. Če <code>vol_shock_mul</code> in <code>vol_lookback</code>
+<b>zakleneš</b> pri 1,5 in 20 ter ju umakneš s seznama nastavljivih, dobiš celotno statistično
+korist, <b>ne da bi spremenil eno samo pozicijo</b>. Brisanje pravila bi prineslo le urejenost
+kode — za ceno spremembe vedenja, ki je ne moremo utemeljiti.</p></div><h2>Združena slika: najboljše nastavitve po obeh poročilih</h2><p>Poročilo o parametrih pove <b>obliko</b> vsakega gumba — plato, ostra konica ali
+inerten. To poročilo pove, ali <b>pravilo</b>, ki ga gumb nastavlja, sploh kaj počne. Šele
+skupaj dasta ukrep. Spodnja tabela je sestavljena iz obeh, ne napisana na roko.</p><div class="fig"><table><tr><th>parameter</th><th class="n">danes</th><th>oblika preleta</th><th class="n">razpon</th><th>ukrep</th><th>zakaj</th></tr><tr><td><code>ma_med_len</code></td><td class="n">50</td><td style="font-size:12.5px">inerten</td><td class="n">0.10</td><td><span class="badge" style="background:var(--crit);margin:0">odstraniti</span></td><td style="font-size:12.5px">pravilo <code>above_ma_med</code> je mrtvo pri vseh nastavitvah</td></tr><tr><td><code>min_dist_entry_pct</code></td><td class="n">0.0</td><td style="font-size:12.5px">inerten</td><td class="n">0.04</td><td><span class="badge" style="background:var(--crit);margin:0">odstraniti</span></td><td style="font-size:12.5px">pravilo <code>dist_entry_ok</code> je mrtvo pri vseh nastavitvah</td></tr><tr><td><code>rsi_len</code></td><td class="n">14</td><td style="font-size:12.5px">inerten</td><td class="n">0.12</td><td><span class="badge" style="background:var(--s2);margin:0">zakleniti</span></td><td style="font-size:12.5px">inerten, razpon 0.12; ni vreden nastavljanja</td></tr><tr><td><code>vol_lookback</code></td><td class="n">20</td><td style="font-size:12.5px">inerten</td><td class="n">0.02</td><td><span class="badge" style="background:var(--s2);margin:0">zakleniti</span></td><td style="font-size:12.5px">inerten, razpon 0.02; ni vreden nastavljanja</td></tr><tr><td><code>vol_shock_mul</code></td><td class="n">1.5</td><td style="font-size:12.5px">inerten</td><td class="n">0.02</td><td><span class="badge" style="background:var(--s2);margin:0">zakleniti</span></td><td style="font-size:12.5px">inerten, razpon 0.02; ni vreden nastavljanja</td></tr><tr><td><code>confirm_bars</code></td><td class="n">3</td><td style="font-size:12.5px">ostra konica</td><td class="n">0.33</td><td><span class="badge" style="background:var(--s1);margin:0">prepustiti glasovanju</span></td><td style="font-size:12.5px">ostra konica; vrednost naj določi večina 81 sosedov</td></tr><tr><td><code>exit_grace_bars</code></td><td class="n">3</td><td style="font-size:12.5px">ostra konica</td><td class="n">0.51</td><td><span class="badge" style="background:var(--s1);margin:0">prepustiti glasovanju</span></td><td style="font-size:12.5px">ostra konica; vrednost naj določi večina 81 sosedov</td></tr><tr><td><code>ma_long_len</code></td><td class="n">200</td><td style="font-size:12.5px">ostra konica</td><td class="n">0.32</td><td><span class="badge" style="background:var(--s1);margin:0">prepustiti glasovanju</span></td><td style="font-size:12.5px">ostra konica; vrednost naj določi večina 81 sosedov</td></tr><tr><td><code>reentry_hold</code></td><td class="n">15</td><td style="font-size:12.5px">ostra konica</td><td class="n">0.25</td><td><span class="badge" style="background:var(--s1);margin:0">prepustiti glasovanju</span></td><td style="font-size:12.5px">ostra konica; vrednost naj določi večina 81 sosedov</td></tr><tr><td><code>blowoff_dist_pct</code></td><td class="n">25.0</td><td style="font-size:12.5px">ostra konica</td><td class="n">0.52</td><td><span class="badge" style="background:var(--good);margin:0">pustiti pri miru</span></td><td style="font-size:12.5px">ostra konica, razpon 0.52</td></tr><tr><td><code>ma_slope</code></td><td class="n">5</td><td style="font-size:12.5px">plato</td><td class="n">0.21</td><td><span class="badge" style="background:var(--good);margin:0">pustiti pri miru</span></td><td style="font-size:12.5px">plato, razpon 0.21; natančna vrednost ni pomembna</td></tr><tr><td><code>track_buf_pct</code></td><td class="n">3.0</td><td style="font-size:12.5px">plato</td><td class="n">0.57</td><td><span class="badge" style="background:var(--good);margin:0">pustiti pri miru</span></td><td style="font-size:12.5px">plato, razpon 0.57; natančna vrednost ni pomembna</td></tr><tr><td><code>track_period</code></td><td class="n">75</td><td style="font-size:12.5px">plato</td><td class="n">0.64</td><td><span class="badge" style="background:var(--good);margin:0">pustiti pri miru</span></td><td style="font-size:12.5px">plato, razpon 0.64; natančna vrednost ni pomembna</td></tr><tr><td><code>track_slope_bars</code></td><td class="n">10</td><td style="font-size:12.5px">plato</td><td class="n">0.34</td><td><span class="badge" style="background:var(--good);margin:0">pustiti pri miru</span></td><td style="font-size:12.5px">plato, razpon 0.34; natančna vrednost ni pomembna</td></tr></table></div><div class="note" style="border-left-color:var(--good)">
+<p><b>Kaj to skupaj naredi s številom gumbov.</b></p>
+<table style="margin:9px 0">
+<tr><td><b>14</b></td><td>nastavljivih številk danes</td></tr>
+<tr><td><b>−2</b></td><td>odstranjeni, ker je pravilo mrtvo pri vseh nastavitvah
+    (<code>min_dist_entry_pct</code>, <code>ma_med_len</code>)</td></tr>
+<tr><td><b>−3</b></td><td>zaklenjeni, ker gumb ničesar ne premakne, pravilo pa ostane
+    (<code>rsi_len</code>, <code>vol_shock_mul</code>, <code>vol_lookback</code>)</td></tr>
+<tr style="border-top:1px solid var(--axis)"><td><b>9</b></td>
+    <td><b>nastavljivih ostane</b></td></tr>
+<tr><td><b>−4</b></td><td>prepuščenih glasovanju 81 sosedov, ker so na ostri konici
+    (<code>ma_long_len</code>, <code>confirm_bars</code>, <code>reentry_hold</code>,
+    <code>exit_grace_bars</code>)</td></tr>
+<tr style="border-top:1px solid var(--axis)"><td><b>5</b></td>
+    <td><b>številk, ki bi jih kdo sploh še kdaj nastavljal</b> — in vse so na platoju ali
+    pripadajo pravilu, ki ga ne odpiramo</td></tr>
+</table>
+<p><b>14 &rarr; 9 nastavljivih, od tega 5, ki jih je smiselno gledati.</b>
+In vse to ne da bi spremenili eno samo pozicijo — razen tam, kjer glasovanje nadomesti izbrano
+točko. To je celoten izplen obeh poročil skupaj.</p></div><div class="note"><p><b>Kaj namenoma NI na seznamu.</b>
+<code>blowoff_dist_pct</code> je na ostri konici z vrhom natanko na privzetku, kar bi ga
+uvrstilo med kandidate za glasovanje. Pustimo ga pri miru, ker je pravilo samo nedokazano v
+obe smeri in se njegov predznak obrne glede na okno — spreminjati nastavitev pravila, o katerem
+ne vemo, ali sploh koristi, bi bilo nastavljanje šuma. Enako velja za <code>rsi_len</code>, ki
+napaja isto pravilo: zaklenjen je, ne odstranjen.</p></div><h2>Kaj vse to skupaj pomeni</h2><p class="lead">Strategija ima osem pravil, a pri privzetih nastavitvah tri od njih
 ne počnejo nič — in ravno preverba, ali to drži tudi drugje, je pokazala, da je treba to
 trditev razdeliti na tri različno trdne dele. <code>dist_entry_ok</code> je matematični dvojnik
 pravila nad njim: pri 151 preizkušenih nastavitvah ni bilo niti enega dne
@@ -171,10 +216,12 @@ katerega je slabše na vseh štirih merilih — čeprav se je ob tem izkazalo, d
 zmanjšuje in je torej filter donosa, ne varovalka. Preostala tri so odprta vprašanja:
 <code>above_tl</code> je jedro, a backtest brez njega je rahlo boljši; <code>below_tl</code>
 nosi trinajst od enaindvajsetih poslov brez dokazane prednosti; blow-off pa se obrne glede na
-obdobje. <b>Odstranljivi sta torej dve pravili, ne tri, in razlika med njima šteje: eno je
-varno po matematiki, drugo po meritvi. Kar pa je najbolj poučno, je da je moja najbolj
-samozavestna trditev — »strukturno mrtev, ne more biti drugače« — padla prva, ko sem jo
-preizkusil pri več kot eni nastavitvi.</b></p><footer>
+obdobje. <b>Odstranljivi sta torej dve pravili, ne tri — a to ni celotna zgodba: za statistiko
+šteje število nastavljivih številk, ne število pravil, in tri nadaljnje gumbe je mogoče
+zakleniti, ne da bi se premaknila ena sama pozicija. Skupaj to pomeni štirinajst nastavljivih
+številk na devet, od tega pet, ki jih je smiselno gledati. Kar pa je najbolj poučno, je da je
+moja najbolj samozavestna trditev — »strukturno mrtev, ne more biti drugače« — padla prva, ko
+sem jo preizkusil pri več kot eni nastavitvi.</b></p><footer>
 Vir cen: Binance, zamrznjen posnetek
 <code>testing/data/sources/BTC_binance_warmup.parquet</code>. Ogrevanje indikatorjev je vzeto
 iz zgodovine pred oknom, ne odbito od njega.<br>
