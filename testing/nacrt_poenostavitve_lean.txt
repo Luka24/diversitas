@@ -630,6 +630,70 @@ Korak 1 in 5.3 gresta skupaj: brisanje brez ponovnega PBO ne pokaže koristi.
 tem, ko bi asimetrični pas izmerili.
 
 
+KORAK 6 — ALTERNATIVNI PRISTOPI K NASTAVLJANJU  ·  PREIZKUŠENO 2026-08-01
+================================================================================
+testing/scripts/wf_refit.py · testing/data/wf_refit_BTC.json
+
+Vprašanje: bi bilo bolje iskati po več parametrih hkrati in jih sproti
+prilagajati, namesto da jih pustimo pri miru in povprečimo sosede?
+
+6.1 IZVEDBA
+    Štiri metode na isti podlagi, ocenjene SAMO na odsekih izven vzorca:
+      fiksni privzetki      nikoli ne nastavljamo
+      sprotno nastavljanje  na vsakem treningu najboljša od 81 kombinacij
+      sprotno robustno      najboljše POVPREČJE SOSESKE (kaznovana funkcija cilja)
+      glasovanje 81         večina vseh, brez vsakršne izbire
+    Štiri sheme: trening 2/3/4 leta, test 1 leto; in trening 3 leta, test 2 leti.
+
+6.2 REZULTAT — Sortino izven vzorca
+
+    shema        poslov v   fiksni   sprotno   sprotno    glasovanje
+                 treningu            nastavlj. robustno
+    2 l / 1 l        6       1,093     0,672     0,847      0,909
+    3 l / 1 l        8       1,723     1,027     1,027      1,397
+    4 l / 1 l       12       1,595     0,826     0,826      1,321
+    3 l / 2 l        9       1,723     0,779     0,779      1,397
+
+    Sprotno nastavljanje prekaša fiksne privzetke v 0 od 4 shem.
+    Robustna različica          prekaša v 0 od 4.
+    Glasovanje                  prekaša v 0 od 4.
+    VRSTNI RED JE V VSEH ŠTIRIH ENAK: fiksni > glasovanje > robustno >= sprotno.
+
+6.3 ZAKAJ
+    V vsakem treningu je na voljo 8 do 12 POSLOV. Izbirati med 81 kombinacijami
+    na osmih poslih ni nastavljanje, ampak metanje kovanca. Dokaz: izbrana
+    nastavitev se zamenja skoraj na VSAKI rezini (4/5, 4/4, 3/3, 2/2). Če bi
+    trening nosil signal, bi bila izbira stabilna.
+
+    Kaznovana funkcija cilja je načelno pravilna in v stroki uveljavljena, a pri
+    mreži 3x3x3x3 je soseska preredka: v treh od štirih shem izbere isto celico
+    kot navadno nastavljanje.
+
+6.4 POŠTENA OMEMBA
+    Privzetki so bili izbrani ob gledanju celotnega obdobja, zato njihova prednost
+    ni čista (premija konice +0,279). Metoda, ki je EDINA popolnoma brez vpogleda
+    naprej, je prav sprotno nastavljanje — in je najslabša. To ni zato, ker bi bil
+    vpogled naprej dober, ampak ker nastavljanje na osmih poslih proizvaja šum.
+    Primerjava, ki šteje, je sprotno nastavljanje proti glasovanju: BREZ izbire je
+    bolje kot Z izbiro, v vseh štirih shemah.
+
+6.5 SODBA PO PRISTOPIH
+    NE DELATI  iskanje po več parametrih hkrati — prepletanje je res 38 % glavnega
+               učinka, a to je argument proti: več poskusov, PBO že 0,694, in
+               izbira med 81 kombinacijami izven vzorca škoduje
+    NE DELATI  sprotno prilagajanje — najslabše v vseh štirih shemah; potrebovalo
+               bi vsaj nekaj desetin poslov na trening, imamo osem
+    ŽE VGRAJENO kaznovana funkcija cilja — glasovanje je njena groba oblika
+    OBDRŽATI   glasovanje 81 — slabše od privzetkov, a boljše od vsakega
+               nastavljanja; odpravi izbiro točke, ki je merljivo prilagojena
+    NAJBOLJŠE  manj parametrov — edini pristop, ki tveganje zniža BREZ spremembe
+               vedenja. Ni tekmec ostalim, je predpogoj.
+    VREDNO     dve merili namesto enega (Pareto Sortino/MaxDD) — ne reši
+               premajhnega vzorca, prepreči pa nastavljanje na številko, ki je ne
+               prodajamo. Narediti pri naslednjem preletu.
+
+
+================================================================================
 ================================================================================
 4. ČESA NE DELAMO
 ================================================================================

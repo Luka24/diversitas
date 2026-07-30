@@ -22,6 +22,7 @@ MC = json.loads((ROOT / "testing" / "data" / "mc_tests_BTC.json").read_text(enco
 AU = json.loads((ROOT / "testing" / "data" / "audit_BTC.json").read_text(encoding="utf-8"))
 IN = json.loads((ROOT / "testing" / "data" / "intraday_BTC.json").read_text(encoding="utf-8"))
 CV = json.loads((ROOT / "testing" / "data" / "curves_BTC.json").read_text(encoding="utf-8"))
+WF = json.loads((ROOT / "testing" / "data" / "wf_refit_BTC.json").read_text(encoding="utf-8"))
 OUT = ROOT / "testing" / "porocilo_parametri_BTC.html"
 
 # Plain-language name for every knob, so the page never makes the reader guess.
@@ -568,6 +569,104 @@ istega dneva, zato <b>lepšajo največji padec</b>:</p>
 </table>
 <p>To ni statistična moč — te drobnejša ura ne more dati — ampak <b>natančnost</b>. Številka,
 ki jo je treba komunicirati, je 4-urna, ne dnevna.</p></div>""")
+
+    A("<h2>Bi se sprotno nastavljanje parametrov splačalo?</h2>")
+    A("""<p>Doslej smo parametre premikali po enega naenkrat in nato povprečili sosede. Dve
+očitni alternativi sta: <b>iskati po več parametrih hkrati</b> in <b>parametre sproti
+prilagajati</b> — na vsakem preteklem obdobju izbrati najboljšo kombinacijo in jo trgovati v
+naslednjem. To je klasičen walk-forward. Preizkusili smo obe.</p>
+<p class="cap">Štiri metode so postavljene na isto podlago in ocenjene <b>samo na odsekih izven
+vzorca</b>, tako da nobena ne vidi podatkov, na katerih je ocenjena: <b>fiksni privzetki</b>
+(nikoli ne nastavljamo), <b>sprotno nastavljanje</b> (na vsakem treningu izberemo najboljšo od
+81 kombinacij), <b>sprotno robustno</b> (izberemo tisto z najboljšim <i>povprečjem soseske</i>
+namesto najboljšo točko — to je kaznovana funkcija cilja) in <b>glasovanje</b> (večina vseh 81,
+brez vsakršne izbire).</p>""")
+
+    A('<div class="fig"><table><tr><th>shema</th><th class="n">rezin</th>'
+      '<th class="n">poslov v<br>treningu</th><th class="n">zamenjav<br>nastavitve</th>'
+      '<th>metoda</th><th class="n">Sortino</th><th class="n">CAGR</th>'
+      '<th class="n">MaxDD</th><th class="n">konec</th></tr>')
+    NM = {"fixed": ("fiksni privzetki", "var(--good)"),
+          "vote": ("glasovanje 81", "var(--s1)"),
+          "robust": ("sprotno, robustno", "var(--s2)"),
+          "refit": ("sprotno nastavljanje", "var(--crit)")}
+    for sc in WF["schemes"]:
+        first = True
+        for k in ("fixed", "vote", "robust", "refit"):
+            m = sc["results"][k]
+            nm, col = NM[k]
+            lead = (f'<td rowspan="4">trening {sc["train_years"]} let /<br>test '
+                    f'{sc["test_years"]} leto</td>'
+                    f'<td class="n" rowspan="4">{sc["n_folds"]}</td>'
+                    f'<td class="n" rowspan="4"><b>{sc["median_trades_in_train"]}</b></td>'
+                    f'<td class="n" rowspan="4">{sc["distinct_picks"]}/{sc["n_folds"]}</td>'
+                    if first else "")
+            top = ' style="border-top:2px solid var(--axis)"' if first else ''
+            A(f'<tr{top}>{lead}'
+              f'<td style="color:{col};font-weight:600">{nm}</td>'
+              f'<td class="n">{m["sortino"]:.3f}</td><td class="n">{m["cagr"]:.1f} %</td>'
+              f'<td class="n">{m["maxdd"]:.1f} %</td>'
+              f'<td class="n">{m["final"]:.2f}×</td></tr>')
+            first = False
+    A("</table></div>")
+
+    w = WF["beats_fixed"]
+    A(f"""<div class="box bad">
+<p><b>Sprotno nastavljanje je najslabše od vseh štirih — v vseh štirih shemah.</b> Ne enkrat,
+ne v povprečju: <b>{w['refit']} od {w['n']}</b> shem prekaša fiksne privzetke. Isto velja za
+robustno različico ({w['robust']}/{w['n']}) in za glasovanje ({w['vote']}/{w['n']}).</p>
+<p style="margin-top:9px"><b>Zakaj, je razvidno iz tretjega stolpca.</b> V vsakem treningu je
+na voljo <b>8 do 12 poslov</b>. Izbirati med 81 kombinacijami na osmih poslih ni nastavljanje,
+ampak metanje kovanca — in četrti stolpec to potrdi: izbrana nastavitev se zamenja
+<b>skoraj na vsaki rezini</b>. Če bi trening nosil signal, bi bila izbira stabilna.</p>
+<p style="margin-top:9px">Kaznovana funkcija cilja (»sprotno, robustno«) pomaga, a le malo: v
+eni shemi dvigne Sortino z {WF['schemes'][0]['results']['refit']['sortino']:.3f} na
+{WF['schemes'][0]['results']['robust']['sortino']:.3f}, v treh pa izbere isto celico kot
+navadno nastavljanje. Pri mreži 3×3×3×3 je soseska preredka, da bi kazen imela kaj popraviti.
+</p></div>""")
+
+    A(f"""<div class="box"><p><b>Ena poštena omemba, preden to razberemo kot zmago fiksnih
+privzetkov.</b> Privzetki so bili izbrani ob gledanju celotnega tega obdobja, zato njihova
+prednost ni čista — izmerili smo jo kot premijo konice {prem:+.2f}. Metoda, ki je edina
+popolnoma brez vpogleda naprej, je prav <b>sprotno nastavljanje</b>, in ta je najslabša. To ni
+zato, ker bi bil vpogled naprej dober, ampak ker <b>nastavljanje na osmih poslih proizvaja
+šum</b>. Primerjava, ki šteje, je torej sprotno nastavljanje proti glasovanju: brez izbire je
+bolje kot z izbiro, v vseh štirih shemah.</p></div>""")
+
+    A("""<h3 class="s">Kaj bi torej delovalo bolje — in kaj ne</h3>""")
+    A("""<div class="fig"><table>
+<tr><th style="width:26%">pristop</th><th>sodba</th></tr>
+<tr><td><b>Iskanje po več parametrih hkrati</b></td>
+    <td style="font-size:12.5px">Izmerjeno prepletanje je 38 % največjega glavnega učinka,
+    torej bi skupno iskanje res našlo <i>druge</i> optimume kot iskanje po enem. Ampak to je
+    argument proti, ne za: štiridimenzionalna mreža poveča število poskusov, verjetnost
+    prevelike prilagojenosti je že 0,694, in zgornja tabela pokaže, da že izbira med 81
+    kombinacijami izven vzorca škoduje. <b>Ne delati.</b></td></tr>
+<tr><td><b>Sprotno prilagajanje (walk-forward re-fit)</b></td>
+    <td style="font-size:12.5px">Preizkušeno v štirih shemah, najslabše v vseh. Zahtevalo bi
+    vsaj nekaj desetin poslov na trening, mi imamo osem. <b>Ne delati</b> — dokler je poslov
+    toliko, tega ni mogoče izvesti smiselno, ne glede na to, kako dobro je izvedeno.</td></tr>
+<tr><td><b>Kaznovana funkcija cilja</b><br>
+    <span style="font-size:11.5px;color:var(--muted)">robustna optimizacija</span></td>
+    <td style="font-size:12.5px">Načelno pravilna smer in v stroki uveljavljena: namesto
+    najvišje točke izberi tisto, katere okolica je stabilna. Pri naši mreži prinese komaj kaj,
+    ker so sosedje preredki. <b>Vgrajeno je že v glasovanje</b>, ki je njena groba, a
+    delujoča oblika.</td></tr>
+<tr><td><b>Glasovanje 81 sosedov</b></td>
+    <td style="font-size:12.5px">Slabše od fiksnih privzetkov, a <b>boljše od vsake oblike
+    nastavljanja</b> v vseh štirih shemah. Ostaja priporočilo — ne ker bi izboljšalo rezultat,
+    ampak ker odpravi izbiro točke, ki je merljivo prilagojena.</td></tr>
+<tr><td><b>Manj parametrov</b></td>
+    <td style="font-size:12.5px">Edini pristop, ki tveganje zniža <i>brez</i> spremembe
+    vedenja. Iz 14 nastavljivih na 9, od tega 5, ki jih je smiselno gledati. <b>To je
+    najboljša razpoložljiva poteza</b> in ni tekmec ostalim — je predpogoj.</td></tr>
+<tr><td><b>Dve merili namesto enega</b><br>
+    <span style="font-size:11.5px;color:var(--muted)">Pareto</span></td>
+    <td style="font-size:12.5px">Doslej smo izbirali po Sortinu, ki pa <i>ni</i> tisto, kar
+    produkt obljublja. Smiselno bi bilo gledati mejo med Sortinom in največjim padcem
+    hkrati. To ne reši premajhnega vzorca, prepreči pa nastavljanje na številko, ki je ne
+    prodajamo. <b>Vredno narediti</b> pri naslednjem preletu.</td></tr>
+</table></div>""")
 
     A("<h2>Kaj bi se konkretno spremenilo</h2>")
     A(f"""<div class="fig"><table>
