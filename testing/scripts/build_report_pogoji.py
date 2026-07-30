@@ -478,14 +478,6 @@ na vseh treh deluje šibkeje.</p>
 razpon. To ni napaka grafa — nasprotno, ožja črta bi bila laž.</p>
 </div></div></div>""")
 
-    A(f"""<div class="note"><p><b>Dve okni, in to namenoma.</b> Vprašanje »kaže pravilo v
-pravo smer« je statistika posameznih dni in uporablja <b>celotno zgodovino {ES['from']} →
-{ES['to']} ({ES['n_days']} dni)</b>; skrajšanje na pet let bi zavrglo 900 dni in blow-offu
-pustilo štiri sprožitve. Vprašanje »kaj se zgodi z denarjem« je backtest in uporablja
-<b>zadnjih pet celih let, {AF['from']} → {AF['to']} ({AF['n']} dni)</b>, neto
-{AF['fee_per_side_pct']} % na stran. Pri vsaki številki je zapisano, katero okno velja.</p>
-</div>""")
-
     A("<h2>Vstopni pogoji, eden za drugim</h2>")
     A(f"""<p class="cap">Pod vsakim pogojem je tabela gumbov, ki jih <i>ta</i> pogoj bere, z
 obliko preleta iz poročila o parametrih in predlaganim ukrepom. Dva gumba nista v nobeni
