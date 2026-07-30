@@ -75,15 +75,72 @@ def blowoff_chart(bm, w=860, h=150) -> str:
     return "".join(p) + "</svg>"
 
 
+# key -> (what the rule mechanically does, at the shipped defaults;
+#         the parameters it uses; the one-line verdict; badge)
 READ = {
- "above_tl":            ("Predznak pravi, a noben razpon ne izloči ničle.", "?"),
- "above_ma_med":        ("Značilen na 5 dni — edini posamezni filter, ki je.", "ok"),
- "track_rising_window": ("Značilen na 20 dni. Najbolj trden filter.", "ok"),
- "regime_ok":           ("Na 60 dni +13 o. t. Varovalka pred dolgimi padci.", "ok"),
- "bull_condition":      ("Kombinacija je močnejša od vsakega dela posebej.", "ok"),
- "below_tl":            ("Pravi predznak, razlika premajhna glede na razpršenost.", "?"),
- "blowoff":             ("22 sprožitev — pod mejo testljivosti. Glej graf spodaj.", "bad"),
- "vol_shock":           ("Sproži se pred značilno BOLJŠIMI 60 dnevi. Obrnjeno.", "bad"),
+ "above_tl": (
+   "<b>Trackline</b> je sredina zadnjih 75 dni: vzemi najvišjo točko in najnižjo točko "
+   "zadnjih 75 dni in ju povpreči. Pogoj velja, ko je zaključni tečaj <b>več kot 3 % nad "
+   "to sredino</b>.<br><br>Pove, da je cena v zgornji polovici svojega tromesečnega "
+   "razpona, in to z rezervo. Teh 3 % je <i>mrtvi pas</i> — brez njega bi se signal "
+   "prižigal in ugašal ob vsakem drobnem nihaju okoli sredine.",
+   "track_period = 75 dni · track_buf_pct = 3 %",
+   "Predznak je pravi, a noben razpon ne izloči ničle.", "?"),
+
+ "above_ma_med": (
+   "Povprečje zaključnih tečajev zadnjih <b>50 dni</b>. Pogoj velja, ko je cena nad njim — "
+   "tu brez kakršnekoli rezerve.<br><br>Najbolj običajen filter smeri srednjeročnega "
+   "trenda, ki obstaja. Namenoma ni nič posebnega.",
+   "ma_med_len = 50 dni",
+   "Značilen na 5 dni — edini posamezni filter, ki je.", "ok"),
+
+ "track_rising_window": (
+   "Današnja vrednost trackline je <b>višja kot pred 10 dnevi</b>.<br><br>Ni dovolj, da je "
+   "cena visoko. Sam razpon, v katerem se giblje, se mora premikati navzgor. To je pravilo, "
+   "ki ubija stranski trg — tam cena niha gor in dol, a sredina razpona stoji na mestu.",
+   "track_slope_bars = 10 dni",
+   "Značilen na 20 dni. Najbolj trden posamezni filter.", "ok"),
+
+ "regime_ok": (
+   "Zapora nastopi <b>samo, če sta izpolnjena oba pogoja hkrati</b>: cena je pod "
+   "200-dnevnim povprečjem <b>in</b> to povprečje pada (je nižje kot pred 5 dnevi). Če velja "
+   "le eno od tega, zapore ni.<br><br>To je zapornik za medvedji trg. Namenoma zahteva "
+   "oboje — sicer bi blokiral ob vsakem prvem prebitju navzdol sredi zdravega trenda.",
+   "ma_long_len = 200 dni · ma_slope = 5 dni",
+   "Na 60 dni +13 o. t. Varovalka pred dolgimi padci, ne izbirnik dobrih tednov.", "ok"),
+
+ "bull_condition": (
+   "Vsi štirje zgornji pogoji izpolnjeni <b>hkrati, isti dan</b>.<br><br>Pozor: to še <b>ni "
+   "nakup</b>. Pozicija nastane šele, ko je ta kombinacija izpolnjena <b>3 dni zapored</b> "
+   "in je od zadnje spremembe signala minilo vsaj <b>15 dni</b>. Ti dve zamudi sta razlog, "
+   "zakaj ima strategija 17 poslov in ne 200.",
+   "confirm_bars = 3 dni · reentry_hold = 15 dni",
+   "Kombinacija je močnejša od vsakega dela posebej — filtri se torej ne podvajajo.", "ok"),
+
+ "below_tl": (
+   "Zrcalna slika vstopa: cena je <b>več kot 3 % pod</b> sredino zadnjih 75 dni.<br><br>"
+   "Izstop se ne zgodi takoj. Pogoj mora veljati <b>3 dni zapored</b>, sicer nas vsak "
+   "enodnevni sunek vrže iz pozicije. Po odstranitvi blow-offa je to <b>edini preostali "
+   "izstop</b> in nosi celotno izstopno stran strategije.",
+   "track_period = 75 dni · track_buf_pct = 3 % · exit_grace_bars = 3 dni",
+   "Pravi predznak, a razlika je premajhna glede na razpršenost.", "?"),
+
+ "blowoff": (
+   "Cena je <b>več kot 25 % nad</b> trackline <b>in</b> hkrati je RSI nad 80. RSI je "
+   "kazalnik pregretosti od 0 do 100; nad 80 pomeni zelo hitro rast v kratkem času.<br><br>"
+   "Naj bi ujel evforični skok tik pred zlomom. Izstop je <b>takojšen</b>, brez treh dni "
+   "čakanja.",
+   "blowoff_dist_pct = 25 % · RSI prag = 80 · rsi_len = 14 dni",
+   "22 sprožitev — pod mejo testljivosti. Presojen po mehanizmu, glej graf spodaj.", "bad"),
+
+ "vol_shock": (
+   "Nihajnost zadnjih 20 dni je <b>več kot 1,5-krat višja</b> od svojega 50-dnevnega "
+   "povprečja <b>in</b> je cena hkrati pod trackline.<br><br>Naj bi pospešil izstop ob "
+   "paniki. Ker pa zahteva tudi pogoj <code>below_tl</code>, se <b>ne more sprožiti "
+   "sam</b> — vedno ga prehiti navadni izstop. Zato ga primerjamo samo z drugimi dnevi pod "
+   "trackline; primerjava z vsemi dnevi bi merila <code>below_tl</code>, ne njega.",
+   "vol_shock_mul = 1,5 · vol_lookback = 20 dni",
+   "Sproži se pred značilno BOLJŠIMI naslednjimi 60 dnevi. Smer je obrnjena.", "bad"),
 }
 BADGE = {"ok": ("dokazan", "var(--good)"), "?": ("nedokazan", "var(--warn)"),
          "bad": ("dela narobe", "var(--crit)")}
@@ -92,13 +149,16 @@ BADGE = {"ok": ("dokazan", "var(--good)"), "?": ("nedokazan", "var(--warn)"),
 def card(r):
     rows = [(f"{h} dni", v["diff"], v["ci"], v["sig"])
             for h in ES["horizons"] if (v := r["m"]["donos"][str(h)])]
-    txt, bk = READ[r["key"]]
+    what, params, txt, bk = READ[r["key"]]
     lab, col = BADGE[bk]
     gate = "" if r["gate"] == "all" else " · primerjano znotraj dni pod trackline"
     return (f'<div class="card"><h3>{r["key"]}'
             f'<span class="badge" style="background:{col}">{lab}</span></h3>'
-            f'<p class="d">{r["label"]} · {r["n_fire"]}× ({r["share"]} % dni){gate}</p>'
-            f'{ci_chart(rows)}<p class="read">{txt}</p></div>')
+            f'<p class="d">{r["label"]} · velja na {r["n_fire"]} dneh '
+            f'({r["share"]} % vzorca){gate}</p>'
+            f'<p class="long">{what}</p>'
+            f'<p class="par">privzeto: {params}</p>'
+            f'{ci_chart(rows)}<p class="read"><b>Sodba:</b> {txt}</p></div>')
 
 
 def main():
@@ -140,6 +200,9 @@ def main():
  .card{{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:13px}}
  .card h3{{font:600 13.5px ui-monospace,SFMono-Regular,Menlo,monospace;margin:0 0 1px}}
  .card .d{{color:var(--muted);font-size:12px;margin:0 0 6px}}
+ .card .long{{font-size:12.5px;line-height:1.6;color:var(--ink2);margin:0 0 8px}}
+ .card .par{{font:11.5px ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);
+  margin:0 0 10px;padding:5px 8px;border-radius:6px;background:var(--band)}}
  .card .read{{font-size:12.5px;margin:8px 0 0;padding:7px 9px;border-radius:7px;
   background:var(--band);color:var(--ink2)}}
  .badge{{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.04em;
@@ -168,10 +231,42 @@ fee + slippage 0,30 % na stran</p>
 vsako pravilo sodimo po <b>vseh dneh, ko velja</b> (700–1700 opazovanj namesto
 {base['trades']}), in vprašamo eno stvar: <i>kaj je sledilo, ko je pravilo veljalo, v
 primerjavi s tem, ko ni?</i></p>
-<p class="cap"><b>Branje grafov:</b> pika je izmerjena razlika v odstotnih točkah, črta je
-razpon negotovosti. <b>Če črta seka ničlo, razlike nismo dokazali.</b> Vstopno pravilo naj
-bi bilo pozitivno, izstopno negativno. Razponi iz bločnega bootstrapa, ker se nadaljnja
-okna prekrivajo — navadni test bi jih naredil do 6× preozke.</p>""")
+
+<h2>Kako se bere graf</h2>
+<div class="fig"><div class="grid" style="gap:22px">
+<div>
+<p style="margin:0 0 8px"><b>Kaj je številka</b></p>
+<p class="cap" style="margin:0 0 10px">Vse dni v vzorcu razdelimo na dva kupa: dnevi, ko je
+pravilo <b>izpolnjeno</b>, in dnevi, ko <b>ni</b>. Za oba kupa izračunamo, koliko je BTC v
+povprečju zrasel v naslednjih N dneh. <b>Številka na grafu je razlika med tema dvema
+povprečjema</b>, v odstotnih točkah.</p>
+<p class="cap" style="margin:0 0 10px"><b>Primer.</b> Pri <code>bull_condition</code> piše
+<b>+1,68</b> pri 5 dneh. Beri: v petih dneh po dnevih, ko so bili vsi vstopni pogoji
+izpolnjeni, je BTC v povprečju zrasel za 1,68 odstotne točke <b>več</b> kot v petih dneh po
+vseh ostalih dneh.</p>
+<p class="cap" style="margin:0"><b>To ni donos strategije.</b> Je merilo, ali pravilo sploh
+kaže v pravo smer. Vstopno pravilo naj bi bilo <b>pozitivno</b>, izstopno
+<b>negativno</b>. Črta je razpon negotovosti — <b>če seka ničlo, razlike nismo
+dokazali</b>, tudi če pika ni na ničli.</p>
+</div>
+<div>
+<p style="margin:0 0 8px"><b>Zakaj tri različna števila dni</b></p>
+<table style="margin:0 0 10px">
+<tr><td><b>5 dni</b></td><td style="font-size:12.5px">približno teden. Ali pravilo pove kaj
+<i>takoj</i>?</td></tr>
+<tr><td><b>20 dni</b></td><td style="font-size:12.5px">približno mesec. To je merilo, na
+katerem strategija dejansko živi — povprečen posel traja tedne.</td></tr>
+<tr><td><b>60 dni</b></td><td style="font-size:12.5px">približno četrtletje. Se trend
+nadaljuje ali se prelomi?</td></tr>
+</table>
+<p class="cap" style="margin:0 0 10px">Pravilo, ki deluje samo na enem od teh treh, je bolj
+sumljivo kot pravilo, ki na vseh treh deluje šibkeje.</p>
+<p class="cap" style="margin:0"><b>Zakaj so črte pri 60 dneh dosti daljše.</b> Ker je manj
+<i>neodvisnih</i> opazovanj: 60-dnevni okni sosednjih dni se prekrivata v 59 dneh od 60, zato
+{ES['n_days']} dni da le okoli 40 res ločenih 60-dnevnih obdobij. Manj dokazov pomeni širši
+razpon. To ni napaka grafa — nasprotno, ožja črta bi bila laž.</p>
+</div>
+</div></div>""")
 
     A("<h2>Vstopni pogoji — vseh 12 meritev kaže v pravo smer</h2>")
     A('<div class="grid">' + "".join(card(c) for c in entry) + "</div>")

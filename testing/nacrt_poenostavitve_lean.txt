@@ -238,16 +238,49 @@ Ocena dela: ~2 uri.
         0,10–0,30 zmerna prilagojenost; ansambel je primernejša izbira
         > 0,30   večina prednosti izvira iz izbire točke — to je glavna najdba
 
-2.5 KAJ PRIČAKOVATI
-    Backtest ansambla bo skoraj zagotovo SLABŠI od izhodiščnega. To ni
-    poslabšanje strategije — prejšnja številka preprosto ni bila resnična.
-    Pričakujemo tudi: manj skokovite prehode, verjetno nižji promet in
-    potencialno plitvejši MaxDD.
+2.5 IZVEDENO 2026-07-30 — REZULTAT
+    testing/scripts/ensemble.py , testing/data/ensemble_BTC.json
+    Okno 2021-07-01 → 2026-06-30 (1826 dni), presek indeksov poravnan.
 
-2.6 SPREJEMNI KRITERIJ
-    - premija konice izračunana in zapisana z intervalom
-    - promet ansambla ni višji od izhodiščnega
-    - obe strategiji primerjani na IDENTIČNEM oknu (eksplicitno preverjeno)
+        ena točka (privzetki)   Sortino 1,099   MaxDD −39,8 %   promet 16,0
+        ansambel 81 članov      Sortino 0,820   MaxDD −41,8 %   promet 17,7
+        PREMIJA KONICE          +0,279   95 % CI [+0,077; +0,546]   ZNAČILNA
+        rang privzetkov         77. od 81 = 95. percentil
+
+    Nastavitev, izbrana brez gledanja teh podatkov, bi pristala okoli 41. od 81.
+    Privzetki so 77. To ni več sum: privzete vrednosti so bile nastavljene na to
+    zgodovino, in 0,82 je poštena napoved naprej, ne 1,10.
+
+    DVE NAPOVEDI IZ TEGA NAČRTA STA BILI NAPAČNI:
+      - napovedal sem NIŽJI promet; dejansko je VIŠJI (16,0 → 17,7), ker se 81
+        članov obrača ob različnih dnevih in nastane veliko drobnih premikov
+      - napovedal sem plitvejši MaxDD; dejansko je rahlo GLOBLJI (−39,8 → −41,8)
+    Sprejemni kriterij "promet ansambla ni višji" je bil zato napačno postavljen
+    in je odstranjen. Nižji promet ni bil nikoli del argumenta za ansambel;
+    argument je, da na konici ni več mogoče sedeti.
+
+2.6 PREPLETANJE PARAMETROV — IZVEDENO, ODGOVOR NA "ALI TESTIRATI V KOMBINACIJAH"
+    Glavni učinki : exit_grace_bars 0,206 · ma_long_len 0,176 ·
+                    confirm_bars 0,138 · reentry_hold 0,084
+    Prepletanje   : največje je ma_long_len × confirm_bars pri 0,079,
+                    kar je 38 % največjega glavnega učinka
+
+    Preleti po en parameter naenkrat so bili torej PRIBLIŽNO, ne povsem veljavni.
+    Pravilen odgovor pa NI iskanje najboljše kombinacije — mreža v štirih
+    dimenzijah na 17 poslih bi PBO (0,694) samo dvignila. Pravilen odgovor je
+    POVPREČJE čez vse kombinacije, kar ansambel naredi po konstrukciji.
+
+2.7 SPREJEMNI KRITERIJ (dosežen)
+    [x] premija konice izračunana z intervalom
+    [x] obe strategiji primerjani na IDENTIČNEM oknu (presek indeksov)
+    [x] prepletanje izmerjeno
+
+2.8 ODPRTA ODLOČITEV ZA NAROČNIKA
+    Ansambel zahteva DELNE POZICIJE (0, 1/81, ... 1). Če produkt tega ne podpira,
+    je zasilna možnost ena vrednost, a izbrana kot sredina najširše ravnine
+    namesto vrha: ma_long_len 225, confirm_bars 1, reentry_hold 15,
+    exit_grace_bars 4. To problema ne odpravi, ga le zmanjša.
+    V obeh primerih velja: številka, ki jo komuniciramo, je 0,82, ne 1,10.
 
 
 ================================================================================
