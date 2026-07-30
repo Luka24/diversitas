@@ -97,13 +97,33 @@ MIN_DIST_ENTRY_PCT — odstraniti
   2. V inkrementalnem testu blokira 0 dni.
   3. Prelet 0 → 3: razpon Sortina 0,016.
 
-MA_MED_LEN — pravilo OBDRŽATI, gumb ZAKLENITI
-  1. Prelet 20 → 120: razpon Sortina 0,096; od 40 naprej je ravno. Gumb je mrtev.
-  2. AMPAK above_ma_med je edini posamezni filter, ki je značilen sam zase:
-     +1,39 o. t. na 5 dni, CI [+0,27; +2,52], in ostane značilen tudi znotraj
-     dni, ki jih 200-dnevno povprečje že spusti skozi.
-  3. Prejšnja različica tega seznama je pravilo uvrščala med odstranitve. To je
-     bilo NAROBE: prelet meri gumb, event study meri pravilo. Ločeni vprašanji.
+MA_MED_LEN in above_ma_med — ODSTRANITI (sodba spremenjena 2026-08-01)
+  Vir: testing/scripts/ablation_full.py , testing/data/ablation_full_BTC.json
+
+  1. Prelet gumba 20 → 120: razpon Sortina 0,096; od 40 naprej raven. Gumb mrtev.
+  2. Event study: above_ma_med je značilen SAM ZASE (+1,71 o. t. nad povprečnim
+     dnevom na 20 dni). Zato je bila prejšnja sodba "pravilo obdržati, gumb
+     zakleniti".
+  3. TO SODBO OVRŽE POLNA ABLACIJA. Ko filter izklopimo iz bull_condition, je
+     rezultat BITNO IDENTIČEN izhodišču: Sortino 1,505 · Sharpe 0,974 ·
+     CAGR 33,6 % · MaxDD −45,2 % · 21 poslov · končni večkratnik 8,55×.
+     Razlika je 0,000000 na vseh 2700 dneh.
+  4. Zakaj: filter blokira 65 dni, ki jih drugi filtri spustijo, a NOBEN od teh
+     65 dni se ni nikoli prelevil v posel — pobereta ga zahteva po treh
+     zaporednih dneh (confirm_bars) in 15-dnevni premor (reentry_hold).
+
+  POMEMBNO RAZLIKOVANJE, ki ga je treba povedati na glas:
+    vol_shock       je mrtev STRUKTURNO — vezan je na below_tl in ga redni izstop
+                    vedno prehiti; to ne more biti drugače, ne glede na podatke.
+    dist_entry_ok   je mrtev MATEMATIČNO — pri min_dist_entry_pct = 0 je isti
+                    pogoj kot above_tl.
+    above_ma_med    je mrtev LE EMPIRIČNO — na teh podatkih je učinek natanko
+                    nič, strukturnega jamstva pa ni. Na drugem obdobju bi lahko
+                    zaleglo.
+  Zato: če hočemo biti previdni, se above_ma_med pusti v kodi, a se ma_med_len
+  umakne s seznama nastavljivih številk. Učinek na rezultat je tako in tako nič.
+  Poimenska sodba je "odstraniti", ker je 50-dnevna MA v dashboardu tako ali tako
+  narisana in jo je mogoče prikazovati brez tega, da bi bila del signala.
 
 KAJ OSTANE IN JE UPRAVIČENO (za kontekst, se ne dotikamo)
   regime_ok            blokira 35 dni s povprečnim 20-dnevnim donosom −10,09 %
@@ -112,18 +132,31 @@ KAJ OSTANE IN JE UPRAVIČENO (za kontekst, se ne dotikamo)
                        (razlika −7,29 o. t., CI [−13,06; −2,08]) — dokazan
   above_tl             jedro logike; pozitiven predznak, a noben CI ne izloči ničle
   below_tl             glavni izstop (13 od 21 poslov); pravi predznak, ni dokazan
+  above_tl             POZOR: polna ablacija pokaže, da je backtest BREZ njega
+                       boljši (12,54× proti 8,55×, Sortino 1,730 proti 1,505,
+                       razpon Sortina [−0,00; +0,59] se ničle le dotakne). To ni
+                       razlog za odstranitev — jedro brez vstopnega pogoja ni
+                       strategija — je pa največja odprta neznanka. Glej §5.2.
+  track_rising_window  edini filter, brez katerega se padec OPAZNO poglobi
+                       (−45,2 % → −53,3 %, torej 8,1 o. t.). Kupuje mirnejšo
+                       vožnjo; obdržati.
+  regime_ok            edini, brez katerega je slabše na VSEM (Sortino 1,378,
+                       CAGR 30,1 %). A padca NE izboljša (razlika 0,0 o. t.) —
+                       je filter donosa, ne varovalka pred padcem. Obdržati.
 
 
 ================================================================================
 KORAK 1 — BRISANJE PRAVIL BREZ DOKAZOV
 ================================================================================
-Ocena dela: ~2 uri.  Cilj: 14 nastavljivih parametrov → 8.
+Ocena dela: ~2 uri.  Cilj: 14 nastavljivih parametrov → 10.
+(Prejšnji zapis "→ 8" oziroma "→ 6" je bil napačen: 14 − 4 = 10.)
 
 1.1 lean/diversitas/config.py
     ODSTRANITI polja:
         vol_shock_mul
         vol_lookback
         min_dist_entry_pct
+        ma_med_len            (glej §1 — polna ablacija je bitno identična)
     NE odstraniti blowoff_dist_pct in rsi_len — blow-off je nedokazan, ne ovržen.
     OBDRŽATI ma_med_len = 50, a dodati komentar, da je zaklenjen in ni več
     nastavljiv parameter (z razlogom in datumom, po vzoru obstoječega komentarja
@@ -134,6 +167,9 @@ Ocena dela: ~2 uri.  Cilj: 14 nastavljivih parametrov → 8.
 1.2 lean/diversitas/strategy.py
     compute_features():
         - izbrisati df["vol_shock"]
+        - izbrisati df["dist_entry_ok"] iz bull_condition (dvojnik above_tl)
+        - odstraniti df["above_ma_med"] iz bull_condition; ma_med SAM PUSTITI,
+          ker ga dashboard riše
         - df["rsi"] in df["blowoff"] OBDRŽATI (glej §1)
         - izbrisati df["dist_entry_ok"] in ga odstraniti iz bull_condition
           (identičen above_tl, ki v bull_condition že je — vedenje se NE spremeni)
@@ -185,7 +221,8 @@ Ocena dela: ~2 uri.  Cilj: 14 nastavljivih parametrov → 8.
 
 1.9 SPREJEMNI KRITERIJ
     Poženi testing/scripts/ablation.py in preveri, da se nova izhodiščna
-    strategija ujema z vrstico "vol-shock izklopljen":
+    strategija ujema z vrstico "brez obojega" iz ablation_full.py — in tudi z
+    vrstico "brez above_ma_med", ker so vse tri odstranitve bitno identične:
         Sortino 1,505 · MaxDD −45,2 % · 21 poslov — torej NESPREMENJENO, ker je
         vol-shock dokazano nedejaven. Vsaka razlika pomeni, da je bila
         spremenjena logika, ne le odstranjena mrtva koda.
@@ -514,36 +551,18 @@ IZSTOPA. Danes tega ne vemo, ker ista številka opravlja oboje.
 
 
 --------------------------------------------------------------------------------
-5.3  above_ma_med — ali sta potrebna dva trend filtra
+5.3  above_ma_med — REŠENO 2026-08-01, ostane le ena preverba
 --------------------------------------------------------------------------------
-ZAKAJ: značilen sam zase (+1,71 o. t. nad povprečnim dnevom na 20 dni), a
-inkrementalno blokira le 65 dni in razlika tam ni dokazana. Sum: prekriva se s
-track_rising_window.
+Vprašanje "ali sta potrebna dva trend filtra" je odgovorjeno: NE. Polna ablacija
+je bitno identična, filter je odveč (glej §1).
 
-NOVA SKRIPTA: testing/scripts/filter_overlap.py
-
-IZVEDBA:
-  1. Prešteti štiri stanja po dneh:
-        oba resnična · samo above_ma_med · samo track_rising_window · nobeden
-     Če je "samo above_ma_med" pod ~100 dni, filter praktično nima svojega
-     prostora in je odveč, ne glede na ostalo.
-  2. Za vsako od štirih skupin izmeriti nadaljnji donos in nadaljnji MaxDD
-     (5/20/60). Ključna primerjava sta OBE SKUPINI, KJER SE RAZHAJATA — tam se
-     vidi, kateri filter nosi informacijo.
-  3. Izklopiti above_ma_med iz bull_condition in pognati poln protokol:
-     Sortino, MaxDD, poslov, PBO. PBO je obvezen, ker odstranitev filtra
-     spremeni prostor iskanja in s tem število poskusov.
-
-SPREJEMNI KRITERIJ ZA ODSTRANITEV — vsi trije hkrati:
-  (a) "samo above_ma_med" obsega manj kot ~100 dni;
-  (b) na dneh, kjer se filtra razhajata, above_ma_med ne prinaša boljšega
-      nadaljnjega izida od track_rising_window;
-  (c) izklop ne poslabša MaxDD (torej mere, ki jo produkt obljublja).
-Če katerikoli od treh pade, filter OSTANE.
-
-KAJ BI TO REŠILO: ali potrebujemo dva trend filtra ali enega. Če je odvečen,
-pade še en parameter in s tem prostor iskanja.
-
+OSTANE ENA STVAR, ki jo je treba narediti PO odstranitvi:
+  Ponovno izračunati PBO in deflated Sharpe na zmanjšanem prostoru iskanja.
+  Odstranitev štirih parametrov spremeni število preizkusov, in celotna korist
+  te poenostavitve je prav v tej številki — rezultat strategije se ne spremeni.
+  Če PBO po odstranitvi ne pade, poenostavitev ni prinesla ničesar in to je treba
+  povedati.
+  Ocena dela: ~1 ura. Skripta obstaja (PBO je bil že izračunan, 0,694).
 
 --------------------------------------------------------------------------------
 5.4  blow-off — NE ODPIRATI
@@ -557,11 +576,14 @@ Pustiti pri miru. Ne uporabljati kot argument v nobeno smer.
 --------------------------------------------------------------------------------
 5.5  VRSTNI RED IN OCENA DELA
 --------------------------------------------------------------------------------
-  5.1  below_tl in tekmeci        ~1 dan     največ na kocki
-  5.3  above_ma_med prekrivanje   ~2 uri     najcenejši, lahko pade parameter
-  5.2  asimetrični mrtvi pas      ~pol dneva zahteva poseg v strategy.py
+  KORAK 1  brisanje 4 parametrov   ~2 uri     nič ne izboljša, a zniža PBO
+  5.3      PBO na novo              ~1 ura     pokaže, ali je Korak 1 kaj prinesel
+  5.1      below_tl in tekmeci      ~1 dan     največ na kocki
+  5.2      asimetrični mrtvi pas    ~pol dneva zahteva poseg v strategy.py
 
-5.3 pred 5.2, ker je cenejši in lahko odstrani parameter, preden dodamo novega.
+Korak 1 in 5.3 gresta skupaj: brisanje brez ponovnega PBO ne pokaže koristi.
+5.1 pred 5.2, ker below_tl nosi 13 od 21 poslov, above_tl pa je odprt tudi po
+tem, ko bi asimetrični pas izmerili.
 
 
 ================================================================================
@@ -612,7 +634,7 @@ R5  Kumulativno število poskusov raste in z njim PBO.
 ================================================================================
 6. DEFINICIJA DOKONČANOSTI
 ================================================================================
-[ ] Korak 1: 3 parametri odstranjeni, ma_med_len zaklenjen in dokumentiran
+[ ] Korak 1: 4 parametri odstranjeni (14 → 10), vsak z zapisanim razlogom
 [ ] Korak 1: novi testi (1.8) napisani in zeleni
 [ ] Korak 1: sprejemni kriterij 1.9 izpolnjen (Sortino 1,616 / MaxDD −39,8 / 11 poslov)
 [ ] Korak 1: dashboard se naloži brez napake

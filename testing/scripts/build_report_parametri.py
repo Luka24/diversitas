@@ -120,7 +120,7 @@ def equity_chart(clock, w=880, h=330) -> str:
         p.append(f'<text x="{X(i):.1f}" y="{h-pad_b+16:.0f}" text-anchor="middle">{y}</text>')
 
     def path(vals):
-        return " ".join(f'{"M" if i == 0 else "L"}{X(i):.1f},{Y(v):.2f}'
+        return " ".join(f'{"M" if i == 0 else "L"}{X(i):.0f},{Y(v):.1f}'
                         for i, v in enumerate(vals))
 
     p.append(f'<path d="{path(bh)}" fill="none" stroke="var(--muted)" stroke-width="1.4" '

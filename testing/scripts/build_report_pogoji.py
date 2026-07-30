@@ -17,6 +17,7 @@ ES = json.loads((ROOT / "testing" / "data" / "event_study_BTC.json").read_text(e
 AB = json.loads((ROOT / "testing" / "data" / "ablation_BTC.json").read_text(encoding="utf-8"))
 EX = json.loads((ROOT / "testing" / "data" / "exit_rules_BTC.json").read_text(encoding="utf-8"))
 AU = json.loads((ROOT / "testing" / "data" / "audit_BTC.json").read_text(encoding="utf-8"))
+AF = json.loads((ROOT / "testing" / "data" / "ablation_full_BTC.json").read_text(encoding="utf-8"))
 OUT = ROOT / "testing" / "porocilo_pogoji_BTC.html"
 
 
@@ -47,6 +48,45 @@ def ci_chart(rows, w=430) -> str:
     p.append(f'<text x="{pad_l}" y="{h-5}" text-anchor="start">slabše</text>')
     p.append(f'<text x="{w-pad_r}" y="{h-5}" text-anchor="end">bolje (o. t.)</text>')
     return "".join(p) + "</svg>"
+
+
+
+def mini_equity(base, alt, bench, idx, w=420, h=185) -> str:
+    """Baseline against one ablation. Linear axis, full resolution, no log:
+    a log axis would hide how much of the difference is one late run."""
+    hi = max(max(base), max(alt), max(bench)) * 1.05
+    pad_l, pad_r, pad_t, pad_b = 34, 12, 12, 26
+    n = len(idx)
+
+    def X(i): return pad_l + i / (n - 1) * (w - pad_l - pad_r)
+    def Y(v): return pad_t + (1 - v / hi) * (h - pad_t - pad_b)
+
+    out = [f'<svg viewBox="0 0 {w} {h}" role="img">']
+    step = max(1, int(hi // 5))
+    g = 0
+    while g <= hi:
+        out.append(f'<line x1="{pad_l}" y1="{Y(g):.1f}" x2="{w-pad_r}" y2="{Y(g):.1f}" '
+                   f'stroke="var(--grid)"/>')
+        out.append(f'<text x="{pad_l-5}" y="{Y(g)+4:.1f}" text-anchor="end">{g}×</text>')
+        g += step
+    seen = set()
+    for i, d in enumerate(idx):
+        if d[:4] not in seen:
+            seen.add(d[:4])
+            out.append(f'<text x="{X(i):.1f}" y="{h-8}" text-anchor="middle">'
+                       f"'{d[2:4]}</text>")
+
+    def path(v):
+        return " ".join(f'{"M" if i == 0 else "L"}{X(i):.0f},{Y(x):.1f}'
+                        for i, x in enumerate(v))
+
+    out.append(f'<path d="{path(bench)}" fill="none" stroke="var(--muted)" '
+               f'stroke-width="1" opacity=".4"/>')
+    out.append(f'<path d="{path(base)}" fill="none" stroke="var(--crit)" '
+               f'stroke-width="2.6"/>')
+    out.append(f'<path d="{path(alt)}" fill="none" stroke="var(--s1)" '
+               f'stroke-width="1.7" stroke-dasharray="4 3"/>')
+    return "".join(out) + "</svg>"
 
 
 def blowoff_chart(bm, w=860, h=150) -> str:
@@ -409,6 +449,149 @@ o. t. Ko prag znižamo toliko, da <b>res</b> začne izstopati, se poslabša vse:
 {EX['vol_shock_threshold_sweep'][0]['maxdd']:.1f} %. To je edina izstopna ugotovitev, ki ne
 sloni na statistični značilnosti, ampak na mehaniki, in je zato edina trdna.
 <b>Odstraniti.</b></p>""")
+
+    B = AF["cases"]["izhodišče"]
+    IDX = AF["index"]
+    BENCH = AF["benchmark"]["equity"]
+
+    A("<h2>Kaj predlagam odstraniti — in kaj to naredi</h2>")
+    A(f"""<p>Vsak pogoj sem izklopil posebej in izmeril vse štiri številke, ne le Sortina.
+Izhodišče: Sortino <b>{B['sortino']:.3f}</b>, Sharpe <b>{B['sharpe']:.3f}</b>, letni donos
+<b>{B['cagr']:.1f} %</b>, največji padec <b>{B['maxdd']:.1f} %</b>, končni večkratnik
+<b>{B['final']:.2f}×</b> pri {B['trades']} poslih.</p>
+<p class="cap">Sharpe je dodan namenoma: Sortino kaznuje samo padce, zato lahko pravilo tam
+izgleda dobro, medtem ko stane navaden donos. Končni večkratnik je zraven, ker se v odstotkih
+letnega donosa slabo vidi, koliko denarja je to v sedmih letih.</p>""")
+
+    A('<div class="fig"><table><tr><th>izklopimo</th><th>Sortino</th><th>Sharpe</th>'
+      '<th>letni donos</th><th>največji padec</th><th>končni<br>večkratnik</th>'
+      '<th>poslov</th><th>sodba</th></tr>')
+    ROWS = [
+      ("brez vol-shocka", "vol-shock", "odstraniti", "var(--crit)"),
+      ("brez dist_entry_ok", "dist_entry_ok", "odstraniti", "var(--crit)"),
+      ("brez above_ma_med", "above_ma_med (50 MA)", "odstraniti", "var(--crit)"),
+      ("brez blow-offa", "blow-off", "nedokazan", "var(--warn)"),
+      ("brez above_tl", "above_tl (trackline)", "obdržati", "var(--good)"),
+      ("brez track_rising", "track_rising_window", "obdržati", "var(--good)"),
+      ("brez regime_ok", "regime_ok (200 MA)", "obdržati", "var(--good)"),
+    ]
+    for key, nice, verdict, col in ROWS:
+        r = B_ = AF["cases"][key]
+        ident = r.get("identical")
+        st = ' style="color:var(--muted)"' if ident else ""
+        A(f'<tr><td><code>{nice}</code></td>'
+          f'<td class="n"{st}>{r["sortino"]:.3f}</td><td class="n"{st}>{r["sharpe"]:.3f}</td>'
+          f'<td class="n"{st}>{r["cagr"]:.1f} %</td><td class="n"{st}>{r["maxdd"]:.1f} %</td>'
+          f'<td class="n"{st}>{r["final"]:.2f}×</td><td class="n"{st}>{r["trades"]}</td>'
+          f'<td style="font-size:12.5px;color:{col};font-weight:600">{verdict}'
+          f'{" · nič se ne spremeni" if ident else ""}</td></tr>')
+    A(f'<tr style="border-top:2px solid var(--axis)"><td style="color:var(--muted)">'
+      f'kupi in drži</td><td class="n" style="color:var(--muted)">'
+      f'{AF["benchmark"]["sortino"]:.3f}</td>'
+      f'<td class="n" style="color:var(--muted)">{AF["benchmark"]["sharpe"]:.3f}</td>'
+      f'<td class="n" style="color:var(--muted)">{AF["benchmark"]["cagr"]:.1f} %</td>'
+      f'<td class="n" style="color:var(--muted)">{AF["benchmark"]["maxdd"]:.1f} %</td>'
+      f'<td class="n" style="color:var(--muted)">{BENCH[-1]:.2f}×</td>'
+      f'<td class="n" style="color:var(--muted)">1</td><td></td></tr>')
+    A("</table></div>")
+
+    # ── group 1: the three that change nothing ────────────────────────────
+    A("<h3 style='font-size:14.5px;margin:26px 0 8px'>Trije, ki jih odstranim: krivulja se "
+      "ne premakne niti za piko</h3>")
+    A(f"""<p class="cap">Modra črtkana črta je strategija <b>brez</b> vseh treh pravil, rdeča
+z njimi. Popolnoma se prekrivata — največja razlika je <b>0,000000</b> na vseh
+{AF['n']} dneh. Sivo je kupi-in-drži za merilo.</p>""")
+    A('<div class="fig">'
+      + mini_equity(B["equity"], AF["cases"]["brez obojega"]["equity"], BENCH, IDX,
+                    w=860, h=250)
+      + "</div>")
+    A(f"""<div class="fig"><table>
+<tr><th>pravilo</th><th style="width:46%">zakaj se nič ne spremeni</th>
+<th>kako trdno je to</th></tr>
+<tr><td><code>vol-shock</code></td>
+    <td style="font-size:12.5px">V kodi zahteva <code>below_tl</code>, izstop na
+    <code>below_tl</code> pa ga <b>vedno prehiti</b>. Od {B['trades']} izstopov jih je
+    povzročil {base['exit_reasons']['vol_shock']}. Obstaja 41 dni, ko bi lahko deloval — na
+    nobenem se ne sproži.</td>
+    <td style="font-size:12.5px;color:var(--good)"><b>Strukturno.</b> Ne more se sprožiti prvi,
+    ne glede na podatke.</td></tr>
+<tr><td><code>dist_entry_ok</code></td>
+    <td style="font-size:12.5px">Pri <code>min_dist_entry_pct = 0</code> je matematično isti
+    pogoj kot <code>above_tl</code>, ki je v <code>bull_condition</code> že prisoten.
+    {ES['dist_entry_disagreements']} dni razlike od {ES['n_days']}.</td>
+    <td style="font-size:12.5px;color:var(--good)"><b>Matematično.</b> Ni odvisno od
+    vzorca.</td></tr>
+<tr><td><code>above_ma_med</code></td>
+    <td style="font-size:12.5px">Blokira 65 dni, ki jih drugi filtri spustijo — a nobeden od
+    teh 65 dni se nikoli ni prelevil v posel, ker ga prej pobereta zahteva po treh zaporednih
+    dneh in 15-dnevni premor.</td>
+    <td style="font-size:12.5px;color:var(--warn)"><b>Le empirično.</b> Na teh podatkih je
+    učinek nič, strukturnega jamstva pa ni. Na drugem obdobju bi lahko zaleglo.</td></tr>
+</table></div>""")
+    A("""<p class="cap"><b>To razliko je vredno povedati na glas.</b> Prva dva izbrisa sta
+varna po svoji naravi. Tretji je varen po meritvi. Če hočemo biti zelo previdni, se
+<code>above_ma_med</code> pusti v kodi, a odstrani s seznama nastavljivih številk — učinek
+na rezultat je tako in tako nič.</p>""")
+
+    # ── group 2: the ones with a real effect ──────────────────────────────
+    A("<h3 style='font-size:14.5px;margin:26px 0 8px'>Štirje, ki jih ne odstranim — in kaj bi "
+      "izgubili ali pridobili</h3>")
+    A("""<p class="cap">Pri nobenem od teh štirih <b>noben razpon ne izloči ničle</b>, torej
+nobene razlike nismo dokazali. Točkovne ocene pa vseeno povejo, kaj bi bilo na kocki.
+Rdeče je z pravilom (današnja strategija), modro črtkano brez njega.</p>""")
+    A('<div class="grid">')
+    CARDS = [
+      ("brez blow-offa", "blow-off",
+       "Daleč največji vpliv med vsemi. Brez njega bi bilo v sedmih letih "
+       "<b>{final:.1f}×</b> namesto <b>{bfinal:.1f}×</b> — skoraj dvakrat toliko — za ceno "
+       "{ddabs:.1f} o. t. globljega padca. Če je to dober posel, je odvisno od tega, kaj "
+       "prodajamo. Nič od tega ni statistično dokazano.", "var(--warn)"),
+      ("brez above_tl", "above_tl",
+       "Presenetljivo: <b>brez jedra strategije je backtest boljši</b> "
+       "({final:.1f}× proti {bfinal:.1f}×, Sortino {sortino:.2f} proti {bsortino:.2f}). "
+       "Razpon Sortina [{cs0:+.2f}, {cs1:+.2f}] se ničle le dotakne. To ne pomeni odstraniti — "
+       "pomeni, da trackline kot vstopni sprožilec ni dokazan in je to največja odprta "
+       "neznanka.", "var(--good)"),
+      ("brez track_rising", "track_rising_window",
+       "Edini filter, pri katerem izklop <b>opazno poglobi padec</b>: "
+       "{maxdd:.1f} % proti {bmaxdd:.1f} %, torej {ddabs:.1f} o. t. Donos bi bil rahlo višji. "
+       "To je pravilo, ki dejansko kupuje mirnejšo vožnjo.", "var(--good)"),
+      ("brez regime_ok", "regime_ok",
+       "Edini, pri katerem je izklop <b>slabši na vsem</b>: Sortino "
+       "{sortino:.2f} proti {bsortino:.2f}, donos {cagr:.1f} % proti {bcagr:.1f} %. "
+       "Pozor na podrobnost, ki spremeni njegovo zgodbo: padca <b>ne izboljša</b> "
+       "({maxdd:.1f} % proti {bmaxdd:.1f} %, razlika 0,0). Je filter donosa, ne varovalka "
+       "pred padcem.", "var(--good)"),
+    ]
+    for key, nice, txt, col in CARDS:
+        r = AF["cases"][key]
+        body = txt.format(final=r["final"], bfinal=B["final"], sortino=r["sortino"],
+                          bsortino=B["sortino"], cagr=r["cagr"], bcagr=B["cagr"],
+                          maxdd=r["maxdd"], bmaxdd=B["maxdd"],
+                          ddabs=abs(r["d_maxdd"]),
+                          cs0=r["ci_sortino"][0], cs1=r["ci_sortino"][1])
+        A(f'<div class="card"><h3><code>{nice}</code></h3>'
+          f'<p class="d">rdeče: z pravilom · modro črtkano: brez njega</p>'
+          f'{mini_equity(B["equity"], r["equity"], BENCH, IDX)}'
+          f'<p class="par">ΔSortino {r["d_sortino"]:+.3f} [{r["ci_sortino"][0]:+.2f}, '
+          f'{r["ci_sortino"][1]:+.2f}] · ΔSharpe {r["d_sharpe"]:+.3f} · '
+          f'Δdonos {r["d_cagr"]:+.1f} o. t. · Δpadec {r["d_maxdd"]:+.1f} o. t.</p>'
+          f'<p class="read">{body}</p></div>')
+    A("</div>")
+
+    A(f"""<div class="note" style="border-left-color:var(--good)">
+<p><b>Skupaj: odstranim tri od sedmih.</b> Nastavljivih številk je s tem
+{ES['n_days'] and 14} &rarr; <b>10</b> (<code>vol_shock_mul</code>,
+<code>vol_lookback</code>, <code>min_dist_entry_pct</code>, <code>ma_med_len</code>).
+Rezultat se ne spremeni za nobeno decimalko — in prav to je namen. <b>Ne izboljšujemo
+strategije, zmanjšujemo število načinov, kako lahko zavedemo sami sebe.</b> Manj gumbov
+neposredno zniža verjetnost prevelike prilagojenosti (PBO) in število poskusov v deflated
+Sharpu.</p>
+<p style="margin-top:9px">Ostalih štirih <b>ne odstranim</b>, ker pri nobenem noben razpon ne
+izloči ničle. Za vsakega je razlog drugačen: blow-off je nedokazan v obe smeri,
+<code>above_tl</code> je jedro brez dokaza, <code>track_rising_window</code> je edini, ki
+dokazljivo kupuje plitvejši padec, <code>regime_ok</code> pa je edini, brez katerega je
+slabše na vsem.</p></div>""")
 
     A("<h2>Povzetek</h2>")
     A('<div class="fig"><table><tr><th>pogoj</th><th>kaj dela</th><th>sodba</th></tr>')
