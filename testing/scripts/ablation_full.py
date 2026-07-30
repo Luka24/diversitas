@@ -35,6 +35,7 @@ from testing.scripts import engine
 np.seterr(all="ignore")
 
 FEE, PPY = 0.30, 365
+WIN_FROM, WIN_TO = "2021-07-01", "2026-06-30"   # last five whole years
 NBOOT, BLOCK, SEED = 2000, 20, 20260801
 SRC = ROOT / "testing" / "data" / "sources" / "BTC_binance_warmup.parquet"
 OUT = ROOT / "testing" / "data" / "ablation_full_BTC.json"
@@ -106,8 +107,10 @@ def run(raw, force=(), **kw):
         df["green_dot"] = df["bull_condition"]
     df = trim_warmup(smod.run_state_machine(df, cfg))
     pos = pd.Series(engine.position(df, s_bull_code=1), index=df.index, dtype=float)
+    win = pos.index[(pos.index >= WIN_FROM) & (pos.index <= WIN_TO)]
+    pos = pos.reindex(win)
     r = net_returns(pos, raw["close"].pct_change().fillna(0.0), FEE)
-    return r.to_numpy(float), pos, df.index
+    return r.to_numpy(float), pos, win
 
 
 def main():
@@ -147,6 +150,20 @@ def main():
                "turnover": round(float(turnover(pos).sum()), 1),
                "trades": int((np.diff(pos.to_numpy(), prepend=pos.to_numpy()[0]) > 0).sum()),
                "equity": [round(float(v), 4) for v in eq]}
+        # where does the toggle actually change what we hold?
+        dp = pos.to_numpy() - base_pos.to_numpy()
+        seg, i = [], 0
+        while i < len(dp):
+            if abs(dp[i]) > 1e-9:
+                j = i
+                while j + 1 < len(dp) and abs(dp[j + 1]) > 1e-9:
+                    j += 1
+                seg.append([i, j, "in" if dp[i] > 0 else "out"])
+                i = j + 1
+            else:
+                i += 1
+        row["diff_segments"] = seg
+        row["days_different"] = int((np.abs(dp) > 1e-9).sum())
         if name != "izhodišče":
             for key, fn in (("sortino", sortino), ("sharpe", sharpe),
                             ("cagr", cagr), ("maxdd", maxdd)):
