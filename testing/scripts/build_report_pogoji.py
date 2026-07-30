@@ -232,6 +232,59 @@ PEER = {"blowoff": ("blowoff_vs_extended", "primerjano med dnevi &gt; 25 % nad t
         "vol_shock": (None, "primerjano med dnevi pod trackline")}
 
 
+
+# Which knobs each condition actually reads. Two of them -- track_period and
+# track_buf_pct -- are read by BOTH above_tl and below_tl, which is the reason the
+# entry and exit thresholds cannot be moved independently today. That is exactly
+# the open question in the plan, and stating it per condition is the point of this
+# table.
+PARAMS_OF = {
+ "above_tl":            ["track_period", "track_buf_pct"],
+ "above_ma_med":        ["ma_med_len"],
+ "track_rising_window": ["track_slope_bars"],
+ "dist_entry_ok":       ["min_dist_entry_pct"],
+ "regime_ok":           ["ma_long_len", "ma_slope"],
+ "below_tl":            ["track_period", "track_buf_pct", "exit_grace_bars"],
+ "blowoff":             ["blowoff_dist_pct", "rsi_len"],
+ "vol_shock":           ["vol_shock_mul", "vol_lookback"],
+}
+SHARED = {"track_period", "track_buf_pct"}
+ACT_COL = {"odstraniti": "var(--crit)", "zakleniti": "var(--s2)",
+           "prepustiti glasovanju": "var(--s1)", "pustiti pri miru": "var(--good)"}
+PLAN = {r["name"]: r for r in MG["parameter_plan"]}
+
+
+def param_table(key):
+    """The knobs this condition reads, with what both reports say to do about them."""
+    names = PARAMS_OF.get(key, [])
+    if not names:
+        return ""
+    rows = ""
+    for nm in names:
+        r = PLAN[nm]
+        col = ACT_COL[r["action"]]
+        sh = (' <span style="color:var(--s2)" title="isti parameter bere tudi drugi pogoj">'
+              '&#8644; deljen</span>' if nm in SHARED else "")
+        rows += (f'<tr><td><code>{nm}</code>{sh}</td>'
+                 f'<td class="n">{r["default"]}</td>'
+                 f'<td style="font-size:12px">{r["kind"]}</td>'
+                 f'<td class="n">{r["range"]:.2f}</td>'
+                 f'<td style="font-size:12px;color:{col};font-weight:600">'
+                 f'{r["action"]}</td></tr>')
+    extra = ""
+    if key in ("above_tl", "below_tl"):
+        extra = ('<p class="cap" style="margin:8px 0 0;font-size:12px">'
+                 '<b>&#8644; deljena parametra.</b> <code>track_period</code> in '
+                 '<code>track_buf_pct</code> bereta <i>oba</i> — vstopni in izstopni pogoj. '
+                 'Vstopnega praga danes ni mogoče premakniti brez izstopnega, in prav to je '
+                 'odprto vprašanje asimetričnega mrtvega pasu.</p>')
+    if key == "bull_condition":
+        extra = ""
+    return (f'<table class="mini" style="margin:0 0 10px">'
+            f'<tr><th>parameter</th><th class="n">danes</th><th>oblika preleta</th>'
+            f'<th class="n">razpon</th><th>ukrep</th></tr>{rows}</table>{extra}')
+
+
 def base_line(key):
     row = next((x for x in AU["entry_vs_base"] if x["key"] == key), None)
     if not row or "20" not in row["h"]:
@@ -251,7 +304,7 @@ def section(key):
     out = [f'<h3 class="cond"><code>{key}</code>'
            f'<span class="badge" style="background:{col}">{lab}</span></h3>',
            f'<div class="two"><div><p class="mech">{what}</p>'
-           f'<p class="par">privzeto: {params}</p>']
+           f'{param_table(key) or f"""<p class="par">privzeto: {params}</p>"""}']
     if es:
         m = EX[peer]["m"]["donos"] if peer else es["m"]["donos"]
         rows = [(f"{h} dni", v["diff"], v["ci"], v["sig"]) for h in ES["horizons"]
@@ -460,6 +513,13 @@ pustilo štiri sprožitve. Vprašanje »kaj se zgodi z denarjem« je backtest in
 </div>""")
 
     A("<h2>Vstopni pogoji, eden za drugim</h2>")
+    A(f"""<p class="cap">Pod vsakim pogojem je tabela gumbov, ki jih <i>ta</i> pogoj bere, z
+obliko preleta iz poročila o parametrih in predlaganim ukrepom. Dva gumba nista v nobeni
+tabeli, ker ne pripadata posameznemu pogoju, ampak <b>vratom za vse skupaj</b>:
+<code>confirm_bars</code> = {PLAN['confirm_bars']['default']} (signal mora veljati toliko dni
+zapored) in <code>reentry_hold</code> = {PLAN['reentry_hold']['default']} (toliko dni premora
+po zadnji spremembi). Oba sta na ostri konici in oba sta predlagana
+<b style="color:var(--s1)">za glasovanje</b>.</p>""")
     for k in entry:
         A(section(k))
     A("<h2>Izstopni pogoji, eden za drugim</h2>")
