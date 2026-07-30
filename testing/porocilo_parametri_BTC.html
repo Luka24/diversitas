@@ -95,8 +95,8 @@ zgodovina odvila.</p></div><h2>Ugotovitev 3: je strategija boljša od sreče?</h
     Brez te rasti od prednosti ne ostane skoraj nič.</td></tr>
 <tr><td><b>Zna izbrati boljši trenutek za <span style="color:var(--good)">izogib
     padcem</span>?</b></td>
-    <td><b style="color:var(--good)">DA</b><br><span style="font-size:12px;color:var(--muted)">
-    p = 0.041 — dokazano</span></td>
+    <td><b style="color:var(--good)">DA, a previdno</b><br>
+    <span style="font-size:12px;color:var(--muted)">p = 0.041</span></td>
     <td style="font-size:13px">Pustimo popolnoma enako: enak čas v trgu
     (41.9 %), enako število obdobij (21), samo njihov
     vrstni red premešamo, 2000-krat. Strategija je boljša od
@@ -106,9 +106,13 @@ zgodovina odvila.</p></div><h2>Ugotovitev 3: je strategija boljša od sreče?</h
 <b>+31 odstotnih točk</b>. Naključna razporeditev istega časa v trgu da v
 povprečju le +14 točk. Približno
 14 točk torej pride že iz tega, da smo pol časa zunaj trga —
-ostalih 17 pa iz tega, <i>kdaj</i>.</p><div class="box good"><p><b>To je edina stvar, ki je statistično dokazana — in je
-hkrati edina, ki jo produkt obljublja.</b> Ne prodajamo napovedi cene. Prodajamo mirnejšo
-vožnjo.</p></div><h2>Kaj predlagam</h2><p><b>1. Vrzimo ven pravila, ki ne delajo.</b> Ločena analiza vsakega vstopnega in
+ostalih 17 pa iz tega, <i>kdaj</i>.</p><div class="box good"><p><b>To je edini test, ki ga strategija prestane — in je
+hkrati edino, kar produkt obljublja.</b> Ne prodajamo napovedi cene. Prodajamo mirnejšo
+vožnjo.</p>
+<p style="margin-top:9px"><b>Zakaj tudi tega ne imenujemo dokaz.</b> Na teh podatkih je bilo
+opravljenih 137 preizkusov nastavitev. Ko toliko stvari preizkusiš, se en
+rezultat s p = 0.041 pojavi tudi takrat, kadar ni ničesar — zato je to
+<i>najmočnejši znak, ki ga imamo</i>, ne pa dokaz.</p></div><h2>Kaj predlagam</h2><p><b>1. Vrzimo ven pravila, ki ne delajo.</b> Ločena analiza vsakega vstopnega in
 izstopnega pogoja je pokazala štiri, ki ne prestanejo lastne predpostavke — med njimi
 pravilo, ki se v šestih letih ni sprožilo niti enkrat, in pravilo, ki naj bi zaznavalo
 vrhove, v resnici pa se sproža na začetkih rasti. S tem pade
@@ -166,7 +170,33 @@ na obeh merilih hkrati.</p><h2>Kaj bi se konkretno spremenilo</h2><div class="fi
 </table></div>
 <p class="cap">Da: po tem popravku bo backtest izgledal <b>slabše</b>. To ni poslabšanje
 strategije — prejšnja številka preprosto ni bila resnična. Bolje, da to izvemo zdaj kot pri
-pravem denarju.</p><h2>Česa ta analiza ne dokaže</h2><p>Vse je merjeno na istem bitcoinu, na katerem so bile nastavitve izbrane. Noben
+pravem denarju.</p><h2>Je kaj od tega neodvisno preverjeno?</h2><p>To je najpomembnejše vprašanje na strani, zato naj bo odgovor brez ovinkov:
+<b>ne.</b> Razlikovati je treba dva pomena.</p><div class="fig"><table>
+<tr><th style="width:52%">pomen »neodvisno«</th><th>drži?</th></tr>
+<tr><td>V teh testih ne nastavljamo nobene številke — vrednosti so ves čas fiksne.</td>
+    <td><b style="color:var(--good)">DA</b></td></tr>
+<tr><td>Rezultati niso pod vplivom tega, da je nekdo te podatke že videl, preden je izbral
+    številke.</td><td><b style="color:var(--crit)">NE</b></td></tr>
+</table></div>
+<p>Privzete vrednosti izhajajo iz skripte, napisane ob gledanju zgodovine bitcoina, in vseh
+137 preizkusov je bilo opravljenih na istem oknu. <b>Koliko to šteje, smo
+izmerili</b> — to je premija konice iz Ugotovitve 2: današnje nastavitve so
+77. najboljše od 81 svojih sosedov,
+kar se brez vpogleda v podatke ne zgodi.</p>
+<p>Iz tega sledita dve pravili za branje vseh številk na tej strani:</p>
+<ul class="cap">
+<li><b>Ugotovitve o tem, kaj ne dela, so trdne.</b> Ne slonijo na statistični značilnosti,
+ampak na mehaniki — pravilo, ki se v sedmih letih sproži ničkrat, se ne sproži ne glede na to,
+kdo je izbral prag.</li>
+<li><b>Ugotovitve o tem, kaj dela, so šibke.</b> Lahko držijo, lahko pa so lastnost tega
+obdobja. Nobena od njih ni preživela preizkusa na podatkih, ki jih nismo videli — ker takih
+podatkov pod danimi omejitvami ni.</li>
+</ul>
+<p class="cap"><b>Kaj bi to spremenilo.</b> Edina prava rešitev so opazovanja, ki na izbiro
+številk niso mogla vplivati. Ker ostajamo pri bitcoinu in ne čakamo, je najbližja možnost
+isti trg z drobnejšo uro (4-urni odseki), kar da približno šestkrat več meritev. To ni
+neodvisen vzorec in tega ne bomo trdili — je pa edini način, da se natančnost izboljša brez
+novih trgov in brez čakanja.</p><h2>Česa ta analiza ne dokaže</h2><p>Vse je merjeno na istem bitcoinu, na katerem so bile nastavitve izbrane. Noben
 izračun na teh podatkih tega ne more popraviti — za to bi bili potrebni podatki, ki jih še
 nismo videli.</p>
 <p>Kar ta stran <b>zares</b> podpira, je torej ozko in se glasi: <i>vemo, koliko od uspeha

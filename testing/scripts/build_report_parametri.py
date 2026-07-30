@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 D = json.loads((ROOT / "testing" / "data" / "parametri_BTC.json").read_text(encoding="utf-8"))
 EN = json.loads((ROOT / "testing" / "data" / "ensemble_BTC.json").read_text(encoding="utf-8"))
 MC = json.loads((ROOT / "testing" / "data" / "mc_tests_BTC.json").read_text(encoding="utf-8"))
+AU = json.loads((ROOT / "testing" / "data" / "audit_BTC.json").read_text(encoding="utf-8"))
 OUT = ROOT / "testing" / "porocilo_parametri_BTC.html"
 
 # Plain-language name for every knob, so the page never makes the reader guess.
@@ -271,8 +272,8 @@ zgodovina odvila.</p></div>""")
     Brez te rasti od prednosti ne ostane skoraj nič.</td></tr>
 <tr><td><b>Zna izbrati boljši trenutek za <span style="color:var(--good)">izogib
     padcem</span>?</b></td>
-    <td><b style="color:var(--good)">DA</b><br><span style="font-size:12px;color:var(--muted)">
-    p = {ex['p_value']:.3f} — dokazano</span></td>
+    <td><b style="color:var(--good)">DA, a previdno</b><br>
+    <span style="font-size:12px;color:var(--muted)">p = {ex['p_value']:.3f}</span></td>
     <td style="font-size:13px">Pustimo popolnoma enako: enak čas v trgu
     ({ex['exposure_pct']} %), enako število obdobij ({ex['holding_periods']}), samo njihov
     vrstni red premešamo, {ex['n']}-krat. Strategija je boljša od
@@ -284,9 +285,13 @@ zgodovina odvila.</p></div>""")
 povprečju le {ex['shuffled_mean_gap']:+.0f} točk. Približno
 {ex['shuffled_mean_gap']:.0f} točk torej pride že iz tega, da smo pol časa zunaj trga —
 ostalih {ex['real_gap']-ex['shuffled_mean_gap']:.0f} pa iz tega, <i>kdaj</i>.</p>""")
-    A(f"""<div class="box good"><p><b>To je edina stvar, ki je statistično dokazana — in je
-hkrati edina, ki jo produkt obljublja.</b> Ne prodajamo napovedi cene. Prodajamo mirnejšo
-vožnjo.</p></div>""")
+    A(f"""<div class="box good"><p><b>To je edini test, ki ga strategija prestane — in je
+hkrati edino, kar produkt obljublja.</b> Ne prodajamo napovedi cene. Prodajamo mirnejšo
+vožnjo.</p>
+<p style="margin-top:9px"><b>Zakaj tudi tega ne imenujemo dokaz.</b> Na teh podatkih je bilo
+opravljenih {D['trials_total']} preizkusov nastavitev. Ko toliko stvari preizkusiš, se en
+rezultat s p = {ex['p_value']:.3f} pojavi tudi takrat, kadar ni ničesar — zato je to
+<i>najmočnejši znak, ki ga imamo</i>, ne pa dokaz.</p></div>""")
 
     # ── 4. what I propose ──────────────────────────────────────────────────
     A("<h2>Kaj predlagam</h2>")
@@ -382,6 +387,35 @@ strategije — prejšnja številka preprosto ni bila resnična. Bolje, da to izv
 pravem denarju.</p>""")
 
     # ── 5. limits ──────────────────────────────────────────────────────────
+    A("<h2>Je kaj od tega neodvisno preverjeno?</h2>")
+    A(f"""<p>To je najpomembnejše vprašanje na strani, zato naj bo odgovor brez ovinkov:
+<b>ne.</b> Razlikovati je treba dva pomena.</p>""")
+    A(f"""<div class="fig"><table>
+<tr><th style="width:52%">pomen »neodvisno«</th><th>drži?</th></tr>
+<tr><td>V teh testih ne nastavljamo nobene številke — vrednosti so ves čas fiksne.</td>
+    <td><b style="color:var(--good)">DA</b></td></tr>
+<tr><td>Rezultati niso pod vplivom tega, da je nekdo te podatke že videl, preden je izbral
+    številke.</td><td><b style="color:var(--crit)">NE</b></td></tr>
+</table></div>
+<p>Privzete vrednosti izhajajo iz skripte, napisane ob gledanju zgodovine bitcoina, in vseh
+{D['trials_total']} preizkusov je bilo opravljenih na istem oknu. <b>Koliko to šteje, smo
+izmerili</b> — to je premija konice iz Ugotovitve 2: današnje nastavitve so
+{sum(1 for v in ms['all'] if v < pt['sortino'])}. najboljše od {EN['members']} svojih sosedov,
+kar se brez vpogleda v podatke ne zgodi.</p>
+<p>Iz tega sledita dve pravili za branje vseh številk na tej strani:</p>
+<ul class="cap">
+<li><b>Ugotovitve o tem, kaj ne dela, so trdne.</b> Ne slonijo na statistični značilnosti,
+ampak na mehaniki — pravilo, ki se v sedmih letih sproži ničkrat, se ne sproži ne glede na to,
+kdo je izbral prag.</li>
+<li><b>Ugotovitve o tem, kaj dela, so šibke.</b> Lahko držijo, lahko pa so lastnost tega
+obdobja. Nobena od njih ni preživela preizkusa na podatkih, ki jih nismo videli — ker takih
+podatkov pod danimi omejitvami ni.</li>
+</ul>
+<p class="cap"><b>Kaj bi to spremenilo.</b> Edina prava rešitev so opazovanja, ki na izbiro
+številk niso mogla vplivati. Ker ostajamo pri bitcoinu in ne čakamo, je najbližja možnost
+isti trg z drobnejšo uro (4-urni odseki), kar da približno šestkrat več meritev. To ni
+neodvisen vzorec in tega ne bomo trdili — je pa edini način, da se natančnost izboljša brez
+novih trgov in brez čakanja.</p>""")
     A("<h2>Česa ta analiza ne dokaže</h2>")
     A(f"""<p>Vse je merjeno na istem bitcoinu, na katerem so bile nastavitve izbrane. Noben
 izračun na teh podatkih tega ne more popraviti — za to bi bili potrebni podatki, ki jih še

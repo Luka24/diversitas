@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ES = json.loads((ROOT / "testing" / "data" / "event_study_BTC.json").read_text(encoding="utf-8"))
 AB = json.loads((ROOT / "testing" / "data" / "ablation_BTC.json").read_text(encoding="utf-8"))
 EX = json.loads((ROOT / "testing" / "data" / "exit_rules_BTC.json").read_text(encoding="utf-8"))
+AU = json.loads((ROOT / "testing" / "data" / "audit_BTC.json").read_text(encoding="utf-8"))
 OUT = ROOT / "testing" / "porocilo_pogoji_BTC.html"
 
 
@@ -108,7 +109,7 @@ READ = {
    "le eno od tega, zapore ni.<br><br>To je zapornik za medvedji trg. Namenoma zahteva "
    "oboje — sicer bi blokiral ob vsakem prvem prebitju navzdol sredi zdravega trenda.",
    "ma_long_len = 200 dni · ma_slope = 5 dni",
-   "Na 60 dni +13 o. t. Varovalka pred dolgimi padci, ne izbirnik dobrih tednov.", "ok"),
+   "Blokira najhujše dni, a nad povprečnim dnevom doda le +0,4 o. t. — varovalka, ne izbirnik.", "ok"),
 
  "bull_condition": (
    "Vsi štirje zgornji pogoji izpolnjeni <b>hkrati, isti dan</b>.<br><br>Pozor: to še <b>ni "
@@ -134,7 +135,7 @@ READ = {
    "pravilo se posvetuje samo, ko je cena že več kot 25 % nad trackline, zato je to edina "
    "smiselna primerjalna skupina.",
    "blowoff_dist_pct = 25 % · RSI prag = 80 · rsi_len = 14 dni",
-   "Na 20 dni mu sledi opazno slabši donos, na 5 dni značilno globlji padec.", "ok"),
+   "Ob upoštevanju bazne stopnje in števila testov ostane nedokazan.", "?"),
 
  "vol_shock": (
    "Nihajnost zadnjih 20 dni je <b>več kot 1,5-krat višja</b> od svojega 50-dnevnega "
@@ -160,6 +161,21 @@ PEER = {
 }
 
 
+def _base_line(r):
+    """How much the rule adds over an average day, not just over its complement.
+
+    The complement of a bull filter is mostly bear market, so beating it is easy.
+    Beating the unconditional average is the harder and more honest bar."""
+    row = next((x for x in AU["entry_vs_base"] if x["key"] == r["key"]), None)
+    if not row or "20" not in row["h"]:
+        return ""
+    v = row["h"]["20"]
+    col = "var(--good)" if v["vs_base"] >= 1.0 else "var(--muted)"
+    return (f'<p class="par" style="color:{col}">čez 20 dni: {v["mean_true"]:+.2f} % ob pogoju '
+            f'proti {v["base"]:+.2f} % na povprečnem dnevu &rarr; '
+            f'<b>{v["vs_base"]:+.2f} o. t. nad bazo</b></p>')
+
+
 def card(r):
     src, note = PEER.get(r["key"], (None, ""))
     m = src() if src else r["m"]["donos"]
@@ -175,7 +191,8 @@ def card(r):
             f'({r["share"]} % vzorca){gate}</p>'
             f'<p class="long">{what}</p>'
             f'<p class="par">privzeto: {params}</p>'
-            f'{ci_chart(rows)}<p class="read"><b>Sodba:</b> {txt}</p></div>')
+            f'{ci_chart(rows)}{_base_line(r)}'
+            f'<p class="read"><b>Sodba:</b> {txt}</p></div>')
 
 
 def main():
@@ -285,7 +302,7 @@ razpon. To ni napaka grafa — nasprotno, ožja črta bi bila laž.</p>
 </div>
 </div></div>""")
 
-    A("<h2>Vstopni pogoji — vseh 12 meritev kaže v pravo smer</h2>")
+    A("<h2>Vstopni pogoji</h2>")
     A('<div class="grid">' + "".join(card(c) for c in entry) + "</div>")
 
     A("<h2>Izstopni pogoji</h2>")
@@ -300,29 +317,41 @@ razpon. To ni napaka grafa — nasprotno, ožja črta bi bila laž.</p>
     va = EX["vol_shock_actionable"]
 
     A("<h2>Izstopni pogoji podrobneje</h2>")
-    A(f"""<p><b>Blow-off ni detektor vrhov, ampak detektor nemira — in to je tisto, kar
-potrebujemo.</b> Vrha ne zna napovedati: mediana sprožitve pristane na
-{b_['median_percentile_of_fwd60']}. percentilu nadaljnjega 60-dnevnega donosa, cena pa je v
-60 dneh padla le po {fs.get('n_price_fell_60d','?')} od {fs.get('n','?')} izstopov. Zato pa
-po <b>vsakem</b> od {len(fired)} izstopov sledi padec med 13 in 28 % (mediana
-{fs.get('median_dd60','?')} %), in proti drugim enako raztegnjenim dnevom mu na 20 dni sledi
-donos <b>{d20['diff']:+.1f} o. t.</b> slabši, na 5 dni pa <b>značilno globlji</b> vmesni
-padec ({dd5['diff']:+.2f} o. t., razpon [{dd5['ci'][0]:+.2f}, {dd5['ci'][1]:+.2f}]). Backtest
-to potrdi z zadnje strani: izklop dvigne Sortino za {abl['brez_blowoff']['d_sortino']:+.2f}, a
-poglobi največji padec za {abs(abl['brez_blowoff']['d_maxdd']):.1f} odstotne točke
-({base['maxdd']:.1f} % &rarr; {abl['brez_blowoff']['maxdd']:.1f} %). Stane donos, kupi
-mirnejšo vožnjo — natanko posel, ki ga produkt obljublja. <b>Obdržati.</b></p>
+    A(f"""<p><b>Blow-off ostaja nedokazan v obe smeri.</b> Vrha ne zna napovedati: mediana
+sprožitve pristane na {b_['median_percentile_of_fwd60']}. percentilu nadaljnjega 60-dnevnega
+donosa. Sledi mu sicer globlji vmesni padec kot drugim enako raztegnjenim dnevom, a ta
+ugotovitev ne vzdrži pregleda: <b>{AU['dd_base_rate']['share_of_all_windows']:.0f} % vseh
+60-dnevnih oken v tem vzorcu vsebuje padec vsaj 13 %</b>, zato je »po vsakem izstopu je sledil
+padec« skoraj prazna trditev — mediana po sprožitvi je
+{AU['dd_base_rate']['median_after_blowoff']:.1f} % proti
+{AU['dd_base_rate']['median_all_windows']:.1f} % na povprečnem oknu. Od
+{AU['multiple_testing_blowoff']['n_tests']} opravljenih testov je značilen
+{AU['multiple_testing_blowoff']['n_significant']}, pri
+{AU['multiple_testing_blowoff']['n_tests']} testih pa je verjetnost vsaj enega značilnega po
+naključju <b>{AU['multiple_testing_blowoff']['p_at_least_one_by_chance']*100:.0f} %</b>.
+Tudi ablacija ne pomaga: izklop premakne Sortino za
+{AU['blowoff_ablation']['d_sortino']:+.2f} (razpon
+[{AU['blowoff_ablation']['ci_d_sortino'][0]:+.2f}, {AU['blowoff_ablation']['ci_d_sortino'][1]:+.2f}])
+in MaxDD za {AU['blowoff_ablation']['d_maxdd']:+.1f} o. t. (razpon
+[{AU['blowoff_ablation']['ci_d_maxdd'][0]:+.1f}, {AU['blowoff_ablation']['ci_d_maxdd'][1]:+.1f}])
+— <b>oba razpona zajemata ničlo</b>. Pri {len(EX['blowoff_exits'])} sprožitvah v sedmih letih
+tega ni mogoče razrešiti. <b>Pustiti pri miru in ne uporabljati kot argument v nobeno
+smer.</b></p>
 
 <p><b>Vol-shock se ne sproži.</b> Od {base['trades']} izstopov strategije jih je povzročil
-{base['exit_reasons']['vol_shock']}. Obstaja {va['n_window']} dni, ko bi lahko deloval — v
-poziciji smo, cena je pod trackline, redni izstop še ni nastopil — in na
-{va['n_fire_in_window']} od njih se sproži, ker ga izstop na <code>below_tl</code> vedno
-prehiti; izklop spremeni Sortino za {abl['brez_vol_shock']['d_sortino']:+.3f} in MaxDD za
-{abl['brez_vol_shock']['d_maxdd']:+.1f} o. t. Najbolj poveden je zadnji test: ko prag
-znižamo toliko, da <b>res</b> začne izstopati, se poslabša vse — pri množitelju 1,0 Sortino
-pade z {vsw[6]['sortino']:.3f} na {vsw[1]['sortino']:.3f} in padec se poglobi z
-{vsw[6]['maxdd']:.1f} % na {vsw[1]['maxdd']:.1f} %, pri 0,8 pa na {vsw[0]['sortino']:.3f} in
-{vsw[0]['maxdd']:.1f} %. Ni le nedejaven — kadar je prisiljen delovati, škoduje.
+{base['exit_reasons']['vol_shock']}. Obstaja {EX['vol_shock_actionable']['n_window']} dni, ko
+bi lahko deloval — v poziciji smo, cena je pod trackline, redni izstop še ni nastopil — in na
+{EX['vol_shock_actionable']['n_fire_in_window']} od njih se sproži, ker ga izstop na
+<code>below_tl</code> vedno prehiti; izklop spremeni Sortino za
+{abl['brez_vol_shock']['d_sortino']:+.3f} in MaxDD za {abl['brez_vol_shock']['d_maxdd']:+.1f}
+o. t. Ko prag znižamo toliko, da <b>res</b> začne izstopati, se poslabša vse: pri množitelju
+1,0 Sortino pade z {EX['vol_shock_threshold_sweep'][6]['sortino']:.3f} na
+{EX['vol_shock_threshold_sweep'][1]['sortino']:.3f} in padec z
+{EX['vol_shock_threshold_sweep'][6]['maxdd']:.1f} % na
+{EX['vol_shock_threshold_sweep'][1]['maxdd']:.1f} %, pri 0,8 pa na
+{EX['vol_shock_threshold_sweep'][0]['sortino']:.3f} in
+{EX['vol_shock_threshold_sweep'][0]['maxdd']:.1f} %. To je edina izstopna ugotovitev, ki ne
+sloni na statistični značilnosti, ampak na mehaniki, in je zato edina trdna.
 <b>Odstraniti.</b></p>""")
 
     A("<h2>Povzetek</h2>")
@@ -334,9 +363,9 @@ pade z {vsw[6]['sortino']:.3f} na {vsw[1]['sortino']:.3f} in padec se poglobi z
       ("above_tl", "jedro logike; noben razpon ne izloči ničle", "obdržati, a nedokazan", "var(--warn)"),
       ("dist_entry_ok", f"matematični dvojnik <code>above_tl</code> — {ES['dist_entry_disagreements']} dni razlike od {ES['n_days']}", "odstraniti", "var(--crit)"),
       ("below_tl", "pravi predznak, razlika ni dokazana", "obdržati — glavni izstop", "var(--warn)"),
-      ("blowoff", f"{base['exit_reasons']['blowoff']} od {base['trades']} poslov; stane "
-                  f"{abl['brez_blowoff']['d_sortino']:+.2f} Sortina, prihrani "
-                  f"{abs(abl['brez_blowoff']['d_maxdd']):.1f} o. t. padca", "obdržati", "var(--good)"),
+      ("blowoff", f"{base['exit_reasons']['blowoff']} od {base['trades']} poslov; oba razpona "
+                  f"(Sortino in MaxDD) zajemata ničlo", "nedokazan v obe smeri — pustiti pri miru",
+              "var(--warn)"),
       ("vol_shock", f"{base['exit_reasons']['vol_shock']} sprožitev od {base['trades']} izstopov; smer obrnjena "
                     f"({vs['m']['donos']['60']['diff']:+.1f} o. t. na 60 dni)", "odstraniti", "var(--crit)"),
     ]
