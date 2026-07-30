@@ -28,6 +28,7 @@ ES = json.loads((DD / "event_study_BTC.json").read_text(encoding="utf-8"))
 EX = json.loads((DD / "exit_rules_BTC.json").read_text(encoding="utf-8"))
 AU = json.loads((DD / "audit_BTC.json").read_text(encoding="utf-8"))
 AF = json.loads((DD / "ablation_full_BTC.json").read_text(encoding="utf-8"))
+DR = json.loads((DD / "dead_rules_BTC.json").read_text(encoding="utf-8"))
 OUT = ROOT / "testing" / "porocilo_pogoji_BTC.html"
 
 BASE = AF["cases"]["izhodišče"]
@@ -177,8 +178,7 @@ COND = {
    "Povprečje zaključnih tečajev zadnjih <b>50 dni</b>. Pogoj velja, ko je cena nad njim, "
    "brez kakršnekoli rezerve.",
    "ma_med_len = 50", "brez above_ma_med",
-   "Značilen sam zase, a odstranitev ne spremeni <b>ničesar</b> — blokira 65 dni, ki jih "
-   "protiplaznična zamuda tako ali tako požre. Odstraniti.",
+   "Pri privzetkih odstranitev ne spremeni <b>ničesar</b>. Preverjeno na 151 nastavitvah: oživi le pri <b>3</b>, in še tam za največ 15 dni ter brez vpliva na padec. Odstraniti — a ne po konstrukciji, ampak po meritvi.",
    "kill", "cena nad 50-dnevnim povprečjem"),
  "track_rising_window": ("vstop",
    "Današnja vrednost trackline je <b>višja kot pred 10 dnevi</b>. Ni dovolj, da je cena "
@@ -192,8 +192,7 @@ COND = {
    "<code>min_dist_entry_pct</code> odposlan z vrednostjo <b>0</b>, se pogoj sesede v "
    "<code>above_tl</code>.",
    "min_dist_entry_pct = 0 %", "brez dist_entry_ok",
-   "Matematični dvojnik <code>above_tl</code> — 0 dni razlike od 2700. V dashboardu se "
-   "prikazuje kot ločena kljukica, ki ne more nikoli ugovarjati tisti nad njo. Odstraniti.",
+   "Matematični dvojnik <code>above_tl</code>: 0 dni razlike, in mrtev pri <b>vseh 151</b> preizkušenih nastavitvah. V dashboardu zaseda ločeno kljukico, ki ne more nikoli ugovarjati tisti nad njo. <b>Edina odstranitev, ki je varna po konstrukciji.</b>",
    "kill", "dodatna razdalja nad trackline (nastavljena na 0)"),
  "regime_ok": ("vstop",
    "Zapora nastopi <b>samo, če velja oboje</b>: cena je pod 200-dnevnim povprečjem <b>in</b> "
@@ -222,9 +221,8 @@ COND = {
    "<b>in</b> cena je hkrati pod trackline. Ker zahteva <code>below_tl</code>, ga redni "
    "izstop vedno prehiti.",
    "vol_shock_mul = 1,5 · vol_lookback = 20", "brez vol-shocka",
-   "Povzročil je 0 od 21 izstopov. Obstaja 41 dni, ko bi lahko deloval — na nobenem se ne "
-   "sproži. Odstraniti.",
-   "kill", "skok nihajnosti, a le pod trackline"),
+   "Pri privzetkih se ne sproži nikoli — a to je <b>naključje štirih vrednosti, ne lastnost pravila</b>. Oživi pri 67 od 151 nastavitev, med njimi pri <b>45 od 81 članov ansambla</b>, in tam je odstranitev slabša 61× proti 6×. <b>Ne odstraniti.</b>",
+   "?", "skok nihajnosti, a le pod trackline"),
 }
 BADGE = {"ok": ("obdržati", "var(--good)"), "?": ("nedokazan", "var(--warn)"),
          "kill": ("odstraniti", "var(--crit)")}
@@ -477,49 +475,111 @@ deluje. Ali deluje kot napovednik nemira, ostaja odprto: po vsaki sprožitvi res
 <b>{AU['dd_base_rate']['share_of_all_windows']:.0f} % vseh 60-dnevnih oken</b> v tem vzorcu
 vsebuje padec vsaj 13 %, zato to skoraj nič ne pomeni.</p>""")
 
-    A("<h2>Skupni rezultat: strategija brez vseh treh odveč pravil</h2>")
-    A("""<p>Spodaj je današnja strategija proti tisti, iz katere so odstranjena vsa tri
-pravila hkrati — <code>vol_shock</code>, <code>dist_entry_ok</code> in
-<code>above_ma_med</code>.</p>""")
+    A("<h2>Ali so ta pravila res mrtva? Preizkus pri 151 nastavitvah</h2>")
+    A(f"""<p>Nič se ne spremeni je bilo izmerjeno pri <b>eni</b> nastavitvi. To ne zadostuje
+za brisanje kode: pravilo lahko pri privzetkih spi, korak vstran pa se prebudi. Tu je še
+posebej pomembno, ker drugo poročilo priporoča <b>povprečenje 81 sosednjih nastavitev</b> —
+pravilo, ki oživi v katerikoli od njih, ni odstranljivo brez spremembe ansambla.</p>
+<p class="cap">Preizkušenih je bilo {DR['settings_tested']} nastavitev: preleti desetih
+parametrov čez razpone, ki gredo daleč čez vse, kar bi kdo dejansko uporabil, plus vseh 81
+članov ansambla. Primerjava je na <b>seriji pozicij</b>, ne na merilih — enaka merila bi
+lahko načeloma prišla iz različnih poti, enake pozicije ne morejo.</p>""")
+    A('<div class="fig"><table><tr><th>pravilo</th><th class="n">oživi pri</th>'
+      '<th class="n">med 81 člani<br>ansambla</th>'
+      '<th class="n">odstranitev<br>boljša / slabša</th><th>sodba</th></tr>')
+    ROBUST = [
+      ("dist_entry_ok", "<b>Odstraniti.</b> Edino, kar je mrtvo pri vseh nastavitvah — in "
+       "mrtvo po konstrukciji, ne po sreči.", "var(--crit)"),
+      ("above_ma_med", "<b>Odstraniti.</b> Oživi le pri zelo ozkem mrtvem pasu (1–1,5 % "
+       "namesto 3 %) in pri obdobju 115. Učinki so drobni in padca ne premaknejo.",
+       "var(--crit)"),
+      ("vol_shock", "<b>NE odstraniti.</b> Pri privzetkih spi, a to je naključje štirih "
+       "vrednosti. Oživi pri več kot tretjini preizkušenih nastavitev in pri več kot polovici "
+       "članov ansambla.", "var(--warn)"),
+    ]
+    for key, note, col in ROBUST:
+        sm = DR["summary"][key]
+        grid_hits = len(DR["grid"][key])
+        A(f'<tr><td><code>{key}</code></td>'
+          f'<td class="n">{sm["n_alive"]} / {DR["settings_tested"]}</td>'
+          f'<td class="n">{grid_hits} / 81</td>'
+          f'<td class="n">{sm["removal_better"]} / {sm["removal_worse"]}</td>'
+          f'<td style="font-size:12.5px;color:{col}">{note}</td></tr>')
+    A("</table></div>")
+
+    A(f"""<div class="note" style="border-left-color:var(--crit)">
+<p><b>Kje se <code>vol_shock</code> prebudi.</b> Pravilo zahteva <code>below_tl</code> in da
+redni izstop še ni nastopil. Pri privzetkih <code>track_period</code> 75,
+<code>track_buf_pct</code> 3 %, <code>exit_grace_bars</code> 3 in <code>reentry_hold</code> 15
+to okno nikoli ne nastane — a že en korak vstran nastane:</p>
+<table style="margin:9px 0">
+<tr><th>parameter</th><th>vrednosti, pri katerih SPI</th>
+<th>vrednosti, pri katerih SE SPROŽI</th></tr>
+<tr><td><code>exit_grace_bars</code></td><td>1, 3, 4</td>
+    <td><b>2, 5, 6, 8, 10, 14</b> — pri 14 na 140 dneh</td></tr>
+<tr><td><code>track_period</code></td><td>75, 85</td>
+    <td><b>45, 55, 65, 95, 105, 115</b></td></tr>
+<tr><td><code>track_buf_pct</code></td><td>3, 4, 5</td><td><b>1, 1,5, 2, 2,5, 6</b></td></tr>
+<tr><td><code>reentry_hold</code></td><td>15, 20, 25, 30</td><td><b>0, 3, 6, 9, 12</b></td></tr>
+</table>
+<p><b>Moja prejšnja trditev, da je vol_shock »strukturno mrtev in ne more biti drugače«, je
+bila napačna.</b> Mrtev je pri natanko tej kombinaciji štirih vrednosti. Učinek je majhen —
+mediana {abs(DR['summary']['vol_shock']['n_alive']) and '−0,020'} Sortina, največ 0,085 — a ni
+nič, in v 61 od 67 primerov je odstranitev slabša.</p></div>""")
+
+    A(f"""<div class="note"><p><b>Kaj o tem pove drugo poročilo.</b>
+<code>porocilo_parametri_BTC.html</code> je te tri gumbe uvrstilo med mrtve na podlagi
+preletov z razponi 0,001 do 0,096. Ti preleti so pravilni, a merijo isto slepo pego: vsak
+premakne <b>en</b> gumb, ostale pa pusti pri natanko tej kombinaciji, kjer pravilo spi. Tisto
+poročilo to omejitev navaja samo — »Analiza gleda po en parameter naenkrat. Ne vidi, kaj se
+zgodi, če dva premakneš hkrati.« <b>To je prvi primer, kjer je ta omejitev res udarila.</b>
+Sodba o gumbu drži (ni ga vredno nastavljati), sodba o pravilu pa ne sledi iz nje.</p></div>""")
+
+    A("<h2>Skupni rezultat: strategija brez dveh odveč pravil</h2>")
+    A("""<p>Spodaj je današnja strategija proti tisti brez <code>dist_entry_ok</code> in
+<code>above_ma_med</code>. <code>vol_shock</code> po zgornjem preizkusu <b>ostane</b>.</p>""")
     A('<div class="fig">' + equity(AF["cases"]["brez obojega"]["equity"], (),
-                                   alt_label="brez vseh treh") + "</div>")
+                                   alt_label="brez obeh") + "</div>")
     A(f"""<div class="note" style="border-left-color:var(--good)">
-<p><b>Modra črta se popolnoma skriva pod rdečo.</b> Ni napaka risanja: razlika je
-<b>0,000000</b> na vseh {AF['n']} dneh in ni niti enega dneva, ko bi držali kaj drugega. Vsa
-štiri merila ostanejo nespremenjena — Sortino {BASE['sortino']:.3f}, Sharpe
-{BASE['sharpe']:.3f}, letni donos {BASE['cagr']:.1f} %, največji padec {BASE['maxdd']:.1f} %,
-končni večkratnik {BASE['final']:.2f}× pri {BASE['trades']} poslih. Kupi-in-drži je v istem
-obdobju dosegel {BENCH[-1]:.2f}× pri padcu {AF['benchmark']['maxdd']:.1f} %.</p>
-<p style="margin-top:9px"><b>Končna sodba.</b> Odstranitev ne izboljša ničesar — in prav to
-je namen. Nastavljivih številk je s tem <b>14 &rarr; 10</b>
-(<code>vol_shock_mul</code>, <code>vol_lookback</code>, <code>min_dist_entry_pct</code>,
-<code>ma_med_len</code>). Manj gumbov pomeni manj načinov, kako lahko zavedemo sami sebe, in
-neposredno nižjo verjetnost prevelike prilagojenosti. <b>Strategija ostane ista, naše
-zaupanje vanjo pa je bolje utemeljeno.</b></p></div>""")
+<p><b>Modra črta se popolnoma skriva pod rdečo.</b> Razlika je <b>0,000000</b> na vseh
+{AF['n']} dneh. Vsa štiri merila ostanejo nespremenjena — Sortino {BASE['sortino']:.3f},
+Sharpe {BASE['sharpe']:.3f}, letni donos {BASE['cagr']:.1f} %, največji padec
+{BASE['maxdd']:.1f} %, končni večkratnik {BASE['final']:.2f}× pri {BASE['trades']} poslih.
+Kupi-in-drži je v istem obdobju dosegel {BENCH[-1]:.2f}× pri padcu
+{AF['benchmark']['maxdd']:.1f} %.</p>
+<p style="margin-top:9px"><b>Končna sodba.</b> Nastavljivih številk je
+<b>14 &rarr; 12</b> — odpadeta <code>min_dist_entry_pct</code> in <code>ma_med_len</code>.
+<code>vol_shock_mul</code> in <code>vol_lookback</code> <b>ostaneta</b>, ker pravilo ni mrtvo
+pri nastavitvah, ki jih dejansko nameravamo uporabiti. To je manj, kot je prej kazalo, in
+razlog je pošten: prvi izračun je meril eno točko, drugi jih je meril
+{DR['settings_tested']}.</p></div>""")
 
     A("<h2>Kaj vse to skupaj pomeni</h2>")
-    A(f"""<p class="lead">Strategija ima osem pravil, a le pet od njih kaj počne. Tri —
-<code>vol_shock</code>, <code>dist_entry_ok</code> in <code>above_ma_med</code> — je mogoče
-izklopiti, ne da bi se premaknila ena sama decimalka, in vsako iz svojega razloga: prvo je
-vezano na pogoj, ki ga redni izstop vedno prehiti, zato se v sedmih letih ni sprožilo niti
-enkrat; drugo je matematični dvojnik pravila nad njim, ki v dashboardu zaseda svojo kljukico,
-čeprav ne more nikoli povedati nič novega; tretje pa blokira petinšestdeset dni, ki jih trije
-dnevi potrditve in petnajstdnevni premor tako ali tako požrejo. Med preostalimi sta dva
+    A(f"""<p class="lead">Strategija ima osem pravil, a pri privzetih nastavitvah tri od njih
+ne počnejo nič — in ravno preverba, ali to drži tudi drugje, je pokazala, da je treba to
+trditev razdeliti na tri različno trdne dele. <code>dist_entry_ok</code> je matematični dvojnik
+pravila nad njim: pri {DR['settings_tested']} preizkušenih nastavitvah ni bilo niti enega dne
+razlike, in tudi ne more biti, ker je isti izraz zapisan dvakrat — v dashboardu zaseda svojo
+kljukico, ki ne more nikoli ugovarjati tisti nad njo. <code>above_ma_med</code> je mrtev
+skoraj povsod: oživi pri treh nastavitvah od {DR['settings_tested']}, in še tam za največ
+petnajst dni in brez vpliva na padec, ker petinšestdeset dni, ki jih blokira, tako ali tako
+požrejo trije dnevi potrditve in petnajstdnevni premor. <code>vol_shock</code> pa sem
+<b>napačno razglasil za strukturno mrtvega</b>: pri privzetkih se res nikoli ne sproži, a to
+je naključje štirih vrednosti hkrati, in že korak vstran — pri drugem mrtvem pasu, drugi
+dolžini razpona ali drugem številu dni potrpljenja — oživi; pri
+{len(DR['grid']['vol_shock'])} od 81 članov ansambla, ki ga priporočamo uporabiti, deluje, in
+tam je njegova odstranitev slabša v 61 primerih od 67. Med pravili, ki nekaj počnejo, sta dva
 zagovorljiva: <code>track_rising_window</code> je edini, brez katerega se največji padec
 opazno poglobi z {BASE['maxdd']:.1f} % na
 {AF['cases']['brez track_rising']['maxdd']:.1f} %, in <code>regime_ok</code> je edini, brez
-katerega je slabše na vseh štirih merilih hkrati — čeprav se je ob tem izkazalo, da padca
-sploh ne zmanjšuje in je torej filter donosa, ne varovalka, kot je bil doslej opisan. Ostala
-tri so odprta vprašanja, ne rešitve: <code>above_tl</code> je jedro strategije, a backtest
-brez njega je rahlo <i>boljši</i> in nad povprečnim dnevom doda le +1,6 odstotne točke;
-<code>below_tl</code> nosi trinajst od enaindvajsetih poslov, a njegova prednost ni dokazana;
-blow-off pa se obrne glede na to, katero obdobje pogledaš — na petih letih pomaga, na sedmih
-in pol škoduje — česar pri osmih sprožitvah ni mogoče razrešiti. Skupna slika je torej
-strategija, ki je preprostejša, kot je videti, in katere dokazana vrednost je ožja, kot bi si
-želeli: <b>ne znamo pokazati, da izbira boljše trenutke za zaslužek; znamo pokazati, da en
-filter zares zmanjšuje padce; in znamo pokazati, katera tri pravila lahko brez najmanjše
-izgube odstranimo.</b> To je manj, kot bi radi predstavili — je pa prvo, kar bo zdržalo
-vprašanja.</p>""")
+katerega je slabše na vseh štirih merilih — čeprav se je ob tem izkazalo, da padca sploh ne
+zmanjšuje in je torej filter donosa, ne varovalka. Preostala tri so odprta vprašanja:
+<code>above_tl</code> je jedro, a backtest brez njega je rahlo boljši; <code>below_tl</code>
+nosi trinajst od enaindvajsetih poslov brez dokazane prednosti; blow-off pa se obrne glede na
+obdobje. <b>Odstranljivi sta torej dve pravili, ne tri, in razlika med njima šteje: eno je
+varno po matematiki, drugo po meritvi. Kar pa je najbolj poučno, je da je moja najbolj
+samozavestna trditev — »strukturno mrtev, ne more biti drugače« — padla prva, ko sem jo
+preizkusil pri več kot eni nastavitvi.</b></p>""")
 
     A(f"""<footer>
 Vir cen: Binance, zamrznjen posnetek

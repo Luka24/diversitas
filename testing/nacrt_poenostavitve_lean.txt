@@ -49,23 +49,39 @@ Vir: testing/porocilo_pogoji_BTC.html
 Ponovljivo z: testing/scripts/event_study.py , testing/scripts/ablation.py
 Surovi rezultati: testing/data/event_study_BTC.json , testing/data/ablation_BTC.json
 
-VOL-SHOCK — odstraniti
-  1. Povzročil je 0 od 21 izstopov v 2700 dneh. Obstaja 41 dni, ko bi lahko
-     deloval (v poziciji, pod trackline, redni izstop še ni nastopil) — na
-     nobenem se ne sproži.
-     Razlog je v kodi: vol_shock zahteva below_tl, izstop na below_tl pa ga vedno
-     prehiti, ker se v state machine oceni prej.
-  2. Izklop pravila: ΔSortino +0,000 · ΔMaxDD +0,0 o. t. · Δposli 0.
-  3. Prelet vol_shock_mul 1,2 → 3,0: razpon Sortina 0,013.
-     Prelet vol_lookback 10 → 40:  razpon Sortina 0,001.
-  4. Nadaljnji 60-dnevni donos po sprožitvi, primerjan z DRUGIMI dnevi pod
-     trackline (edina poštena primerjava): +11,02 o. t., 95 % CI [+0,14; +22,16].
-     ZNAČILNO — in v napačno smer.
-  5. Ko prag znižamo toliko, da RES začne izstopati, se poslabša vse:
-     množitelj 1,0 → Sortino 1,393 in MaxDD −47,8 % ; 0,8 → 1,218 in −49,7 %
-     (izklopljen: 1,505 in −45,2 %). Ni le nedejaven — kadar je prisiljen
-     delovati, škoduje. To je edina izstopna ugotovitev, ki ne sloni na
-     statistični značilnosti, ampak na mehaniki, in je zato edina trdna.
+VOL-SHOCK — NE ODSTRANITI (sodba spremenjena 2026-08-01)
+  Vir: testing/scripts/dead_rules_robust.py , testing/data/dead_rules_BTC.json
+
+  KAJ SEM TRDIL: "strukturno mrtev — vezan je na below_tl in ga redni izstop vedno
+  prehiti; to ne more biti drugače, ne glede na podatke." TO JE BILO NAPAČNO.
+
+  1. Pri privzetkih se res ne sproži nikoli: 0 od 21 izstopov, 41 dni priložnosti,
+     0 sprožitev, odstranitev bitno identična.
+  2. AMPAK to je naključje ŠTIRIH VREDNOSTI HKRATI, ne lastnost pravila. Preizkus
+     pri 151 nastavitvah pokaže, da oživi pri 67 od njih:
+
+        exit_grace_bars   spi pri 1, 3, 4   ·  oživi pri 2, 5, 6, 8, 10, 14
+        track_period      spi pri 75, 85    ·  oživi pri 45, 55, 65, 95, 105, 115
+        track_buf_pct     spi pri 3, 4, 5   ·  oživi pri 1; 1,5; 2; 2,5; 6
+        reentry_hold      spi pri 15+       ·  oživi pri 0, 3, 6, 9, 12
+
+     Privzetki (75 / 3 % / 3 / 15) so ena redkih kombinacij, kjer spi.
+  3. ODLOČILNO ZA NAS: oživi pri 45 od 81 ČLANOV ANSAMBLA, ki ga priporoča Korak 4.
+     Odstranitev bi torej spremenila ansambel.
+  4. Smer: v 61 od 67 primerov je odstranitev SLABŠA (mediana ΔSortino −0,020,
+     najslabše −0,085 in padec 2,6 o. t. globlji pri track_period 45). Učinek je
+     majhen, a ni nič in ni naključno usmerjen.
+
+  SODBA: vol_shock_mul in vol_lookback OSTANETA. Pravilo ni mrtvo pri nastavitvah,
+  ki jih dejansko nameravamo uporabiti. Sodi v isti predal kot blow-off:
+  premajhno in preveč odvisno od nastavitve, da bi se odločili.
+
+  NAUK, ki ga je vredno zapisati: preleti po en parameter naenkrat so pokazali
+  razpone 0,001 do 0,013 in videti je bilo, da je pravilo mrtvo. Preleti so bili
+  pravilni, a so vsi merili isto slepo pego — premikali so en gumb, ostale pa
+  puščali pri natanko tisti kombinaciji, kjer pravilo spi. Poročilo o parametrih
+  je to omejitev navajalo samo ("Ne vidi, kaj se zgodi, če dva premakneš hkrati").
+  To je prvi primer, kjer je udarila.
 
 BLOW-OFF — NEDOKAZAN V OBE SMERI, PUSTITI PRI MIRU
   Sodbo o tem pravilu sem med delom spremenil dvakrat. Končno stanje in razlogi:
@@ -148,16 +164,18 @@ KAJ OSTANE IN JE UPRAVIČENO (za kontekst, se ne dotikamo)
 ================================================================================
 KORAK 1 — BRISANJE PRAVIL BREZ DOKAZOV
 ================================================================================
-Ocena dela: ~2 uri.  Cilj: 14 nastavljivih parametrov → 10.
-(Prejšnji zapis "→ 8" oziroma "→ 6" je bil napačen: 14 − 4 = 10.)
+Ocena dela: ~1 ura.  Cilj: 14 nastavljivih parametrov → 12.
+(Zaporedje popravkov: "→ 6", "→ 8", "→ 10" so bili vsi preveč
+ optimistični. Po preizkusu robustnosti odpadeta samo dva.)
 
 1.1 lean/diversitas/config.py
     ODSTRANITI polja:
-        vol_shock_mul
-        vol_lookback
-        min_dist_entry_pct
-        ma_med_len            (glej §1 — polna ablacija je bitno identična)
-    NE odstraniti blowoff_dist_pct in rsi_len — blow-off je nedokazan, ne ovržen.
+        min_dist_entry_pct    (mrtev pri vseh 151 preizkušenih nastavitvah)
+        ma_med_len            (oživi pri 3 od 151, učinek droben, padca ne premakne)
+    NE odstraniti:
+        blowoff_dist_pct, rsi_len   — blow-off je nedokazan, ne ovržen
+        vol_shock_mul, vol_lookback — pravilo oživi pri 67 od 151 nastavitev in
+                                      pri 45 od 81 članov ansambla (glej §1)
     OBDRŽATI ma_med_len = 50, a dodati komentar, da je zaklenjen in ni več
     nastavljiv parameter (z razlogom in datumom, po vzoru obstoječega komentarja
     o odstranitvi ER).
@@ -166,22 +184,20 @@ Ocena dela: ~2 uri.  Cilj: 14 nastavljivih parametrov → 10.
 
 1.2 lean/diversitas/strategy.py
     compute_features():
-        - izbrisati df["vol_shock"]
         - izbrisati df["dist_entry_ok"] iz bull_condition (dvojnik above_tl)
         - odstraniti df["above_ma_med"] iz bull_condition; ma_med SAM PUSTITI,
           ker ga dashboard riše
-        - df["rsi"] in df["blowoff"] OBDRŽATI (glej §1)
+        - df["vol_shock"], df["rsi"] in df["blowoff"] OBDRŽATI (glej §1)
         - izbrisati df["dist_entry_ok"] in ga odstraniti iz bull_condition
           (identičen above_tl, ki v bull_condition že je — vedenje se NE spremeni)
         - izračun annual_vol / vol_avg50 OBDRŽATI: annual_vol je prikazan v
           dashboardu in uporabljen v ogrevanju. Fiksirati okno na 20 (bivši
           vol_lookback) kot konstanto v modulu.
     run_state_machine():
-        - iz izstopne veje odstraniti samo vol_shock_arr
-        - ostaneta below_tl (z exit_grace_bars) in blowoff
+        - NE spreminjati. Vse tri izstopne veje ostanejo.
         - odstraniti pripadajoča branja stolpcev
     build_summary():
-        - odstraniti ključ "vol_shock"
+        - ne odstranjevati ničesar
 
 1.3 lean/diversitas/dashboard.py
     Odstraniti vse prikaze blow-offa, vol-shocka in RSI (4 + 4 + 1 mest).
@@ -602,6 +618,9 @@ tem, ko bi asimetrični pas izmerili.
   edina vrednost, ki je NI treba izbrati. Dvotretjinski prag je bil na dnevnih
   barih boljši in je na 4-urnih padel z 2. na 4. mesto — to je opozorilo, ne
   vabilo k nadaljnjemu iskanju.
+- Nobenega pravila ne razglasimo za mrtvo na podlagi ene nastavitve. Preizkus
+  robustnosti (dead_rules_robust.py) je obvezen korak pred vsakim brisanjem —
+  brez njega bi izbrisali vol_shock, ki oživi pri 45 od 81 članov ansambla.
 - Ne uporabljamo besede "dokazano" nad enim samim p. Na teh podatkih je bilo
   opravljenih 137 preizkusov nastavitev; pri toliko poskusih se posamezen
   rezultat s p okoli 0,04 pojavi tudi takrat, kadar ni ničesar.
@@ -634,7 +653,7 @@ R5  Kumulativno število poskusov raste in z njim PBO.
 ================================================================================
 6. DEFINICIJA DOKONČANOSTI
 ================================================================================
-[ ] Korak 1: 4 parametri odstranjeni (14 → 10), vsak z zapisanim razlogom
+[ ] Korak 1: 2 parametra odstranjena (14 → 12), vsak z zapisanim razlogom
 [ ] Korak 1: novi testi (1.8) napisani in zeleni
 [ ] Korak 1: sprejemni kriterij 1.9 izpolnjen (Sortino 1,616 / MaxDD −39,8 / 11 poslov)
 [ ] Korak 1: dashboard se naloži brez napake
