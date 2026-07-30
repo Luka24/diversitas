@@ -442,39 +442,13 @@ def main():
 <h1>Vsi vstopni in izstopni pogoji — kaj vsak počne in ali ga potrebujemo</h1>
 <p class="sub">Diversitas Lean · BTC · Binance · fee + slippage
 {AF['fee_per_side_pct']} % na stran</p>
+""")
 
-<h2>Seznam pogojev</h2>
-<p class="cap">Strategija ima dve ločeni skupini pravil. <b>Vstopna</b> se morajo izpolniti
-<i>vsa hkrati</i> (logični IN), da nastane nakupni signal. <b>Izstopna</b> delujejo
-<i>vsako zase</i> (logični ALI) — dovolj je eno, da nas spravi iz trga.</p>""")
-
-    for title, keys, note in (
-        ("Vstopni pogoji — vsi morajo veljati hkrati", entry,
-         "Izpolnjen signal še ni nakup: veljati mora <b>3 dni zapored</b> "
-         "(<code>confirm_bars</code>) in od zadnje spremembe mora miniti vsaj <b>15 dni</b> "
-         f"(<code>reentry_hold</code>). Ti dve zamudi sta razlog, zakaj ima strategija "
-         f"{BASE['trades']} poslov in ne 200."),
-        ("Izstopni pogoji — vsak zase zadostuje", exits,
-         "Vrstni red v kodi je pomemben: najprej se preveri <code>below_tl</code>, nato "
-         "blow-off, nato vol-shock. Kar se preveri prej, prehiti ostale — in prav to je "
-         "razlog, da se vol-shock nikoli ne sproži.")):
-        A(f'<div class="fig"><p style="margin:0 0 10px"><b>{title}</b></p><table>'
-          f'<tr><th style="width:19%">pogoj</th><th>kaj zahteva</th>'
-          f'<th style="width:24%">privzeto</th><th style="width:13%">sodba</th></tr>')
-        for k in keys:
-            _, _, params, _, _, bk, short = COND[k]
-            lab, col = BADGE[bk]
-            A(f'<tr><td><code>{k}</code></td>'
-              f'<td style="font-size:12.5px">{short}</td>'
-              f'<td style="font-size:12px;color:var(--muted)">{params}</td>'
-              f'<td><span class="badge" style="background:{col};margin:0">{lab}</span>'
-              f'</td></tr>')
-        A(f'</table><p class="cap" style="margin:10px 0 0">{note}</p></div>')
-
-    A("<h2>Kako se bere graf</h2>")
+    A("<h2>Kako se bere manjši graf na levi</h2>")
     A(f"""<div class="fig"><div class="two" style="gap:28px">
 <div>
 <p style="margin:0 0 8px"><b>Kaj je številka</b></p>
+<p class="cap" style="margin:0 0 10px;padding:7px 10px;background:var(--band);border-radius:7px"><b>To velja za manjši graf levo pri vsakem pogoju</b> — tistega z vodoravnimi črtami in piko. Široki graf pod njim je nekaj drugega: tam sta krivulji premoženja z in brez pravila.</p>
 <p class="cap">Vse dni v vzorcu razdelimo na dva kupa: dnevi, ko je pravilo izpolnjeno, in
 dnevi, ko ni. Za oba kupa izračunamo, koliko je BTC v povprečju zrasel v naslednjih N dneh.
 <b>Številka na grafu je razlika med tema dvema povprečjema</b>, v odstotnih točkah.</p>
@@ -588,14 +562,6 @@ to okno nikoli ne nastane — a že en korak vstran nastane:</p>
 bila napačna.</b> Mrtev je pri natanko tej kombinaciji štirih vrednosti. Učinek je majhen —
 mediana {abs(DR['summary']['vol_shock']['n_alive']) and '−0,020'} Sortina, največ 0,085 — a ni
 nič, in v 61 od 67 primerov je odstranitev slabša.</p></div>""")
-
-    A(f"""<div class="note"><p><b>Kaj o tem pove drugo poročilo.</b>
-<code>porocilo_parametri_BTC.html</code> je te tri gumbe uvrstilo med mrtve na podlagi
-preletov z razponi 0,001 do 0,096. Ti preleti so pravilni, a merijo isto slepo pego: vsak
-premakne <b>en</b> gumb, ostale pa pusti pri natanko tej kombinaciji, kjer pravilo spi. Tisto
-poročilo to omejitev navaja samo — »Analiza gleda po en parameter naenkrat. Ne vidi, kaj se
-zgodi, če dva premakneš hkrati.« <b>To je prvi primer, kjer je ta omejitev res udarila.</b>
-Sodba o gumbu drži (ni ga vredno nastavljati), sodba o pravilu pa ne sledi iz nje.</p></div>""")
 
     A("<h2>Skupni rezultat: strategija brez dveh odveč pravil</h2>")
     A("""<p>Spodaj je današnja strategija proti tisti brez <code>dist_entry_ok</code> in

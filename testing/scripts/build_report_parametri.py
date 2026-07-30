@@ -357,29 +357,29 @@ rezultat s p = {ex['p_value']:.3f} pojavi tudi takrat, kadar ni ničesar — zat
 
     # ── 4. what I propose ──────────────────────────────────────────────────
     A("<h2>Kaj predlagam</h2>")
-    A(f"""<p><b>1. Vrzimo ven pravila, ki ne delajo.</b> Ločena analiza vsakega vstopnega in
-izstopnega pogoja je pokazala štiri, ki ne prestanejo lastne predpostavke — med njimi
-pravilo, ki se v šestih letih ni sprožilo niti enkrat, in pravilo, ki naj bi zaznavalo
-vrhove, v resnici pa se sproža na začetkih rasti. S tem pade
-{len(D['params'])} številk na 6. To je edini ukrep, ki takoj izboljša zanesljivost in
-ničesar ne poslabša.</p>
+    A(f"""<p>Dve stvari, in prva je pomembnejša.</p>
 
-<p><b>2. Nehajmo izbirati eno številko.</b> Namesto ene vrednosti uporabimo tri sosednje
-hkrati. Vrnimo se k prispodobi: namesto da pečemo pri 183 stopinjah, pečemo pri 180, 183 in
-186. Na konici tako ni več mogoče sedeti. Pozicija ostane vse-ali-nič — različice o njej
-<b>glasujejo</b>, glej razdelek spodaj. Cena je, da backtest pade z
-{pt['sortino']:.2f} na okoli {[v for v in EN['binary_variants'] if v['name']=='glasovanje: vecina sosedov'][0]['sortino']:.2f}
-— a ta nižja številka je bila resnična že prej, le da je nismo poznali.</p>
+<p><b>Nehajmo navajati {pt['sortino']:.2f}.</b> Ta številka vključuje prednost, ki so jo
+današnje nastavitve dobile s tem, da jih je nekdo izbral, ko je zgodovino že videl.
+Izmerili smo jo in znaša {prem:.2f}. Poštena ocena za naprej je nekje med 0,98 in 1,02.
+Za to ni treba spremeniti niti vrstice kode — samo povedati je treba pravo številko.</p>
 
-<p><b>3. Poglejmo isti trg z drobnejšo uro.</b> Največja težava ni metoda, ampak da ima
-strategija samo <b>{D['mc']['trades']['total']} poslov</b> v šestih letih in pol; stroka
-priporoča vsaj {D['mc']['trades']['guideline']}. Iste podatke, isti bitcoin, isto obdobje,
-a razdeljeno na 4-urne namesto dnevne odseke, da približno šestkrat več meritev. Ni nov trg
-in ni čakanje — samo natančnejše branje istega.</p>
+<p><b>Zmanjšajmo število gumbov.</b> Dva parametra sta odveč, ker pravilo, ki ga
+nastavljata, ne naredi ničesar. Trije so mrtvi kot gumbi, čeprav pravilo ostane — te se
+zaklene pri današnji vrednosti in umakne s seznama. Skupaj pade število nastavljivih
+številk s štirinajstih na devet. Rezultat strategije se ob tem ne spremeni za nobeno
+decimalko, kar je tudi ves namen: manj gumbov pomeni manj načinov, kako se lahko
+zmotimo, in prav to število vstopa v izračun tveganja prevelike prilagojenosti.</p>
 
-<p><b>4. Nehajmo nastavljati.</b> Vsak nadaljnji poskus na istih podatkih poveča tveganje, da
-najdemo naključje. Verjetnost, da je izbira najboljše nastavitve zgolj šum, je že zdaj
-<b>{pbo['value']:.0%}</b>.</p>""")
+<p>Glede štirih parametrov na ostri konici je razumna možnost, da namesto ene vrednosti
+uporabimo tri sosednje in pustimo, da o poziciji glasujejo. Pozicija ostane vse-ali-nič.
+Prednost je, da na konici ni več mogoče sedeti. Cena je, da backtest pade in da se padec
+poglobi za tri odstotne točke. Ker je padec edino, kar strategija zares obljublja, ta
+odločitev ni tehnična in je opisana v naslednjem razdelku, ne priporočena tukaj.</p>
+
+<p>Kar ne priporočam: nadaljnjega nastavljanja na istih podatkih. Preizkusov je bilo
+{D['trials_total']} in verjetnost, da je izbira najboljše nastavitve zgolj šum, je
+{pbo['value']:.0%}. Vsak nov poskus jo dvigne.</p>""")
 
     A("<h2>Če delnih pozicij ne želimo</h2>")
     bv = {v["name"]: v for v in EN["binary_variants"]}

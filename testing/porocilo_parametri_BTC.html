@@ -112,29 +112,29 @@ vožnjo.</p>
 <p style="margin-top:9px"><b>Zakaj tudi tega ne imenujemo dokaz.</b> Na teh podatkih je bilo
 opravljenih 137 preizkusov nastavitev. Ko toliko stvari preizkusiš, se en
 rezultat s p = 0.041 pojavi tudi takrat, kadar ni ničesar — zato je to
-<i>najmočnejši znak, ki ga imamo</i>, ne pa dokaz.</p></div><h2>Kaj predlagam</h2><p><b>1. Vrzimo ven pravila, ki ne delajo.</b> Ločena analiza vsakega vstopnega in
-izstopnega pogoja je pokazala štiri, ki ne prestanejo lastne predpostavke — med njimi
-pravilo, ki se v šestih letih ni sprožilo niti enkrat, in pravilo, ki naj bi zaznavalo
-vrhove, v resnici pa se sproža na začetkih rasti. S tem pade
-14 številk na 6. To je edini ukrep, ki takoj izboljša zanesljivost in
-ničesar ne poslabša.</p>
+<i>najmočnejši znak, ki ga imamo</i>, ne pa dokaz.</p></div><h2>Kaj predlagam</h2><p>Dve stvari, in prva je pomembnejša.</p>
 
-<p><b>2. Nehajmo izbirati eno številko.</b> Namesto ene vrednosti uporabimo tri sosednje
-hkrati. Vrnimo se k prispodobi: namesto da pečemo pri 183 stopinjah, pečemo pri 180, 183 in
-186. Na konici tako ni več mogoče sedeti. Pozicija ostane vse-ali-nič — različice o njej
-<b>glasujejo</b>, glej razdelek spodaj. Cena je, da backtest pade z
-1.10 na okoli 0.88
-— a ta nižja številka je bila resnična že prej, le da je nismo poznali.</p>
+<p><b>Nehajmo navajati 1.10.</b> Ta številka vključuje prednost, ki so jo
+današnje nastavitve dobile s tem, da jih je nekdo izbral, ko je zgodovino že videl.
+Izmerili smo jo in znaša 0.28. Poštena ocena za naprej je nekje med 0,98 in 1,02.
+Za to ni treba spremeniti niti vrstice kode — samo povedati je treba pravo številko.</p>
 
-<p><b>3. Poglejmo isti trg z drobnejšo uro.</b> Največja težava ni metoda, ampak da ima
-strategija samo <b>17 poslov</b> v šestih letih in pol; stroka
-priporoča vsaj 100. Iste podatke, isti bitcoin, isto obdobje,
-a razdeljeno na 4-urne namesto dnevne odseke, da približno šestkrat več meritev. Ni nov trg
-in ni čakanje — samo natančnejše branje istega.</p>
+<p><b>Zmanjšajmo število gumbov.</b> Dva parametra sta odveč, ker pravilo, ki ga
+nastavljata, ne naredi ničesar. Trije so mrtvi kot gumbi, čeprav pravilo ostane — te se
+zaklene pri današnji vrednosti in umakne s seznama. Skupaj pade število nastavljivih
+številk s štirinajstih na devet. Rezultat strategije se ob tem ne spremeni za nobeno
+decimalko, kar je tudi ves namen: manj gumbov pomeni manj načinov, kako se lahko
+zmotimo, in prav to število vstopa v izračun tveganja prevelike prilagojenosti.</p>
 
-<p><b>4. Nehajmo nastavljati.</b> Vsak nadaljnji poskus na istih podatkih poveča tveganje, da
-najdemo naključje. Verjetnost, da je izbira najboljše nastavitve zgolj šum, je že zdaj
-<b>69%</b>.</p><h2>Če delnih pozicij ne želimo</h2><p>Povprečenje 81 različic da <b>delno pozicijo</b> — na primer 62 %
+<p>Glede štirih parametrov na ostri konici je razumna možnost, da namesto ene vrednosti
+uporabimo tri sosednje in pustimo, da o poziciji glasujejo. Pozicija ostane vse-ali-nič.
+Prednost je, da na konici ni več mogoče sedeti. Cena je, da backtest pade in da se padec
+poglobi za tri odstotne točke. Ker je padec edino, kar strategija zares obljublja, ta
+odločitev ni tehnična in je opisana v naslednjem razdelku, ne priporočena tukaj.</p>
+
+<p>Kar ne priporočam: nadaljnjega nastavljanja na istih podatkih. Preizkusov je bilo
+137 in verjetnost, da je izbira najboljše nastavitve zgolj šum, je
+69%. Vsak nov poskus jo dvigne.</p><h2>Če delnih pozicij ne želimo</h2><p>Povprečenje 81 različic da <b>delno pozicijo</b> — na primer 62 %
 v bitcoinu namesto vse ali nič. Če produkt tega ne podpira ali tega preprosto nočemo, je
 rešitev preprosta: <b>naj različice glasujejo.</b> V poziciji smo, kadar je zanjo dovolj
 velik del soseske. Rezultat je spet vse-ali-nič, ohrani pa se tisto, zaradi česar smo
