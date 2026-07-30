@@ -211,7 +211,7 @@ def main():
 
     # ── robust single values ────────────────────────────────────────────────
     print("\nČE OSTANEMO PRI ENI VREDNOSTI — vrh proti sredini ravnine:")
-    rob = {}
+    rob: dict = {}
     for k, (xs, ys) in SWEEPS.items():
         ys = np.array(ys, float)
         i_def = xs.index(DEFAULTS[k])
@@ -244,6 +244,44 @@ def main():
            "main_effects": main_eff, "interactions": inter,
            "robust_values": rob,
            "nboot": NBOOT, "block": BLOCK, "seed": SEED}
+    # ── binary variants, for when fractional positions are not an option ────
+    # The point of averaging is to stop standing on one spot in parameter space.
+    # That survives a majority vote; only the fractional exposure is lost.
+    print("\nBINARNE RAZLIČICE — ce delne pozicije niso mogoce")
+    ens_frac = ens_pos.to_numpy()
+    variants = []
+
+    def add(name, pos_arr, note):
+        pos = pd.Series(pos_arr, index=win)
+        m, _ = metrics(pos, ret)
+        n_tr = int((np.diff(pos.to_numpy(), prepend=pos.to_numpy()[0]) > 0).sum())
+        variants.append({"name": name, "note": note, "binary": bool(
+            set(np.unique(pos_arr)) <= {0.0, 1.0}), "trades": n_tr, **m})
+        print(f"  {name:34} Sortino {m['sortino']:.3f}  MaxDD {m['maxdd']:6.1f} %  "
+              f"promet {m['turnover']:5.1f}  poslov {n_tr:3d}  "
+              f"izpostavljenost {m['expo']:.1f} %")
+
+    add("danes: ena tocka", P[dflt].to_numpy(),
+        "privzete vrednosti, vse-ali-nic")
+    add("ansambel, zvezna pozicija", ens_frac,
+        "povprecje 81 sosedov; zahteva delne pozicije")
+    for thr, lab in ((1 / 3, "vec kot tretjina"), (0.5, "vecina"), (2 / 3, "dve tretjini")):
+        add(f"glasovanje: {lab} sosedov", (ens_frac > thr - 1e-9).astype(float),
+            f"vse-ali-nic; v poziciji, ko je zanjo {lab} od 81 razlicic")
+    rob_kw = {k: rob[k]["robust"] for k in GRID}
+    rob_pos = member_position(raw, **rob_kw).reindex(win)
+    add("sredina ravnine, ena tocka",
+        rob_pos.to_numpy(),
+        "vse-ali-nic; " + ", ".join(f"{k}={v}" for k, v in rob_kw.items()))
+
+    out["binary_variants"] = variants
+    out["robust_config"] = rob_kw
+    best_bin = max((v for v in variants if v["binary"] and "glasovanje" in v["name"]),
+                   key=lambda v: v["sortino"])
+    out["recommended_binary"] = best_bin["name"]
+    print(f"  -> najboljsa binarna razlicica: {best_bin['name']} "
+          f"(Sortino {best_bin['sortino']:.3f}, MaxDD {best_bin['maxdd']:.1f} %)")
+
     OUT.write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
     print(f"\nJSON -> {OUT}")
     return out

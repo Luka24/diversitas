@@ -298,10 +298,11 @@ vrhove, v resnici pa se sproža na začetkih rasti. S tem pade
 ničesar ne poslabša.</p>
 
 <p><b>2. Nehajmo izbirati eno številko.</b> Namesto ene vrednosti uporabimo tri sosednje
-hkrati in povprečimo. Vrnimo se k prispodobi: namesto da pečemo pri 183 stopinjah, pečemo pri
-180, 183 in 186 in vzamemo povprečje. Na konici tako ni več mogoče sedeti. Cena je, da
-backtest pade na {en['sortino']:.2f} — a ta številka je bila že prej resnična, le da je
-nismo poznali.</p>
+hkrati. Vrnimo se k prispodobi: namesto da pečemo pri 183 stopinjah, pečemo pri 180, 183 in
+186. Na konici tako ni več mogoče sedeti. Pozicija ostane vse-ali-nič — različice o njej
+<b>glasujejo</b>, glej razdelek spodaj. Cena je, da backtest pade z
+{pt['sortino']:.2f} na okoli {[v for v in EN['binary_variants'] if v['name']=='glasovanje: vecina sosedov'][0]['sortino']:.2f}
+— a ta nižja številka je bila resnična že prej, le da je nismo poznali.</p>
 
 <p><b>3. Poglejmo isti trg z drobnejšo uro.</b> Največja težava ni metoda, ampak da ima
 strategija samo <b>{D['mc']['trades']['total']} poslov</b> v šestih letih in pol; stroka
@@ -313,15 +314,65 @@ in ni čakanje — samo natančnejše branje istega.</p>
 najdemo naključje. Verjetnost, da je izbira najboljše nastavitve zgolj šum, je že zdaj
 <b>{pbo['value']:.0%}</b>.</p>""")
 
+    A("<h2>Če delnih pozicij ne želimo</h2>")
+    bv = {v["name"]: v for v in EN["binary_variants"]}
+    A(f"""<p>Povprečenje {EN['members']} različic da <b>delno pozicijo</b> — na primer 62 %
+v bitcoinu namesto vse ali nič. Če produkt tega ne podpira ali tega preprosto nočemo, je
+rešitev preprosta: <b>naj različice glasujejo.</b> V poziciji smo, kadar je zanjo dovolj
+velik del soseske. Rezultat je spet vse-ali-nič, ohrani pa se tisto, zaradi česar smo
+povprečili — <b>ne stojimo več na eni sami točki.</b></p>""")
+    A('<div class="fig"><table>'
+      '<tr><th>različica</th><th>pozicija</th><th>Sortino</th><th>največji padec</th>'
+      '<th>promet</th><th>poslov</th></tr>')
+    for v in EN["binary_variants"]:
+        binlab = ("<b style='color:var(--good)'>vse ali nič</b>" if v["binary"]
+                  else "<span style='color:var(--crit)'>delna</span>")
+        hl = ' style="background:var(--band)"' if v["name"] == "glasovanje: vecina sosedov" else ""
+        A(f'<tr{hl}><td>{v["name"].replace("vecina", "večina").replace("vec kot", "več kot")}'
+          f'<br><span style="font-size:11.5px;color:var(--muted)">{v["note"]}</span></td>'
+          f'<td>{binlab}</td><td class="n">{v["sortino"]:.3f}</td>'
+          f'<td class="n">{v["maxdd"]:.1f} %</td><td class="n">{v["turnover"]:.1f}</td>'
+          f'<td class="n">{v["trades"]}</td></tr>')
+    A("</table></div>")
+
+    maj = bv["glasovanje: vecina sosedov"]
+    two = bv["glasovanje: dve tretjini sosedov"]
+    pnt = bv["danes: ena tocka"]
+    rb = bv["sredina ravnine, ena tocka"]
+    A(f"""<div class="box good"><p><b>Priporočilo: navadna večina.</b> Pozicija ostane
+vse-ali-nič, število poslov se premakne z {pnt['trades']} na {maj['trades']} in promet s
+{pnt['turnover']:.1f} na {maj['turnover']:.1f} — <b>operativno je to skoraj isto kot
+danes</b>. Sortino je {maj['sortino']:.2f} namesto {pnt['sortino']:.2f}, kar pa ni izguba:
+{pnt['sortino']:.2f} je bila številka, ki je vključevala prednost izbrane točke.</p></div>""")
+
+    A(f"""<div class="box"><p><b>Zakaj ne dvotretjinska večina, ki izgleda bolje.</b>
+Dvotretjinsko glasovanje da {two['sortino']:.2f} namesto {maj['sortino']:.2f}. Vabljivo — a
+prag »dve tretjini« smo izbrali <b>potem, ko smo videli te številke</b>. To je natanko ista
+napaka, ki jo skušamo odpraviti, le eno nadstropje višje. <b>Navadna večina je edini prag, ki
+ga ni treba izbrati</b>: je očitna vrednost, določena vnaprej.</p></div>""")
+
+    rc = EN["robust_config"]
+    A(f"""<p><b>Še preprostejša možnost, če je tudi glasovanje preveč.</b> Obdrži eno samo
+nastavitev, a izberi <b>sredino najširše ravnine namesto najvišje točke</b>:
+{", ".join(f"<code>{k}</code> = {v}" for k, v in rc.items())}. To da Sortino
+{rb['sortino']:.2f} pri enakem prometu kot danes. Pošteno pa je povedati, da to problema
+<b>ne odpravi</b> — še vedno stojimo na eni točki, le na položnejši. Glasovanje je
+načelno boljše, ta možnost pa je boljša od tega, da ne naredimo nič.</p>
+
+<p class="cap">Opozorilo k vsem trem: <b>vse binarne različice imajo globlji največji padec
+kot današnja nastavitev</b> ({pnt['maxdd']:.1f} % proti {maj['maxdd']:.1f} % pri večini).
+To ni slabost glasovanja — je še en obraz iste ugotovitve, da je današnja točka polepšana
+na obeh merilih hkrati.</p>""")
+
     A("<h2>Kaj bi se konkretno spremenilo</h2>")
     A(f"""<div class="fig"><table>
 <tr><th>kaj</th><th>danes</th><th>po predlogu</th></tr>
 <tr><td>številk, ki jih je mogoče nastavljati</td><td class="n">{len(D['params'])}</td>
     <td class="n"><b>6</b></td></tr>
 <tr><td>pravil za izstop iz pozicije</td><td class="n">3</td><td class="n"><b>1</b></td></tr>
-<tr><td>pozicija</td><td>vse ali nič</td><td><b>zvezno med 0 in 100 %</b></td></tr>
+<tr><td>pozicija</td><td>vse ali nič</td><td><b>vse ali nič</b> — glasovanje 81 različic</td></tr>
 <tr><td>Sortino, ki ga navajamo</td><td class="n">{pt['sortino']:.2f}</td>
-    <td class="n"><b>{en['sortino']:.2f}</b></td></tr>
+    <td class="n"><b>{[v for v in EN['binary_variants'] if v['name']=='glasovanje: vecina sosedov'][0]['sortino']:.2f}</b></td></tr>
 <tr><td>poslov v vzorcu</td><td class="n">{D['mc']['trades']['total']}</td>
     <td class="n">11 <span style="color:var(--muted);font-size:12px">(manj, ker odpade
     pravilo, ki jih je ustvarjalo brez koristi)</span></td></tr>

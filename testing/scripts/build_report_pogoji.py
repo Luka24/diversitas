@@ -291,109 +291,39 @@ razpon. To ni napaka grafa — nasprotno, ožja črta bi bila laž.</p>
     A("<h2>Izstopni pogoji</h2>")
     A('<div class="grid">' + "".join(card(c) for c in exit_) + "</div>")
 
-    A("<h2>Blow-off: kaj v resnici počne</h2>")
     bx = EX["blowoff_vs_extended"]
-    A(f"""<p>Blow-off je edini izstop, ki se sproži <b>navzgor</b> — ob evforiji, ne ob
-padcu. Ker se posvetuje le, kadar je cena že daleč nad trackline, ga merimo proti prav tem
-dnevom: <b>{bx['n_extended']} dni</b>, ko je bila cena več kot 25 % nad trackline, od katerih
-se jih <b>{bx['n_fire']}</b> sproži. Vprašanje je ozko: <i>ali RSI nad 80 doda karkoli k
-temu, da je cena že raztegnjena?</i> Zastavili smo ga v dveh korakih.</p>""")
-
-    A("<h3 style='font-size:14.5px;margin:24px 0 8px'>Prvo vprašanje: ali zaznava vrhove?</h3>")
-    A(f'<p class="cap">Vseh {b_["n_fire"]} sprožitev, razvrščenih po tem, kaj je sledilo v '
-      f'naslednjih 60 dneh. Če pravilo zaznava vrhove, morajo pristati levo.</p>')
-    A('<div class="fig">' + blowoff_chart(b_) + "</div>")
-    A(f"""<div class="note"><p><b>Ne.</b> Mediana sprožitve pristane na
-<b>{b_['median_percentile_of_fwd60']}. percentilu</b> nadaljnjega 60-dnevnega donosa;
-{b_['share_in_best_quartile']} % sprožitev je v najboljši četrtini, {b_['share_in_worst_quartile']} %
-v najslabši. Kot napovednik vrha pravilo <b>ne deluje</b>.</p></div>""")
-
-    A("<h3 style='font-size:14.5px;margin:24px 0 8px'>Drugo vprašanje: ali torej ne dela "
-      "ničesar?</h3>")
-    A('<p class="cap">Vrh in nemir nista isto. Zato isto sprožitev izmerimo še proti '
-      'drugim raztegnjenim dnevom, in to na obeh merilih — donosu in globini padca.</p>')
-    A('<div class="grid">')
-    for lab, title, hint in (
-        ("donos", "Nadaljnji donos", "za izstopno pravilo je pravi predznak <b>negativen</b>"),
-        ("maxdd", "Najgloblji vmesni padec",
-         "bolj negativno = po sprožitvi sledi hujši padec, kar je <b>razlog za izstop</b>")):
-        rows = [(f"{h} dni", v["diff"], v["ci"], v["sig"])
-                for h in ES["horizons"]
-                if (v := bx["m"][lab][str(h)]) and not v.get("too_few")]
-        A(f'<div class="card"><h3>{title}</h3><p class="d">{hint}</p>{ci_chart(rows)}</div>')
-    A("</div>")
-    d20 = bx["m"]["donos"]["20"]
-    dd5 = bx["m"]["maxdd"]["5"]
-    A(f"""<div class="note" style="border-left-color:var(--warn)">
-<p><b>Da, dela — le nekaj drugega, kot je bilo mišljeno.</b></p>
-<ul style="margin:8px 0 0"><li>na <b>20 dni</b> mu sledi donos <b>{d20['diff']:+.1f} o. t.</b>
-slabši kot drugim raztegnjenim dnevom ({d20['mean_true']:+.1f} % proti
-{d20['mean_false']:+.1f} %) — prava smer za izstopno pravilo;</li>
-<li>na <b>5 dni</b> mu sledi <b>značilno globlji</b> vmesni padec
-({dd5['diff']:+.2f} o. t., razpon [{dd5['ci'][0]:+.2f}, {dd5['ci'][1]:+.2f}]).</li></ul>
-</div>""")
-
     fired = EX["blowoff_exits"]
     fs = EX.get("blowoff_exits_summary", {})
-    A("<h3 style='font-size:14.5px;margin:24px 0 8px'>Preverba na dejanskih izstopih</h3>")
-    A(f'<p class="cap">Vseh {len(fired)} izstopov, ki jih je blow-off res povzročil. Osem '
-      f'opazovanj samo zase ničesar ne dokaže — povedo pa, ali agregat govori resnico.</p>')
-    A('<div class="fig"><table><tr><th>datum</th><th>% nad trackline</th><th>RSI</th>'
-      '<th>cena čez 20 dni</th><th>cena čez 60 dni</th>'
-      '<th>najgloblji padec v 60 dneh</th></tr>')
-    for r in fired:
-        c20 = "var(--crit)" if (r["ret20"] or 0) < 0 else "var(--ink2)"
-        c60 = "var(--crit)" if (r["ret60"] or 0) < 0 else "var(--ink2)"
-        A(f'<tr><td>{r["date"]}</td><td>{r["dist_pct"]:.0f} %</td><td>{r["rsi"]:.0f}</td>'
-          f'<td style="color:{c20}">{r["ret20"]:+.1f} %</td>'
-          f'<td style="color:{c60}">{r["ret60"]:+.1f} %</td>'
-          f'<td style="color:var(--crit)">{r["dd60"]:+.1f} %</td></tr>')
-    A("</table></div>")
-    A(f"""<div class="note" style="border-left-color:var(--good)">
-<p><b>Sodba: blow-off ni detektor vrhov, ampak detektor turbulence — in to je tisto, kar potrebujemo.</b></p>
-<p style="margin-top:8px">Cena je v 60 dneh padla po <b>{fs.get('n_price_fell_60d','?')} od
-{fs.get('n','?')}</b> izstopov, torej vrha res ne zna napovedati. Ampak po <b>vsakem</b> od
-{len(fired)} izstopov je v naslednjih 60 dneh sledil padec med 13 in 28 % (mediana
-{fs.get('median_dd60','?')} %). Pravilo zanesljivo izstopi pred nemirom, tudi kadar se cena
-na koncu pobere.</p>
-<p style="margin-top:8px">Celoten backtest to potrdi z zadnje strani: <b>izklop blow-offa
-dvigne Sortino za {abl['brez_blowoff']['d_sortino']:+.2f}, a poglobi največji padec za
-{abs(abl['brez_blowoff']['d_maxdd']):.1f} odstotne točke</b> ({base['maxdd']:.1f} % &rarr;
-{abl['brez_blowoff']['maxdd']:.1f} %). Pravilo stane donos in kupi mirnejšo vožnjo — natanko
-posel, ki ga produkt obljublja. <b>Obdržati.</b></p></div>""")
-
-    A("<h2>Vol-shock: pravilo, ki se ne sproži</h2>")
+    d20 = bx["m"]["donos"]["20"]
+    dd5 = bx["m"]["maxdd"]["5"]
     vsw = EX["vol_shock_threshold_sweep"]
     va = EX["vol_shock_actionable"]
-    A(f"""<p>Vol-shock je vezan na <code>below_tl</code>, zato je merjen proti drugim dnevom
-pod trackline. Trije neodvisni pogledi dajo isti odgovor.</p>
-<ul class="cap"><li>Od {base['trades']} izstopov strategije jih je povzročil
-<b>{base['exit_reasons']['vol_shock']}</b>.</li>
-<li>Obstaja <b>{va['n_window']} dni</b>, ko bi lahko deloval — v poziciji smo, cena je pod
-trackline, redni izstop še ni nastopil. Na <b>{va['n_fire_in_window']}</b> od njih se
-sproži.</li>
-<li>Izklop spremeni Sortino za <b>{abl['brez_vol_shock']['d_sortino']:+.3f}</b> in MaxDD za
-<b>{abl['brez_vol_shock']['d_maxdd']:+.1f} o. t.</b></li></ul>
-<p>Najbolj poveden je zadnji test: kaj se zgodi, če prag <b>znižamo</b> toliko, da se pravilo
-sploh začne sprožati?</p>""")
-    A('<div class="fig"><table><tr><th>množitelj praga</th><th>sprožitev</th>'
-      '<th>izstopov</th><th>Sortino</th><th>največji padec</th></tr>')
-    for r in vsw:
-        if r["mul"] > 100:
-            lab = "izklopljen"
-        elif abs(r["mul"] - 1.5) < 1e-9:
-            lab = "1,5 &larr; danes"
-        else:
-            lab = f'{r["mul"]:g}'.replace(".", ",")
-        A(f'<tr><td>{lab}</td><td>{r["fires"]}</td><td>{r["exits"]}</td>'
-          f'<td>{r["sortino"]:.3f}</td><td>{r["maxdd"]:.1f} %</td></tr>')
-    A("</table></div>")
-    A(f"""<div class="note"><p>Pri današnji nastavitvi se pravilo sproži
-{vsw[4]['fires']}-krat, a nikoli prvo — redni izstop ga vedno prehiti, zato je rezultat
-enak izklopu do tretje decimalke. Ko prag znižamo toliko, da <b>res začne izstopati</b>, se
-poslabša vse: pri množitelju 1,0 Sortino pade na {vsw[1]['sortino']:.3f} in padec se poglobi
-na {vsw[1]['maxdd']:.1f} %, pri 0,8 pa na {vsw[0]['sortino']:.3f} in {vsw[0]['maxdd']:.1f} %.
-<b>Pravilo ni le nedejavno — kadar je prisiljeno delovati, škoduje.</b></p></div>""")
+
+    A("<h2>Izstopni pogoji podrobneje</h2>")
+    A(f"""<p><b>Blow-off ni detektor vrhov, ampak detektor nemira — in to je tisto, kar
+potrebujemo.</b> Vrha ne zna napovedati: mediana sprožitve pristane na
+{b_['median_percentile_of_fwd60']}. percentilu nadaljnjega 60-dnevnega donosa, cena pa je v
+60 dneh padla le po {fs.get('n_price_fell_60d','?')} od {fs.get('n','?')} izstopov. Zato pa
+po <b>vsakem</b> od {len(fired)} izstopov sledi padec med 13 in 28 % (mediana
+{fs.get('median_dd60','?')} %), in proti drugim enako raztegnjenim dnevom mu na 20 dni sledi
+donos <b>{d20['diff']:+.1f} o. t.</b> slabši, na 5 dni pa <b>značilno globlji</b> vmesni
+padec ({dd5['diff']:+.2f} o. t., razpon [{dd5['ci'][0]:+.2f}, {dd5['ci'][1]:+.2f}]). Backtest
+to potrdi z zadnje strani: izklop dvigne Sortino za {abl['brez_blowoff']['d_sortino']:+.2f}, a
+poglobi največji padec za {abs(abl['brez_blowoff']['d_maxdd']):.1f} odstotne točke
+({base['maxdd']:.1f} % &rarr; {abl['brez_blowoff']['maxdd']:.1f} %). Stane donos, kupi
+mirnejšo vožnjo — natanko posel, ki ga produkt obljublja. <b>Obdržati.</b></p>
+
+<p><b>Vol-shock se ne sproži.</b> Od {base['trades']} izstopov strategije jih je povzročil
+{base['exit_reasons']['vol_shock']}. Obstaja {va['n_window']} dni, ko bi lahko deloval — v
+poziciji smo, cena je pod trackline, redni izstop še ni nastopil — in na
+{va['n_fire_in_window']} od njih se sproži, ker ga izstop na <code>below_tl</code> vedno
+prehiti; izklop spremeni Sortino za {abl['brez_vol_shock']['d_sortino']:+.3f} in MaxDD za
+{abl['brez_vol_shock']['d_maxdd']:+.1f} o. t. Najbolj poveden je zadnji test: ko prag
+znižamo toliko, da <b>res</b> začne izstopati, se poslabša vse — pri množitelju 1,0 Sortino
+pade z {vsw[6]['sortino']:.3f} na {vsw[1]['sortino']:.3f} in padec se poglobi z
+{vsw[6]['maxdd']:.1f} % na {vsw[1]['maxdd']:.1f} %, pri 0,8 pa na {vsw[0]['sortino']:.3f} in
+{vsw[0]['maxdd']:.1f} %. Ni le nedejaven — kadar je prisiljen delovati, škoduje.
+<b>Odstraniti.</b></p>""")
 
     A("<h2>Povzetek</h2>")
     A('<div class="fig"><table><tr><th>pogoj</th><th>kaj dela</th><th>sodba</th></tr>')
