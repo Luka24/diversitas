@@ -76,6 +76,135 @@
 
   <div class="grid" id="grid"></div>
 
+<!-- KONICE:START -->
+  <h2>Kaj narediti z ostrimi konicami — izmerjeno</h2>
+
+  <p>Zgornji zemljevid pove, da so stirje parametri na ostri konici in trije od njih
+  natanko na privzeti vrednosti. To je diagnoza, ne recept. Tu je meritev, koliko to
+  dejansko stane, in kaj z njo narediti.</p>
+
+  <p><b>Poskus.</b> Vzeli smo stiri konicaste parametre in vsakega pognali pri treh
+  sosednjih vrednostih — <code>ma_long_len</code> 150/200/250, <code>confirm_bars</code>
+  2/3/4, <code>reentry_hold</code> 10/15/20, <code>exit_grace_bars</code> 2/3/4. To je
+  81 kombinacij. Vsako smo pognali posebej in nato <b>povprecili pozicijo</b>,
+  ne rezultata. Meritev je na oknu 2021-07-01 do 2026-06-30
+  (1826 dni), na poenostavljeni strategiji (blow-off in vol-shock izklopljena),
+  z 0,30 % na stran.</p>
+
+  <div class="fig"><svg viewBox="0 0 860 210" role="img"><line x1="34" y1="164" x2="844" y2="164" stroke="var(--axis)"/><rect x="71.8" y="151.0" width="34.8" height="13.0" fill="var(--s1)" opacity=".45" rx="2"/><rect x="108.6" y="138.0" width="34.8" height="26.0" fill="var(--s1)" opacity=".45" rx="2"/><rect x="145.5" y="151.0" width="34.8" height="13.0" fill="var(--s1)" opacity=".45" rx="2"/><rect x="182.3" y="34.0" width="34.8" height="130.0" fill="var(--s1)" opacity=".45" rx="2"/><rect x="219.1" y="34.0" width="34.8" height="130.0" fill="var(--s1)" opacity=".45" rx="2"/><rect x="255.9" y="73.0" width="34.8" height="91.0" fill="var(--s1)" opacity=".45" rx="2"/><rect x="292.7" y="86.0" width="34.8" height="78.0" fill="var(--s1)" opacity=".45" rx="2"/><rect x="329.5" y="73.0" width="34.8" height="91.0" fill="var(--s1)" opacity=".45" rx="2"/><rect x="366.4" y="112.0" width="34.8" height="52.0" fill="var(--s1)" opacity=".45" rx="2"/><rect x="403.2" y="47.0" width="34.8" height="117.0" fill="var(--s1)" opacity=".45" rx="2"/><rect x="440.0" y="86.0" width="34.8" height="78.0" fill="var(--s1)" opacity=".45" rx="2"/><rect x="476.8" y="99.0" width="34.8" height="65.0" fill="var(--s1)" opacity=".45" rx="2"/><rect x="513.6" y="112.0" width="34.8" height="52.0" fill="var(--s1)" opacity=".45" rx="2"/><rect x="550.5" y="138.0" width="34.8" height="26.0" fill="var(--s1)" opacity=".45" rx="2"/><rect x="587.3" y="138.0" width="34.8" height="26.0" fill="var(--s1)" opacity=".45" rx="2"/><rect x="624.1" y="125.0" width="34.8" height="39.0" fill="var(--s1)" opacity=".45" rx="2"/><rect x="697.7" y="151.0" width="34.8" height="13.0" fill="var(--s1)" opacity=".45" rx="2"/><rect x="771.4" y="151.0" width="34.8" height="13.0" fill="var(--s1)" opacity=".45" rx="2"/><text x="34.0" y="180" text-anchor="middle">0.47</text><text x="236.5" y="180" text-anchor="middle">0.68</text><text x="439.0" y="180" text-anchor="middle">0.88</text><text x="641.5" y="180" text-anchor="middle">1.08</text><text x="844.0" y="180" text-anchor="middle">1.29</text><line x1="379.7" y1="28" x2="379.7" y2="164" stroke="var(--s2)" stroke-width="2"/><text x="379.7" y="24" text-anchor="middle" style="fill:var(--s2);font-weight:700">ansambel 81 clanov · 0.82</text><line x1="657.6" y1="28" x2="657.6" y2="164" stroke="var(--crit)" stroke-width="2"/><text x="657.6" y="9" text-anchor="middle" style="fill:var(--crit);font-weight:700">privzetki - ena tocka · 1.10</text><text x="34" y="202">Sortino vsakega od 81 sosedov · vodoravno = kako dobra je posamezna nastavitev</text></svg></div>
+
+  <div class="fig" style="border-left:3px solid var(--crit)">
+  <p style="margin:0 0 10px"><b>Rezultat, ki je pomembnejsi od vsega drugega na tej
+  strani.</b></p>
+  <table>
+   <tr><th class="l">merilo</th><th>vrednost</th><th class="l">branje</th></tr>
+   <tr><td class="l">privzetki, ena tocka</td><td>1.099</td>
+       <td class="l">kar kaze backtest danes</td></tr>
+   <tr><td class="l">ansambel 81 sosedov</td><td>0.820</td>
+       <td class="l">kar ostane, ko nehamo izbirati stevilko</td></tr>
+   <tr><td class="l"><b>premija konice</b></td>
+       <td><b>+0.279</b></td>
+       <td class="l">95 % razpon [+0.077, +0.546] —
+       <b style="color:var(--crit)">ne zajema nicle</b></td></tr>
+   <tr><td class="l">rang privzetkov med sosedi</td>
+       <td><b>77. od 81</b></td>
+       <td class="l">95. percentil</td></tr>
+  </table>
+  <p style="margin:12px 0 0"><b>Kaj to pomeni.</b> Nastavitev, izbrana brez gledanja teh
+  podatkov, bi v povprecju pristala na sredini svoje soseske — priblizno 41. od
+  81. Privzetki so <b>77. od 81</b>. Razlika
+  +0.279 Sortina je statisticno znacilna. To ni sum in ni domneva:
+  <b>privzete vrednosti so bile nastavljene na to zgodovino.</b></p>
+  <p style="margin:10px 0 0">Prakticna posledica: <b>0.82 je stevilka, ki jo
+  je posteno pricakovati naprej, ne 1.10.</b> Razlika je del, ki je prisel
+  iz izbire stevilk.</p>
+  </div>
+
+  <h2>Ali je treba testirati v kombinacijah?</h2>
+
+  <p>Vsi preleti zgoraj premikajo <b>en parameter naenkrat</b>. To je veljavno samo, ce se
+  parametri med seboj ne prepletajo. Na mrezi 81 kombinacij se to da izmeriti:
+  koliko parameter premakne rezultat sam zase, in koliko je njegov ucinek odvisen od
+  drugega.</p>
+
+  <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(330px,1fr))">
+   <div class="card"><h3>Glavni ucinki</h3>
+    <p class="d">koliko parameter premakne Sortino sam zase</p>
+    <table><tr><td class="l"><code>exit_grace_bars</code></td><td>0.206</td></tr><tr><td class="l"><code>ma_long_len</code></td><td>0.176</td></tr><tr><td class="l"><code>confirm_bars</code></td><td>0.138</td></tr><tr><td class="l"><code>reentry_hold</code></td><td>0.084</td></tr></table></div>
+   <div class="card"><h3>Prepletanje</h3>
+    <p class="d">koliko je ucinek enega odvisen od drugega</p>
+    <table><tr><td class="l"><code>ma_long_len</code> × <code>confirm_bars</code></td><td>0.079</td></tr><tr><td class="l"><code>reentry_hold</code> × <code>exit_grace_bars</code></td><td>0.044</td></tr><tr><td class="l"><code>confirm_bars</code> × <code>exit_grace_bars</code></td><td>0.042</td></tr><tr><td class="l"><code>ma_long_len</code> × <code>exit_grace_bars</code></td><td>0.016</td></tr><tr><td class="l"><code>confirm_bars</code> × <code>reentry_hold</code></td><td>0.006</td></tr><tr><td class="l"><code>ma_long_len</code> × <code>reentry_hold</code></td><td>0.001</td></tr></table></div>
+  </div>
+
+  <p>Najvecje prepletanje je <code>ma_long_len</code> × <code>confirm_bars</code> pri
+  0.079, kar je <b>38 %</b> najvecjega glavnega ucinka
+  (0.206). Torej: preleti po en parameter naenkrat so bili <b>priblizno,
+  ne pa povsem veljavni</b>.</p>
+
+  <div class="fig" style="border-left:3px solid var(--warn)">
+  <p style="margin:0"><b>Odgovor je bolj zanimiv od vprasanja.</b> Kombinacije je treba
+  <b>izmeriti</b> — kar smo pravkar naredili — ni pa jih dovoljeno <b>preiskovati za
+  najboljso</b>. Iskanje po stiridimenzionalni mrezi na 17 poslih bi verjetnost prevelike
+  prilagojenosti (PBO, ze zdaj 0,694) samo dvignilo. Pravi odgovor na prepletanje ni
+  boljsa kombinacija, ampak <b>povprecje cez vse kombinacije</b>. Ansambel to naredi po
+  konstrukciji in se izogne izbiri.</p>
+  </div>
+
+  <h2>Konkretno: kaj spremeniti glede na zdaj</h2>
+
+  <div class="fig"><table>
+   <tr><th class="l">parameter</th><th>zdaj</th><th>vrh preleta</th>
+       <th>sredina ravnine</th><th>padec na najslabsega soseda</th><th class="l">opomba</th></tr>
+   <tr><td class="l"><code>ma_long_len</code><br><span style="font-size:11.5px;color:var(--muted)">dolzina rezimske MA</span></td><td>200</td><td>200</td><td>225</td><td style="color:var(--crit)">+0.120</td><td class="l" style="font-size:12.5px">vrh in privzetek sovpadata; sredina ravnine je 225</td></tr><tr><td class="l"><code>confirm_bars</code><br><span style="font-size:11.5px;color:var(--muted)">barov potrditve pred vstopom</span></td><td>3</td><td>2</td><td>1</td><td style="color:var(--crit)">+0.189</td><td class="l" style="font-size:12.5px"><b>privzeta vrednost sploh ni vrh</b> — vrh je pri 2, sredina ravnine pri 1</td></tr><tr><td class="l"><code>reentry_hold</code><br><span style="font-size:11.5px;color:var(--muted)">barov premora pred ponovnim vstopom</span></td><td>15</td><td>15</td><td>15</td><td style="color:var(--crit)">+0.088</td><td class="l" style="font-size:12.5px">vrh, privzetek in sredina ravnine sovpadajo</td></tr><tr><td class="l"><code>exit_grace_bars</code><br><span style="font-size:11.5px;color:var(--muted)">barov potrpezljivosti pred izstopom</span></td><td>3</td><td>3</td><td>4</td><td style="color:var(--crit)">+0.197</td><td class="l" style="font-size:12.5px">vrh in privzetek sovpadata; sredina ravnine je 4</td></tr>
+  </table></div>
+
+  <p>Tri moznosti, po ceni:</p>
+
+  <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(330px,1fr))">
+   <div class="card" style="border-color:var(--good)">
+    <h3>A · Ansambel <span class="badge" style="background:var(--good)">priporoceno</span></h3>
+    <p class="long">Poganjaj vseh 81 kombinacij in povpreci pozicijo. Pozicija
+    postane zvezna med 0 in 1 namesto vse-ali-nic.<br><br>
+    <b>Za:</b> na konici se po konstrukciji ne da vec sedeti. Prehodi so postopni.<br>
+    <b>Proti:</b> backtest pade na 0.82. Promet se rahlo <i>zvisa</i>
+    (16.0 → 17.7), ker se 81 clanov obraca ob
+    razlicnih dnevih. MaxDD se rahlo poslabsa (-39.8 % → -41.8 %).<br>
+    <b>Pogoj:</b> produkt mora podpirati delne pozicije.</p></div>
+
+   <div class="card">
+    <h3>B · Ena vrednost, a sredina ravnine</h3>
+    <p class="long">Ce delne pozicije niso izvedljive: obdrzi eno vrednost, a izberi
+    <b>sredino najsirsega ravnega obmocja</b> namesto najvisje tocke —
+    <code>ma_long_len</code> 225,
+    <code>confirm_bars</code> 1,
+    <code>reentry_hold</code> 15,
+    <code>exit_grace_bars</code> 4.<br><br>
+    <b>Za:</b> nic novega v kodi.<br>
+    <b>Proti:</b> se vedno izbira tocke, le manj obcutljiva. Ne odpravi problema, ga
+    zmanjsa.</p></div>
+
+   <div class="card">
+    <h3>C · Ne spremeni nicesar, popravi pricakovanje</h3>
+    <p class="long">Najmanjsi posteni ukrep: strategijo pusti pri miru, a povsod, kjer se
+    navaja Sortino 1.10, navedi tudi, da je <b>posteno pricakovanje
+    0.82</b>, ker je razlika prisla iz izbire stevilk.<br><br>
+    <b>Za:</b> nic dela, takoj.<br>
+    <b>Proti:</b> strategija ostane obcutljiva; naslednji, ki jo bo nastavljal, bo ponovil
+    isto napako.</p></div>
+  </div>
+
+  <p><b>Priporocilo: A, s C kot obveznim dodatkom.</b> Tudi ce gremo na ansambel, mora biti
+  0.82 stevilka, ki jo komuniciramo — ne 1.10. In B ni slabsa
+  izbira, ce delne pozicije v produktu niso izvedljive; je pa treba vedeti, da problema ne
+  odpravi.</p>
+
+  <p class="cap"><b>Ena opozorilna podrobnost.</b> Pri <code>confirm_bars</code> privzeta
+  vrednost 3 sploh <i>ni</i> vrh — vrh je pri 2, sredina ravnine pa pri 1. Ta parameter
+  torej ni bil prilagojen navzgor, ampak sedi na pobocju navzdol. To je edini od stirih, pri
+  katerem bi ze sama sprememba na eno vrednost verjetno pomagala; a ker gre za isto vrsto
+  izbire na istih podatkih, velja isto opozorilo kot za vse ostalo.</p>
+<!-- KONICE:END -->
+
   <h2>Povzetek</h2>
   <div class="fig"><table id="tbl"></table></div>
 
