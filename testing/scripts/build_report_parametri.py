@@ -359,43 +359,36 @@ rezultat s p = {ex['p_value']:.3f} pojavi tudi takrat, kadar ni ničesar — zat
     A("<h2>Kaj predlagam</h2>")
     A(f"""<p>Dve stvari, in prva je pomembnejša.</p>
 
-<p><b>Nehajmo navajati {pt['sortino']:.2f}.</b> Ta številka vključuje prednost, ki so jo
-današnje nastavitve dobile s tem, da jih je nekdo izbral, ko je zgodovino že videl.
-Izmerili smo jo in znaša {prem:.2f}. Poštena ocena za naprej je nekje med 0,98 in 1,02.
-Za to ni treba spremeniti niti vrstice kode — samo povedati je treba pravo številko.</p>
+<p><b>Nehajmo navajati {pt['sortino']:.2f}.</b> V tej številki je prednost, ki so jo današnje
+nastavitve dobile s tem, da jih je nekdo izbral, ko je zgodovino že videl. Izmerili smo jo,
+znaša {prem:.2f}, in poštena ocena za naprej je nekje med 0,98 in 1,02. Za to ni treba
+spremeniti niti vrstice kode.</p>
 
-<p><b>Zmanjšajmo število gumbov.</b> Dva parametra sta odveč, ker pravilo, ki ga
-nastavljata, ne naredi ničesar. Trije so mrtvi kot gumbi, čeprav pravilo ostane — te se
-zaklene pri današnji vrednosti in umakne s seznama. Skupaj pade število nastavljivih
-številk s štirinajstih na devet. Rezultat strategije se ob tem ne spremeni za nobeno
-decimalko, kar je tudi ves namen: manj gumbov pomeni manj načinov, kako se lahko
+<p><b>Zmanjšajmo število gumbov s štirinajstih na devet.</b> Štirje odpadejo skupaj s pravili,
+ki pri naših vrednostih ne naredijo ničesar, eden se zaklene. Rezultat strategije se ob tem ne
+spremeni za nobeno decimalko — to je ves namen. Manj gumbov pomeni manj načinov, kako se lahko
 zmotimo, in prav to število vstopa v izračun tveganja prevelike prilagojenosti.</p>
 
-<p>Glede štirih parametrov na ostri konici je razumna možnost, da namesto ene vrednosti
-uporabimo tri sosednje in pustimo, da o poziciji glasujejo. Pozicija ostane vse-ali-nič.
-Prednost je, da na konici ni več mogoče sedeti. Cena je, da backtest pade in da se padec
-poglobi za tri odstotne točke. Ker je padec edino, kar strategija zares obljublja, ta
-odločitev ni tehnična in je opisana v naslednjem razdelku, ne priporočena tukaj.</p>
-
-<p>Kar ne priporočam: nadaljnjega nastavljanja na istih podatkih. Preizkusov je bilo
-{D['trials_total']} in verjetnost, da je izbira najboljše nastavitve zgolj šum, je
+<p>Kar odsvetujem: nadaljnje nastavljanje na istih podatkih. Preizkusov je bilo
+{D['trials_total']}, verjetnost, da je izbira najboljše nastavitve zgolj šum, pa je
 {pbo['value']:.0%}. Vsak nov poskus jo dvigne.</p>""")
 
-    A("<h2>Če delnih pozicij ne želimo</h2>")
+    A("<h2>Ali naj namesto ene vrednosti povprečimo sosednje?</h2>")
     bv = {v["name"]: v for v in EN["binary_variants"]}
-    A(f"""<p>Povprečenje {EN['members']} različic da <b>delno pozicijo</b> — na primer 62 %
-v bitcoinu namesto vse ali nič. Če produkt tega ne podpira ali tega preprosto nočemo, je
-rešitev preprosta: <b>naj različice glasujejo.</b> V poziciji smo, kadar je zanjo dovolj
-velik del soseske. Rezultat je spet vse-ali-nič, ohrani pa se tisto, zaradi česar smo
-povprečili — <b>ne stojimo več na eni sami točki.</b></p>""")
+    A(f"""<p>Če na konici ne moremo sedeti, se je ponujala očitna rešitev: strategijo pognati
+pri {EN['members']} sosednjih nastavitvah hkrati in pustiti, da o poziciji glasujejo. Pozicija
+bi ostala vse-ali-nič, izbira ene same številke pa bi odpadla.</p>
+<p>Preizkusili smo več pragov glasovanja in za primerjavo še možnost, da obdržimo eno vrednost,
+a izberemo sredino najširše ravnine namesto vrha.</p>""")
     A('<div class="fig"><table>'
-      '<tr><th>različica</th><th>pozicija</th><th>Sortino</th><th>največji padec</th>'
-      '<th>promet</th><th>poslov</th></tr>')
+      '<tr><th>različica</th><th>pozicija</th><th class="n">Sortino</th>'
+      '<th class="n">največji padec</th><th class="n">promet</th>'
+      '<th class="n">poslov</th></tr>')
     for v in EN["binary_variants"]:
-        binlab = ("<b style='color:var(--good)'>vse ali nič</b>" if v["binary"]
-                  else "<span style='color:var(--crit)'>delna</span>")
-        hl = ' style="background:var(--band)"' if v["name"] == "glasovanje: vecina sosedov" else ""
-        A(f'<tr{hl}><td>{v["name"].replace("vecina", "večina").replace("vec kot", "več kot")}'
+        binlab = ("vse ali nič" if v["binary"] else
+                  "<span style='color:var(--crit)'>delna</span>")
+        hl = ' style="background:var(--band)"' if v["name"] == "danes: ena tocka" else ""
+        A(f'<tr{hl}><td>{v["name"].replace("vecina", "večina").replace("vec kot", "več kot").replace("tocka", "točka").replace("nic", "nič")}'
           f'<br><span style="font-size:11.5px;color:var(--muted)">{v["note"]}</span></td>'
           f'<td>{binlab}</td><td class="n">{v["sortino"]:.3f}</td>'
           f'<td class="n">{v["maxdd"]:.1f} %</td><td class="n">{v["turnover"]:.1f}</td>'
@@ -405,12 +398,12 @@ povprečili — <b>ne stojimo več na eni sami točki.</b></p>""")
     maj = bv["glasovanje: vecina sosedov"]
     two = bv["glasovanje: dve tretjini sosedov"]
     pnt = bv["danes: ena tocka"]
-    rb = bv["sredina ravnine, ena tocka"]
+    rb  = bv["sredina ravnine, ena tocka"]
 
-    A("<h3 class='s'>Katero od teh izbrati — preverjeno na dveh urah</h3>")
+    A("<h3 class='s'>Preverjeno še na drugi uri</h3>")
     A(f"""<p>Razlika med najboljšimi različicami je desetinka Sortina, odločitev pa sloni na
-{pnt['trades']} do {maj['trades']} poslih. Na tolikšnem vzorcu desetinke ni mogoče izmeriti.
-Zato smo vse skupaj pognali <b>še enkrat na 4-urnih barih</b> istega bitcoina v istem obdobju,
+{pnt['trades']} do {maj['trades']} poslih — na tolikšnem vzorcu desetinke ni mogoče izmeriti.
+Zato smo vse skupaj pognali še enkrat na 4-urnih barih istega bitcoina v istem obdobju,
 z vsemi dolžinami pomnoženimi s 6, da ostane ekonomski horizont enak. Če se vrstni red ob
 spremembi ure ohrani, je resničen; če se premeša, je bil šum.</p>""")
     d1, h4 = IN["clocks"]
@@ -441,47 +434,24 @@ spremembi ure ohrani, je resničen; če se premeša, je bil šum.</p>""")
           f'<td style="font-size:12.5px;color:{col}">{j}</td></tr>')
     A("</table></div>")
 
-    A(f"""<div class="box bad"><p><b>Dvotretjinsko glasovanje je padlo.</b> Na dnevnih barih je
-bilo drugo najboljše ({two['sortino']:.2f}), na 4-urnih pade na četrto
-({h4['variants']['glasovanje: dve tretjini']['sortino']:.2f}). Prag »dve tretjini« smo izbrali
-potem, ko smo videli dnevne številke, in ob spremembi ure se je izbira razblinila. <b>To je
-tisto, kar smo iskali: dokaz, da je bila ena od možnosti prilagojena podatkom.</b></p></div>""")
+    A(f"""<p>Dvotretjinsko glasovanje je bilo na dnevnih barih drugo najboljše
+({two['sortino']:.2f}), na 4-urnih pa pade na četrto
+({h4['variants']['glasovanje: dve tretjini']['sortino']:.2f}). Ta prag smo izbrali potem, ko
+smo videli dnevne številke, in ob spremembi ure se je prednost razblinila. Tak izid je bil
+namen preizkusa — pokazati, katera od možnosti je bila prilagojena podatkom.</p>""")
 
     g1 = d1["plateau_minus_majority"]
     g6 = h4["plateau_minus_majority"]
-    A(f"""<div class="box good"><p><b>Priporočilo: glasovanje z navadno večino.</b></p>
-<p style="margin-top:8px">Sredina ravnine ima na obeh urah nekoliko višji Sortino, a razlika
-<b>ni ločljiva od šuma na nobeni</b> ({g1['diff']:+.2f}, razpon
-[{g1['ci'][0]:+.2f}, {g1['ci'][1]:+.2f}] dnevno; {g6['diff']:+.2f}, razpon
-[{g6['ci'][0]:+.2f}, {g6['ci'][1]:+.2f}] na 4h). Ko dveh možnosti ni mogoče ločiti po
-rezultatu, se odloči po načelu — in tu je načelo jasno: <b>vrednosti »sredine ravnine« so bile
-izbrane z gledanjem teh podatkov</b> (kot najvišje drseče povprečje preleta),
-<b>prag navadne večine pa ne.</b> Je edina številka na tej strani, ki je določena vnaprej.</p>
-<p style="margin-top:8px">Operativno se skoraj nič ne spremeni: pozicija ostane vse-ali-nič,
-poslov {pnt['trades']} &rarr; {maj['trades']}, promet {pnt['turnover']:.1f} &rarr;
-{maj['turnover']:.1f}. Sortino, ki ga navajamo, je {maj['sortino']:.2f} namesto
-{pnt['sortino']:.2f}.</p></div>""")
-
-    A(f"""<div class="box"><p><b>Kaj je test na 4-urnih barih pokazal in česa ni.</b>
-Pokazal je, da ena od možnosti ni zdržala spremembe ure — to je bil njegov namen in ga je
-opravil. <b>Ni pa prinesel več poslov:</b> ker so vse dolžine pomnožene s 6, se strategija
-obnaša v ekonomskem času enako in naredi
-{h4['variants']['glasovanje: vecina']['trades']} poslov namesto
-{d1['variants']['glasovanje: vecina']['trades']}. Drobnejša ura torej <b>ne rešuje
-premajhnega vzorca</b> — rešuje samo vprašanje, ali je rezultat odvisen od tega, kdaj po
-dogovoru konča dan. Odgovor: deloma je, saj današnja nastavitev pade z
-{d1['variants']['ena tocka (privzetki)']['sortino']:.2f} na
-{h4['variants']['ena tocka (privzetki)']['sortino']:.2f}.</p></div>""")
-
-    A(f"""<p class="cap">Opozorilo k vsem različicam: <b>vse imajo globlji največji padec kot
-današnja nastavitev</b> ({pnt['maxdd']:.1f} % proti {maj['maxdd']:.1f} % pri večini). To ni
-slabost glasovanja — je še en obraz iste ugotovitve, da je današnja točka polepšana na obeh
-merilih hkrati.</p>""")
-
+    A(f"""<p>Sredina ravnine ima na obeh urah nekoliko višji Sortino od navadne večine, a
+razlika ni ločljiva od šuma na nobeni: {g1['diff']:+.2f}, razpon
+[{g1['ci'][0]:+.2f}, {g1['ci'][1]:+.2f}] dnevno, in {g6['diff']:+.2f}, razpon
+[{g6['ci'][0]:+.2f}, {g6['ci'][1]:+.2f}] na 4-urnih barih. Če bi se za povprečenje odločili,
+bi bila navadna večina prava izbira — je edini prag, ki ga ni treba izbrati, medtem ko so
+vrednosti sredine ravnine izbrane prav na teh podatkih.</p>""")
 
     d1c, h4c = CV["clocks"]
     m1 = d1c["metrics"]
-    A("<h2>Ali je glasovanje sploh kaj pomagalo? Poglejmo krivuljo</h2>")
+    A("<h2>Kako to izgleda na krivulji</h2>")
     A(f"""<p>Do zdaj smo primerjali številke. Tu sta obe različici na isti sliki, skupaj s
 kupi-in-drži, na navadni osi in v polni ločljivosti — brez logaritma, ki bi skril, koliko
 dobička pride iz enega samega vzpona, in brez redčenja točk, ki bi padec naredilo videti
@@ -522,10 +492,9 @@ rdečo.</b> To ni napaka risanja — največja razlika med krivuljama je <b>toč
 bili dokazano mrtvi: brisanje ne spremeni niti ene decimalke. <b>To je hkrati dokaz, da smo
 brisali pravo stvar, in dokaz, da brisanje ni ničesar pokvarilo.</b></p></div>""")
 
-    A(f"""<div class="box bad"><p><b>Druga ugotovitev, in tu moram biti nedvoumen: glasovanje
-ni izboljšalo nobenega merila.</b></p>
+    A(f"""<div class="box bad"><p><b>Glasovanje ne izboljša nobenega merila.</b></p>
 <table style="margin:9px 0">
-<tr><th>merilo</th><th>danes</th><th>glasovanje</th><th>razlika</th></tr>
+<tr><th>merilo</th><th class="n">danes</th><th class="n">glasovanje</th><th class="n">razlika</th></tr>
 <tr><td>Sortino</td><td class="n">{m1['danes']['sortino']:.3f}</td>
     <td class="n">{m1['glasovanje: vecina']['sortino']:.3f}</td>
     <td class="n" style="color:var(--crit)">{m1['glasovanje: vecina']['sortino']-m1['danes']['sortino']:+.3f}</td></tr>
@@ -536,39 +505,46 @@ ni izboljšalo nobenega merila.</b></p>
     <td class="n">{m1['glasovanje: vecina']['cagr']:.1f} %</td>
     <td class="n" style="color:var(--crit)">{m1['glasovanje: vecina']['cagr']-m1['danes']['cagr']:+.1f} o. t.</td></tr>
 </table>
-<p><b>Slabše na vseh treh, in slabše tudi na 4-urnih barih.</b> Kdor bi gledal samo to tabelo,
-bi glasovanje zavrnil — in imel bi prav, če bi bila številka
-{m1['danes']['sortino']:.2f} resnična.</p></div>""")
+<p>Slabše na vseh treh, in prav tako na 4-urnih barih. Promet zraste s
+{m1['danes']['turnover']:.1f} na {bv['glasovanje: vecina sosedov']['turnover']:.1f}.</p></div>""")
 
-    A(f"""<p><b>Zakaj ga vseeno priporočamo — in kaj to v resnici je.</b> Glasovanje ni
-izboljšava. Je <b>popravek pričakovanja</b>. Izmerili smo, da je današnja nastavitev
-{sum(1 for v in ms['all'] if v < pt['sortino'])}. najboljša od {EN['members']} svojih sosedov
-in da je ta prednost statistično značilna (premija konice {prem:+.2f}, razpon
-[{ci[0]:+.2f}, {ci[1]:+.2f}]). Nastavitev, izbrana brez vpogleda v te podatke, bi pristala
-blizu povprečja soseske. Zato je nižja številka <b>ocena tega, kar se lahko ponovi</b>, višja
-pa vključuje del, ki se ne bo.</p>
+    A(f"""<h3 class="s">Odločitev: povprečenja ne uvedemo</h3>""")
+    A(f"""<p>Argument zanj je bil resničen. Današnje nastavitve so
+{sum(1 for v in ms['all'] if v < pt['sortino'])}. najboljše od {EN['members']} svojih sosedov,
+razlika {prem:+.2f} je značilna, in {pt['sortino']:.2f} torej vsebuje del, ki se ne bo
+ponovil.</p>
 
-<p><b>Ampak pošteno je povedati tudi protiargument.</b> Padec se z glasovanjem <b>poglobi</b>
-({m1['danes']['maxdd']:.1f} % &rarr; {m1['glasovanje: vecina']['maxdd']:.1f} %), plitvejši padec
-pa je edina lastnost, ki jo produkt obljublja. Glasovanje torej žrtvuje nekaj tistega, kar
-prodajamo, da popravi številko, ki je ne prodajamo. V bran mu govori le to, da <b>prednost
-današnje nastavitve pri padcu ni statistično značilna</b> (razpon
-[{EN['ci_d_maxdd'][0]:+.1f}, {EN['ci_d_maxdd'][1]:+.1f}] o. t.), medtem ko je prednost pri
-Sortinu značilna in torej dokazano prilagojena. <b>Odločitev je tesna in je poslovna, ne
-tehnična.</b></p>
+<p>Ampak iz tega ne sledi, da je povprečenje boljša strategija. Če je prednost današnjih
+nastavitev res samo naknadna modrost, potem se naprej ne bo ponovila in njihovo pričakovanje
+pade proti povprečju soseske — kar je natanko tam, kjer je pričakovanje povprečenja. Naprej
+imata torej oboje enako pričakovanje. Povprečenje ne prinese boljšega izida, samo manj laskav
+backtest.</p>
 
-<div class="box"><p><b>Kaj so 4-urni bari res prinesli — in to je poleg ovržene dvotretjinske
-večine drugi konkreten izplen.</b> Dnevni bari ne vidijo padca, ki se zgodi in popravi znotraj
-istega dneva, zato <b>lepšajo največji padec</b>:</p>
-<table style="margin:9px 0"><tr><th>različica</th><th>MaxDD dnevno</th>
-<th>MaxDD 4-urno</th><th>skrito</th></tr>
-{"".join(f'<tr><td>{n}</td><td class="n">{d1c["metrics"][n]["maxdd"]:.1f} %</td>'
+<p>Ker pa hkrati poglobi padec za tri odstotne točke, dvigne promet za polovico in zahteva
+{EN['members']} hkratnih izračunov namesto enega, to ni dobra menjava. Padec je edino, kar
+strategija zares obljublja, in ravno tega poslabša.</p>
+
+<p><b>Namesto tega popravimo številko.</b> Premija konice je dokazana in mora biti nekje
+vračunana. Vračunamo jo v pričakovanje — 0,98 do 1,02 namesto {pt['sortino']:.2f} — in ne v
+strategijo. To je edini pravi odgovor na ugotovitev, da je backtest polepšan, in ne stane
+ničesar.</p>
+
+<p class="cap">Če bi se odločitev kdaj obrnila: uporabi navadno večino, ne dvotretjinske, in
+takrat <code>vol_shock</code> ne briši.</p>""")
+
+    A(f"""<div class="box"><p><b>Kaj so 4-urni bari res prinesli.</b> Poleg tega, da so ovrgli
+dvotretjinski prag, so pokazali, da dnevni bari lepšajo največji padec — padca, ki se zgodi
+in popravi znotraj istega dneva, preprosto ne vidijo:</p>
+<table style="margin:9px 0"><tr><th>različica</th><th class="n">MaxDD dnevno</th>
+<th class="n">MaxDD 4-urno</th><th class="n">skrito</th></tr>
+{"".join(f'<tr><td>{n.replace("danes","danes").replace("brez mrtvih gumbov","brez odveč pravil").replace("glasovanje: vecina","glasovanje")}</td>'
+         f'<td class="n">{d1c["metrics"][n]["maxdd"]:.1f} %</td>'
          f'<td class="n">{h4c["metrics"][n]["maxdd"]:.1f} %</td>'
          f'<td class="n" style="color:var(--crit)">{CV["dd_understated"][n]:+.1f} o. t.</td></tr>'
          for n in d1c["metrics"])}
 </table>
-<p>To ni statistična moč — te drobnejša ura ne more dati — ampak <b>natančnost</b>. Številka,
-ki jo je treba komunicirati, je 4-urna, ne dnevna.</p></div>""")
+<p>To ni statistična moč — te drobnejša ura ne more dati — ampak natančnost. Številka, ki jo
+je treba komunicirati, je 4-urna.</p></div>""")
 
     A("<h2>Bi se sprotno nastavljanje parametrov splačalo?</h2>")
     A("""<p>Doslej smo parametre premikali po enega naenkrat in nato povprečili sosede. Dve
@@ -670,22 +646,19 @@ bolje kot z izbiro, v vseh štirih shemah.</p></div>""")
 
     A("<h2>Kaj bi se konkretno spremenilo</h2>")
     A(f"""<div class="fig"><table>
-<tr><th>kaj</th><th>danes</th><th>po predlogu</th></tr>
+<tr><th>kaj</th><th class="n">danes</th><th class="n">po predlogu</th></tr>
 <tr><td>številk, ki jih je mogoče nastavljati</td><td class="n">{len(D['params'])}</td>
-    <td class="n"><b>6</b></td></tr>
-<tr><td>pravil za izstop iz pozicije</td><td class="n">3</td><td class="n"><b>1</b></td></tr>
-<tr><td>pozicija</td><td>vse ali nič</td><td><b>vse ali nič</b> — glasovanje 81 različic</td></tr>
+    <td class="n"><b>9</b></td></tr>
+<tr><td>pravil za izstop iz pozicije</td><td class="n">3</td><td class="n"><b>2</b></td></tr>
+<tr><td>vstopnih pogojev</td><td class="n">5</td><td class="n"><b>3</b></td></tr>
+<tr><td>pozicija</td><td>vse ali nič</td><td>vse ali nič (nespremenjeno)</td></tr>
+<tr><td>krivulja, posli, vsa merila</td><td>—</td><td><b>nespremenjeni</b></td></tr>
 <tr><td>Sortino, ki ga navajamo</td><td class="n">{pt['sortino']:.2f}</td>
-    <td class="n"><b>{[v for v in EN['binary_variants'] if v['name']=='glasovanje: vecina sosedov'][0]['sortino']:.2f}</b></td></tr>
-<tr><td>poslov v vzorcu</td><td class="n">{D['mc']['trades']['total']}</td>
-    <td class="n">11 <span style="color:var(--muted);font-size:12px">(manj, ker odpade
-    pravilo, ki jih je ustvarjalo brez koristi)</span></td></tr>
+    <td class="n"><b>0,98–1,02</b></td></tr>
 </table></div>
-<p class="cap">Da: po tem popravku bo backtest izgledal <b>slabše</b>. To ni poslabšanje
-strategije — prejšnja številka preprosto ni bila resnična. Bolje, da to izvemo zdaj kot pri
-pravem denarju.</p>""")
+<p class="cap">Edina številka v tej tabeli, ki se spremeni, je zadnja — in edina, ki zahteva
+delo v kodi, je prva. Strategija sama ostane ista.</p>""")
 
-    # ── 5. limits ──────────────────────────────────────────────────────────
     A("<h2>Česa ta analiza ne dokaže</h2>")
     A(f"""<p>Vse je merjeno na istem bitcoinu, na katerem so bile nastavitve izbrane. Noben
 izračun na teh podatkih tega ne more popraviti — za to bi bili potrebni podatki, ki jih še

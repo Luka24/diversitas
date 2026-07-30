@@ -51,6 +51,8 @@ CASES = {
     "brez dist_entry_ok": (("dist_entry_ok",), {}, "odstranjen dvojnik above_tl"),
     "brez obojega": (("dist_entry_ok",), {"vol_shock_mul": 999.0},
                      "oba predlagana izbrisa skupaj"),
+    "brez vseh treh": (("dist_entry_ok", "above_ma_med"), {"vol_shock_mul": 999.0},
+                      "vse tri predlagane odstranitve skupaj"),
     "brez blow-offa": ((), {"blowoff_dist_pct": 9999.0}, "blow-off izklopljen"),
     "brez above_ma_med": (("above_ma_med",), {}, "50-dnevni filter izklopljen"),
     "brez track_rising": (("track_rising_window",), {}, "naklon trackline izklopljen"),

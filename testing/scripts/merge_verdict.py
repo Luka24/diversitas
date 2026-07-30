@@ -176,16 +176,24 @@ def main():
 
     # ── joint parameter verdict, derived from both reports ──────────────────
     KIND = {p["name"]: p for p in PAR["params"]}
-    REMOVE = {"min_dist_entry_pct": "dist_entry_ok", "ma_med_len": "above_ma_med"}
-    ENS = set(GRID)
+    # After the decision against the ensemble (plan step C), the rules that are
+    # inert at the values we actually trade come out entirely, and nothing is
+    # delegated to a vote.
+    REMOVE = {"min_dist_entry_pct": "dist_entry_ok", "ma_med_len": "above_ma_med",
+              "vol_shock_mul": "vol_shock", "vol_lookback": "vol_shock"}
+    LOCK = {"rsi_len"}
+    ENS: set = set()
     rows = []
     for name, p in KIND.items():
         if name in REMOVE:
             act = "odstraniti"
             why = f"pravilo <code>{REMOVE[name]}</code> je mrtvo pri vseh nastavitvah"
-        elif name in ENS:
-            act = "prepustiti glasovanju"
-            why = "ostra konica; vrednost naj določi večina 81 sosedov"
+        elif name in LOCK:
+            act = "zakleniti"
+            why = f"inerten gumb (razpon {p['rng']:.2f}); pravilo ostane"
+        elif p["kind"] == "ostra konica":
+            act = "pustiti pri miru"
+            why = "ostra konica, a glasovanja ne uvajamo; popravimo pričakovanje"
         elif p["kind"] == "plato":
             act = "pustiti pri miru"
             why = f"plato, razpon {p['rng']:.2f}; natančna vrednost ni pomembna"

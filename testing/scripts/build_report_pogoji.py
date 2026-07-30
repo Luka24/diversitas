@@ -563,11 +563,10 @@ bila napačna.</b> Mrtev je pri natanko tej kombinaciji štirih vrednosti. Učin
 mediana {abs(DR['summary']['vol_shock']['n_alive']) and '−0,020'} Sortina, največ 0,085 — a ni
 nič, in v 61 od 67 primerov je odstranitev slabša.</p></div>""")
 
-    A("<h2>Skupni rezultat: strategija brez dveh odveč pravil</h2>")
-    A("""<p>Spodaj je današnja strategija proti tisti brez <code>dist_entry_ok</code> in
-<code>above_ma_med</code>. <code>vol_shock</code> po zgornjem preizkusu <b>ostane</b>.</p>""")
-    A('<div class="fig">' + equity(AF["cases"]["brez obojega"]["equity"], (),
-                                   alt_label="brez obeh") + "</div>")
+    A("<h2>Vse tri odstranitve skupaj</h2>")
+    A("""<p>Spodaj je današnja strategija proti tisti brez vseh treh pravil hkrati.</p>""")
+    A('<div class="fig">' + equity(AF["cases"]["brez vseh treh"]["equity"], (),
+                                   alt_label="brez vseh treh") + "</div>")
     A(f"""<div class="note" style="border-left-color:var(--good)">
 <p><b>Modra črta se popolnoma skriva pod rdečo.</b> Razlika je <b>0,000000</b> na vseh
 {AF['n']} dneh. Vsa štiri merila ostanejo nespremenjena — Sortino {BASE['sortino']:.3f},
@@ -575,21 +574,17 @@ Sharpe {BASE['sharpe']:.3f}, letni donos {BASE['cagr']:.1f} %, največji padec
 {BASE['maxdd']:.1f} %, končni večkratnik {BASE['final']:.2f}× pri {BASE['trades']} poslih.
 Kupi-in-drži je v istem obdobju dosegel {BENCH[-1]:.2f}× pri padcu
 {AF['benchmark']['maxdd']:.1f} %.</p>
-<p style="margin-top:9px"><b>Končna sodba.</b> Nastavljivih številk je
-<b>14 &rarr; 12</b> — odpadeta <code>min_dist_entry_pct</code> in <code>ma_med_len</code>.
-<code>vol_shock_mul</code> in <code>vol_lookback</code> <b>ostaneta</b>, ker pravilo ni mrtvo
-pri nastavitvah, ki jih dejansko nameravamo uporabiti. To je manj, kot je prej kazalo, in
-razlog je pošten: prvi izračun je meril eno točko, drugi jih je meril
-{DR['settings_tested']}.</p></div>""")
+<p style="margin-top:9px">Nastavljivih številk je s tem <b>14 &rarr; 9</b>. Odpadejo
+<code>min_dist_entry_pct</code>, <code>ma_med_len</code>, <code>vol_shock_mul</code> in
+<code>vol_lookback</code>; <code>rsi_len</code> se zaklene, ker napaja blow-off, ki ostaja
+nedokazan.</p></div>""")
 
-    A("<h2>Je vol_shock vreden svoje kompleksnosti?</h2>")
+    A("<h2>Je vol_shock vreden dveh parametrov in svoje veje v kodi?</h2>")
     V = MG["variants"]
     dv = MG["drop_vol_shock_glasovanje"]
-    A(f"""<p>Da pravilo oživi pri 45 od 81 članov ansambla, je bil razlog, da ga ne izbrišemo.
-A »spremeni ansambel« in »spremeni ansambel za toliko, da je vredno dveh nastavljivih številk«
-nista isto, in odločilna je druga trditev. Izmerjena je tako: glasovanje vseh 81 sosedov,
-enkrat z živim vol_shockom in enkrat brez njega. Kar delajo posamezni člani, ni pomembno —
-glasovanje je tisto, kar bi dejansko trgovali.</p>""")
+    A(f"""<p>Pravilo oživi pri 45 od 81 sosednjih nastavitev, in dokler smo razmišljali o
+povprečenju teh 81, ga ni bilo mogoče izbrisati brez spremembe rezultata. Zato smo izmerili,
+koliko je v tem povprečju sploh vreden.</p>""")
     A('<div class="fig"><table><tr><th>različica</th><th class="n">Sortino</th>'
       '<th class="n">Sharpe</th><th class="n">letni donos</th>'
       '<th class="n">največji padec</th><th class="n">končni večkratnik</th></tr>')
@@ -601,27 +596,23 @@ glasovanje je tisto, kar bi dejansko trgovali.</p>""")
           f'<td class="n">{m["cagr"]:.1f} %</td><td class="n">{m["maxdd"]:.1f} %</td>'
           f'<td class="n">{m["final"]:.2f}×</td></tr>')
     A("</table></div>")
-    A(f"""<div class="note" style="border-left-color:var(--good)">
-<p><b>Odgovor: pravilo obdržati, oba gumba zakleniti.</b></p>
-<p style="margin-top:8px">V ansamblu izklop vol_shocka stane <b>{abs(dv['d_sortino']):.3f}
-Sortina</b> (razpon [{dv['ci_sortino'][0]:+.2f}, {dv['ci_sortino'][1]:+.2f}] seka ničlo) in
-<b>{abs(dv['d_maxdd']):.1f} odstotne točke padca</b> — torej nič na tistem merilu, ki ga
-produkt edino obljublja. Pri eni sami točki je razlika natanko nič.</p>
-<p style="margin-top:8px">Za primerjavo: pri {V['glasovanje, z vol_shockom']['trades']} poslih
-je najmanjša razlika, ki jo sploh znamo zaznati, okoli <b>0,5 Sortina</b>. Izmerjenih 0,040 je
-dvanajstkrat pod tem pragom. <b>Trditev, da to pravilo kaj prispeva, je pod mejo merljivosti
-v obe smeri.</b></p>
-<p style="margin-top:8px"><b>Zato ni treba izbirati med brisanjem in ohranjanjem.</b> Za
-statistiko šteje <b>število nastavljivih številk</b>, ne število vrstic kode: prav to vstopa v
-PBO in deflated Sharpe. Če <code>vol_shock_mul</code> in <code>vol_lookback</code>
-<b>zakleneš</b> pri 1,5 in 20 ter ju umakneš s seznama nastavljivih, dobiš celotno statistično
-korist, <b>ne da bi spremenil eno samo pozicijo</b>. Brisanje pravila bi prineslo le urejenost
-kode — za ceno spremembe vedenja, ki je ne moremo utemeljiti.</p></div>""")
+    A(f"""<p>V povprečju 81 nastavitev je vreden {abs(dv['d_sortino']):.3f} Sortina, razpon
+[{dv['ci_sortino'][0]:+.2f}, {dv['ci_sortino'][1]:+.2f}] pa seka ničlo. Na največjem padcu
+ne spremeni ničesar. Pri {V['glasovanje, z vol_shockom']['trades']} poslih znamo zaznati
+razlike okoli 0,5 Sortina, tako da je 0,040 daleč pod tem, kar bi sploh lahko izmerili.</p>
+<p>Pri eni sami nastavitvi, torej pri tem, kar dejansko trgujemo, je razlika natanko nič.
+Ker povprečenja ne uvajamo (razlogi so v poročilu o parametrih), odpade edini razlog, da
+pravilo ostane. Gre ven skupaj z obema gumboma, in strategija izgubi celo izstopno vejo.</p>
+<p class="cap">Ena stvar mora ob tem v kodo: pravilo je bilo nedejavno <b>pri konkretnih
+vrednostih</b> track_period 75, track_buf_pct 3 %, exit_grace_bars 3 in reentry_hold 15.
+Pri exit_grace_bars 2 bi se sprožilo na šestih dneh. Kdor te vrednosti spremeni, mora
+vprašanje odpreti znova.</p>""")
 
     A("<h2>Združena slika: najboljše nastavitve po obeh poročilih</h2>")
-    A(f"""<p>Poročilo o parametrih pove <b>obliko</b> vsakega gumba — plato, ostra konica ali
-inerten. To poročilo pove, ali <b>pravilo</b>, ki ga gumb nastavlja, sploh kaj počne. Šele
-skupaj dasta ukrep. Spodnja tabela je sestavljena iz obeh, ne napisana na roko.</p>""")
+    A("""<p>Poročilo o parametrih pove obliko vsakega gumba: plato, ostra konica ali
+inerten. To poročilo pove, ali pravilo, ki ga gumb nastavlja, sploh kaj počne. Ukrep sledi
+šele iz obojega, in spodnja tabela je zato sestavljena iz obeh podatkovnih datotek, ne
+napisana na roko.</p>""")
     ACT = {
       "odstraniti": ("odstraniti", "var(--crit)"),
       "zakleniti": ("zakleniti", "var(--s2)"),
@@ -645,65 +636,47 @@ skupaj dasta ukrep. Spodnja tabela je sestavljena iz obeh, ne napisana na roko.<
 
     n_rm = sum(1 for r in MG["parameter_plan"] if r["action"] == "odstraniti")
     n_lk = sum(1 for r in MG["parameter_plan"] if r["action"] == "zakleniti")
-    n_vt = sum(1 for r in MG["parameter_plan"] if r["action"] == "prepustiti glasovanju")
-    n_al = sum(1 for r in MG["parameter_plan"] if r["action"] == "pustiti pri miru")
     tot = len(MG["parameter_plan"])
     A(f"""<div class="note" style="border-left-color:var(--good)">
-<p><b>Kaj to skupaj naredi s številom gumbov.</b></p>
-<table style="margin:9px 0">
-<tr><td><b>{tot}</b></td><td>nastavljivih številk danes</td></tr>
-<tr><td><b>−{n_rm}</b></td><td>odstranjeni, ker je pravilo mrtvo pri vseh nastavitvah
-    (<code>min_dist_entry_pct</code>, <code>ma_med_len</code>)</td></tr>
-<tr><td><b>−{n_lk}</b></td><td>zaklenjeni, ker gumb ničesar ne premakne, pravilo pa ostane
-    (<code>rsi_len</code>, <code>vol_shock_mul</code>, <code>vol_lookback</code>)</td></tr>
-<tr style="border-top:1px solid var(--axis)"><td><b>{tot-n_rm-n_lk}</b></td>
-    <td><b>nastavljivih ostane</b></td></tr>
-<tr><td><b>−{n_vt}</b></td><td>prepuščenih glasovanju 81 sosedov, ker so na ostri konici
-    (<code>ma_long_len</code>, <code>confirm_bars</code>, <code>reentry_hold</code>,
-    <code>exit_grace_bars</code>)</td></tr>
-<tr style="border-top:1px solid var(--axis)"><td><b>{n_al}</b></td>
-    <td><b>številk, ki bi jih kdo sploh še kdaj nastavljal</b> — in vse so na platoju ali
-    pripadajo pravilu, ki ga ne odpiramo</td></tr>
-</table>
-<p><b>{tot} &rarr; {tot-n_rm-n_lk} nastavljivih, od tega {n_al}, ki jih je smiselno gledati.</b>
-In vse to ne da bi spremenili eno samo pozicijo — razen tam, kjer glasovanje nadomesti izbrano
-točko. To je celoten izplen obeh poročil skupaj.</p></div>""")
-
-    A(f"""<div class="note"><p><b>Kaj namenoma NI na seznamu.</b>
-<code>blowoff_dist_pct</code> je na ostri konici z vrhom natanko na privzetku, kar bi ga
-uvrstilo med kandidate za glasovanje. Pustimo ga pri miru, ker je pravilo samo nedokazano v
-obe smeri in se njegov predznak obrne glede na okno — spreminjati nastavitev pravila, o katerem
-ne vemo, ali sploh koristi, bi bilo nastavljanje šuma. Enako velja za <code>rsi_len</code>, ki
-napaja isto pravilo: zaklenjen je, ne odstranjen.</p></div>""")
+<p>Od {tot} nastavljivih številk jih {n_rm} odpade skupaj s pravili, ki pri naših vrednostih
+ne naredijo ničesar, in {n_lk} se zaklene, ker gumb ne premakne rezultata, pravilo pa ostane.
+Nastavljivih ostane <b>{tot - n_rm - n_lk}</b>.</p>
+<p style="margin-top:9px">Nobena od teh sprememb ne premakne niti ene pozicije. To ni
+pomanjkljivost, ampak namen: manj gumbov pomeni manj načinov, kako se lahko zmotimo, in prav
+to število vstopa v izračun tveganja prevelike prilagojenosti. Ali se je to tveganje res
+znižalo, bo pokazal ponovni izračun PBO — če se ne bo, je treba tudi to povedati.</p>
+<p style="margin-top:9px">Štirje preostali gumbi so na ostri konici in bi bili kandidati za
+povprečenje sosednjih vrednosti. Tega ne delamo. Razlog je v poročilu o parametrih: povprečenje
+napove enak izid kot današnje nastavitve, stane pa polovico več prometa in tri odstotne točke
+globlji padec. Namesto tega popravimo številko, ki jo navajamo.</p></div>""")
 
     A("<h2>Kaj vse to skupaj pomeni</h2>")
-    A(f"""<p class="lead">Strategija ima osem pravil, a pri privzetih nastavitvah tri od njih
-ne počnejo nič — in ravno preverba, ali to drži tudi drugje, je pokazala, da je treba to
-trditev razdeliti na tri različno trdne dele. <code>dist_entry_ok</code> je matematični dvojnik
-pravila nad njim: pri {DR['settings_tested']} preizkušenih nastavitvah ni bilo niti enega dne
-razlike, in tudi ne more biti, ker je isti izraz zapisan dvakrat — v dashboardu zaseda svojo
-kljukico, ki ne more nikoli ugovarjati tisti nad njo. <code>above_ma_med</code> je mrtev
-skoraj povsod: oživi pri treh nastavitvah od {DR['settings_tested']}, in še tam za največ
-petnajst dni in brez vpliva na padec, ker petinšestdeset dni, ki jih blokira, tako ali tako
-požrejo trije dnevi potrditve in petnajstdnevni premor. <code>vol_shock</code> pa sem
-<b>napačno razglasil za strukturno mrtvega</b>: pri privzetkih se res nikoli ne sproži, a to
-je naključje štirih vrednosti hkrati, in že korak vstran — pri drugem mrtvem pasu, drugi
-dolžini razpona ali drugem številu dni potrpljenja — oživi; pri
-{len(DR['grid']['vol_shock'])} od 81 članov ansambla, ki ga priporočamo uporabiti, deluje, in
-tam je njegova odstranitev slabša v 61 primerih od 67. Med pravili, ki nekaj počnejo, sta dva
-zagovorljiva: <code>track_rising_window</code> je edini, brez katerega se največji padec
-opazno poglobi z {BASE['maxdd']:.1f} % na
-{AF['cases']['brez track_rising']['maxdd']:.1f} %, in <code>regime_ok</code> je edini, brez
-katerega je slabše na vseh štirih merilih — čeprav se je ob tem izkazalo, da padca sploh ne
-zmanjšuje in je torej filter donosa, ne varovalka. Preostala tri so odprta vprašanja:
-<code>above_tl</code> je jedro, a backtest brez njega je rahlo boljši; <code>below_tl</code>
-nosi trinajst od enaindvajsetih poslov brez dokazane prednosti; blow-off pa se obrne glede na
-obdobje. <b>Odstranljivi sta torej dve pravili, ne tri — a to ni celotna zgodba: za statistiko
-šteje število nastavljivih številk, ne število pravil, in tri nadaljnje gumbe je mogoče
-zakleniti, ne da bi se premaknila ena sama pozicija. Skupaj to pomeni štirinajst nastavljivih
-številk na devet, od tega pet, ki jih je smiselno gledati. Kar pa je najbolj poučno, je da je
-moja najbolj samozavestna trditev — »strukturno mrtev, ne more biti drugače« — padla prva, ko
-sem jo preizkusil pri več kot eni nastavitvi.</b></p>""")
+    A(f"""<p class="lead">Strategija ima osem pravil. Tri od njih pri vrednostih, ki jih
+trgujemo, ne naredijo ničesar, in vsako iz svojega razloga. <code>dist_entry_ok</code> je isti
+pogoj kot <code>above_tl</code>, samo zapisan drugič — v dashboardu ima svojo kljukico, ki ne
+more nikoli povedati nič novega. <code>above_ma_med</code> blokira petinšestdeset dni, a
+nobeden se ni nikoli prelevil v posel, ker jih prej poberejo trije dnevi potrditve in
+petnajstdnevni premor. <code>vol_shock</code> se v sedmih letih ni sprožil niti enkrat, ker ga
+navadni izstop vedno prehiti. Odstranitev vseh treh skupaj je bitno identična: ista krivulja,
+isti posli, ista številka do zadnje decimalke.</p>
+
+<p class="lead">Od preostalih petih sta dva zagovorljiva. Brez <code>track_rising_window</code>
+se največji padec poglobi z {BASE['maxdd']:.1f} % na
+{AF['cases']['brez track_rising']['maxdd']:.1f} %, kar je edini primer, kjer kakšno pravilo
+vidno kupi mirnejšo vožnjo. Brez <code>regime_ok</code> je slabše na vseh štirih merilih —
+čeprav se je ob tem izkazalo, da padca sploh ne zmanjšuje, torej je filter donosa in ne
+varovalka, kot smo ga opisovali.</p>
+
+<p class="lead">Ostala tri so odprta. <code>above_tl</code> je jedro strategije, a backtest
+brez njega je rahlo boljši in nad povprečnim dnevom doda le poldrugo odstotno točko.
+<code>below_tl</code> povzroči trinajst od enaindvajsetih poslov, njegova prednost pa ni
+dokazana. Blow-off se obrne glede na to, katero obdobje pogledaš: na petih letih pomaga, na
+sedmih in pol škoduje, in pri osmih sprožitvah tega ni mogoče razrešiti.</p>
+
+<p class="lead">Skupaj torej: strategija je preprostejša, kot je videti, in ožja, kot bi si
+želeli. Da izbira boljše trenutke za zaslužek, ne znamo pokazati. Da en filter zmanjšuje
+padce, znamo. In vemo, katera tri pravila lahko odstranimo, ne da bi karkoli izgubili — kar
+ni izboljšava, ampak zmanjšanje števila stvari, o katerih se lahko motimo.</p>""")
 
     A(f"""<footer>
 Vir cen: Binance, zamrznjen posnetek
