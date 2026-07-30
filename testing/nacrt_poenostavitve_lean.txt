@@ -1,0 +1,396 @@
+================================================================================
+NAČRT: POENOSTAVITEV DIVERSITAS LEAN
+================================================================================
+Datum načrta : 2026-07-30
+Obseg        : samo lean/ ; samo BTC ; brez podatkov pred 2019 ; brez papir tradinga
+Podatki      : testing/data/sources/BTC_binance.parquet
+               okno po zavrženem ogrevanju 2019-12-31 → 2026-07-26 (2400 dni)
+Stroški       : 0,30 % na stran (fee + slippage), povsod
+Izhodišče     : Sortino 1,545 · MaxDD −39,8 % · CAGR 33,9 %
+               izpostavljenost 43,5 % · 17 poslov
+               izstopi po vzroku: below_tl = 11, blow-off = 6, vol-shock = 0
+
+
+--------------------------------------------------------------------------------
+0. ZAKAJ TO DELAMO IN KAJ JE MEJA
+--------------------------------------------------------------------------------
+
+Strategija ima 17 poslov v 6,5 letih. Iz sedemnajstih opazovanj ni mogoče ločiti
+spretnosti od sreče. Ker uporabljamo samo BTC, ne gledamo podatkov pred 2019 in
+ne čakamo na papir trading, NE OBSTAJA način, da bi na teh podatkih dokazali, da
+strategija ni prilagojena preteklosti.
+
+Cilj tega načrta zato NI "dokazati, da deluje". Cilj je:
+
+  (a) odstraniti vsa pravila, ki padejo na svoji lastni predpostavki,
+  (b) narediti strategijo strukturno težje prilagodljivo,
+  (c) povečati število opazovanj, ne da bi se dotaknili izključenih virov.
+
+Neprijetna posledica, ki jo je treba vedeti vnaprej: po Koraku 1 pade število
+poslov s 17 na 11. Popravek strategije statistiko POSLABŠA, ker je vzorec manjši.
+Zato je Korak 3 (več opazovanj) del načrta in ne dodatek.
+
+
+--------------------------------------------------------------------------------
+1. KAJ JE ŽE DOKAZANO — PODLAGA ZA KORAK 1
+--------------------------------------------------------------------------------
+
+Vir: testing/porocilo_pogoji_BTC.html
+Ponovljivo z: testing/scripts/event_study.py , testing/scripts/ablation.py
+Surovi rezultati: testing/data/event_study_BTC.json , testing/data/ablation_BTC.json
+
+VOL-SHOCK — odstraniti
+  1. Povzročil je 0 od 17 izstopov v 2400 dneh.
+     Razlog je v kodi: vol_shock zahteva below_tl, izstop na below_tl pa ga vedno
+     prehiti, ker se v state machine oceni prej.
+  2. Izklop pravila: ΔSortino +0,000 · ΔMaxDD +0,0 o. t. · Δposli 0.
+  3. Prelet vol_shock_mul 1,2 → 3,0: razpon Sortina 0,013.
+     Prelet vol_lookback 10 → 40:  razpon Sortina 0,001.
+  4. Nadaljnji 60-dnevni donos po sprožitvi, primerjan z DRUGIMI dnevi pod
+     trackline (edina poštena primerjava): +11,02 o. t., 95 % CI [+0,14; +22,16].
+     ZNAČILNO — in v napačno smer.
+
+BLOW-OFF — odstraniti
+  1. 22 sprožitev v 2400 dneh — pod mejo, kjer je statistični test sploh mogoč.
+  2. Mehanizemski test: mediana sprožitve leži na 88,2. percentilu nadaljnjega
+     60-dnevnega donosa. 72,7 % sprožitev je v NAJBOLJŠI četrtini, 0,0 % v
+     najslabši. Pravilo trdi, da zaznava vrhove; zaznava začetke rasti.
+     Datumi: 2020-11-18..24, 2021-01-01..09, 2024-11-21..22.
+  3. Povzroči 6 od 17 poslov — 35 % vse trgovalne aktivnosti.
+  4. Izklop: Sortino 1,545 → 1,616 · MaxDD nespremenjen · CI [−0,42; +0,55]
+     seka ničlo, torej izboljšanje NI dokazano.
+  5. Popoln izklop je boljši od vseh petih preizkušenih pragov (15/20/25/30/35).
+     Vrh pri privzeti vrednosti 25 je lokalni artefakt, ne optimum.
+
+MIN_DIST_ENTRY_PCT — odstraniti
+  1. dist_entry_ok = dist_pct >= (track_buf_pct + min_dist_entry_pct)
+     above_tl      = dist_pct >  track_buf_pct
+     Pri min_dist_entry_pct = 0 isti pogoj. Preverjeno na 2400 dneh: 0 dni razlike.
+  2. V inkrementalnem testu blokira 0 dni.
+  3. Prelet 0 → 3: razpon Sortina 0,016.
+
+MA_MED_LEN — pravilo OBDRŽATI, gumb ZAKLENITI
+  1. Prelet 20 → 120: razpon Sortina 0,096; od 40 naprej je ravno. Gumb je mrtev.
+  2. AMPAK above_ma_med je edini posamezni filter, ki je značilen sam zase:
+     +1,39 o. t. na 5 dni, CI [+0,27; +2,52], in ostane značilen tudi znotraj
+     dni, ki jih 200-dnevno povprečje že spusti skozi.
+  3. Prejšnja različica tega seznama je pravilo uvrščala med odstranitve. To je
+     bilo NAROBE: prelet meri gumb, event study meri pravilo. Ločeni vprašanji.
+
+KAJ OSTANE IN JE UPRAVIČENO (za kontekst, se ne dotikamo)
+  regime_ok            blokira 35 dni s povprečnim 20-dnevnim donosom −10,09 %
+                       (razlika −16,43 o. t., CI [−23,45; −9,50]) — najbolje dokazan
+  track_rising_window  blokira 235 dni s povprečnim donosom −0,95 %
+                       (razlika −7,29 o. t., CI [−13,06; −2,08]) — dokazan
+  above_tl             jedro logike; pozitiven predznak, a noben CI ne izloči ničle
+  below_tl             edini pravi izstop; pravi predznak, razlika ni dokazana
+
+
+================================================================================
+KORAK 1 — BRISANJE PRAVIL BREZ DOKAZOV
+================================================================================
+Ocena dela: ~2 uri.  Cilj: 14 nastavljivih parametrov → 6.
+
+1.1 lean/diversitas/config.py
+    ODSTRANITI polja:
+        blowoff_dist_pct
+        rsi_len
+        vol_shock_mul
+        vol_lookback
+        min_dist_entry_pct
+    OBDRŽATI ma_med_len = 50, a dodati komentar, da je zaklenjen in ni več
+    nastavljiv parameter (z razlogom in datumom, po vzoru obstoječega komentarja
+    o odstranitvi ER).
+    Na istem mestu zapisati, katera analiza je bila podlaga, tako kot je bilo
+    narejeno pri ER — komentar mora povedati ZAKAJ, ne le KAJ.
+
+1.2 lean/diversitas/strategy.py
+    compute_features():
+        - izbrisati izračun df["rsi"]
+        - izbrisati df["blowoff"]
+        - izbrisati df["vol_shock"]
+        - izbrisati df["dist_entry_ok"] in ga odstraniti iz bull_condition
+          (identičen above_tl, ki v bull_condition že je — vedenje se NE spremeni)
+        - izračun annual_vol / vol_avg50 OBDRŽATI: annual_vol je prikazan v
+          dashboardu in uporabljen v ogrevanju. Fiksirati okno na 20 (bivši
+          vol_lookback) kot konstanto v modulu.
+    run_state_machine():
+        - iz izstopne veje odstraniti blowoff_arr in vol_shock_arr
+        - ostane samo: below_arr[i] and below_c >= cfg.exit_grace_bars
+        - odstraniti pripadajoča branja stolpcev
+    build_summary():
+        - odstraniti ključe "blowoff", "vol_shock", "rsi"
+
+1.3 lean/diversitas/dashboard.py
+    Odstraniti vse prikaze blow-offa, vol-shocka in RSI (4 + 4 + 1 mest).
+    Odstraniti min_dist_entry_pct in dist_entry_ok iz UI.
+    POZOR: dashboard bere summary — če ostane sklic na izbrisan ključ, pade
+    šele ob nalaganju, ne ob importu.
+
+1.4 lean/diversitas/backtest.py
+    2 sklica na blowoff, 2 na vol_shock — odstraniti.
+
+1.5 shared/warmup.py
+    WARMUP_COLS vsebuje "rsi". Pustiti pri miru: warmup_bars() preskoči stolpce,
+    ki jih ni, in full/ še vedno računa rsi.
+    PREVERITI, da required_history(LeanConfig()) ostane 220:
+        max(ma_long_len 200, ma_med_len 50, track_period 75, donchian_period 55)
+        = 200 ; + max(ma_slope 5, track_slope_bars 10) = 10 ; + 10 slack = 220
+    Po odstranitvi rsi_len in vol_lookback je maksimum še vedno 200 → 220 ostane.
+    Če se ta številka spremeni, so dashboardi prekratki na podatkih.
+
+1.6 testing/scripts/ — sklici v pomožnih skriptah
+    features.py (5 + 2 + 1), run_feature_matrix.py (3 + 3), run_sensitivity.py
+    (2 + 1), run_improvements.py (2), improvements.py (2 + 1),
+    run_feature_ab.py (1), run_external.py (1).
+    Te skripte so raziskovalne, ne produkcijske. Naj se ne popravljajo na slepo:
+    kjer je sklic na odstranjen parameter del preleta, se ta prelet odstrani
+    (parametra ni več), ne pa da se mu podtakne privzeta vrednost.
+
+1.7 lean/diversitas/tests/test_strategy.py
+    1 sklic na blowoff — test odstraniti ali predelati.
+
+1.8 NOVI TESTI (obvezno, brez teh se korak ne šteje za dokončan)
+    - test, da LeanConfig nima več izbrisanih polj
+    - test, da bull_condition ne vsebuje več dist_entry_ok in da je rezultat
+      BITNO IDENTIČEN prejšnjemu za člen above_tl
+    - test, da je edina pot iz BULL v BEAR pogoj below_tl z exit_grace_bars
+    - test, da required_history(LeanConfig()) == 220
+
+1.9 SPREJEMNI KRITERIJ
+    Poženi testing/scripts/ablation.py in preveri, da se nova izhodiščna
+    strategija ujema z vrstico "oba izklopljena":
+        Sortino 1,616 · MaxDD −39,8 % · 11 poslov
+    Če se NE ujema, brisanje ni bilo nevtralno in nekje je bila spremenjena
+    logika, ne le odstranjena mrtva koda. V tem primeru ustaviti in poiskati
+    razliko, NE nadaljevati na Korak 2.
+
+1.10 ČESA V KORAKU 1 NE DELAMO
+    Ne dotikamo se full/. Je ločena strategija in ta dokaz zanjo ne velja.
+    Ne spreminjamo nobene preostale vrednosti parametrov.
+
+
+================================================================================
+KORAK 2 — RAZMAZANJE OSTRIH KONIC (ENSEMBLE)
+================================================================================
+Ocena dela: ~2 uri.
+
+2.1 PROBLEM
+    Pet parametrov je imelo obliko ostrega vrha, štirje z vrhom TOČNO na privzeti
+    vrednosti. Eden od njih (blowoff_dist_pct) po Koraku 1 ne obstaja več.
+    Ostanejo štirje:
+        ma_long_len       vrh pri 200
+        confirm_bars      vrh pri 3
+        reentry_hold      vrh pri 15
+        exit_grace_bars   vrh pri 3
+    Privzetki prihajajo iz Pine skripte, pisane ob gledanju zgodovine BTC. Da so
+    štirje hkrati na lokalnem vrhu z opaznim padcem ob strani, je bolj skladno s
+    tem, da so bili nastavljeni na te podatke, kot s srečnim naključjem.
+
+2.2 REŠITEV
+    Nehamo izbirati eno vrednost. Strategijo poženemo pri treh sosednjih
+    vrednostih vsakega od štirih parametrov — polni križni produkt 3^4 = 81
+    članov — in POVPREČIMO POZICIJO.
+
+        ma_long_len       150 , 200 , 250
+        confirm_bars        2 ,   3 ,   4
+        reentry_hold       10 ,  15 ,  20
+        exit_grace_bars     2 ,   3 ,   4
+
+    Pozicija ni več 0 ali 1, ampak zvezna med 0 in 1 (povprečje 81 binarnih
+    pozicij). Na vrhu po konstrukciji ni več mogoče sedeti: rezultat je
+    povprečje soseščine, ne točka.
+
+    Referenca za pristop: poklicni trend-following skladi tega ne delajo z eno
+    dolžino trenda. ReSolve replicira managed futures s trinajstimi strategijami
+    z različnimi lookbacki; AQR kombinira momentum signale čez več horizontov.
+    Ensemble se uporablja izrecno za zmanjšanje variance naučenih parametrov.
+
+2.3 IZVEDBA
+    Nova datoteka: testing/scripts/ensemble.py
+    - članske konfiguracije generira iz itertools.product
+    - vsak član gre skozi trim_warmup in engine.position (obstoječa pot, brez
+      podvajanja logike)
+    - pozicija ansambla = povprečje članskih pozicij po datumih
+      POZOR: člani imajo različne ma_long_len, torej različno dolgo ogrevanje.
+      Poravnati na PRESEK indeksov, ne na unijo, sicer nekateri člani na začetku
+      manjkajo in povprečje je pristransko navzgor.
+    - stroški: shared.costs.turnover že dela s frakcijskimi pozicijami
+      (pos.diff().abs()), zato posebne obravnave ni. Preveriti pa je treba, da
+      je skupen promet ansambla nižji od izhodiščnega — če ni, nekaj ni v redu.
+    - required_history: pri ma_long_len = 250 zraste na 250 + 10 + 10 = 270.
+      Podatkov mora biti dovolj, sicer se okno skrajša in primerjava z
+      izhodiščem ni več na istem oknu. To je najverjetnejši vir napake v tem
+      koraku — okno OBEH strategij mora biti eksplicitno poravnano preden se
+      karkoli primerja.
+
+2.4 KAJ MERIMO — "PREMIJA KONICE"
+    To je glavni izplen tega koraka, pomembnejši od same nove strategije:
+
+        premija konice = Sortino(privzetki, ena točka) − Sortino(ansambel)
+
+    Ta razlika je neposredna ocena, KOLIKO BACKTESTA JE BILA IZBIRA ŠTEVILKE.
+    Interval na razliki iz parnega bločnega bootstrapa (isti prevzorčeni dnevi
+    na obeh serijah), tako kot v ablation.py.
+
+    Branje:
+        < 0,10   konice so bile poštene; privzetki niso bili prilagojeni
+        0,10–0,30 zmerna prilagojenost; ansambel je primernejša izbira
+        > 0,30   večina prednosti izvira iz izbire točke — to je glavna najdba
+
+2.5 KAJ PRIČAKOVATI
+    Backtest ansambla bo skoraj zagotovo SLABŠI od izhodiščnega. To ni
+    poslabšanje strategije — prejšnja številka preprosto ni bila resnična.
+    Pričakujemo tudi: manj skokovite prehode, verjetno nižji promet in
+    potencialno plitvejši MaxDD.
+
+2.6 SPREJEMNI KRITERIJ
+    - premija konice izračunana in zapisana z intervalom
+    - promet ansambla ni višji od izhodiščnega
+    - obe strategiji primerjani na IDENTIČNEM oknu (eksplicitno preverjeno)
+
+
+================================================================================
+KORAK 3 — VEČ OPAZOVANJ IZ ISTEGA TRGA (4-URNI BARI)
+================================================================================
+Ocena dela: ~1 dan.  To je edini korak, ki napade pravi problem — velikost vzorca.
+
+3.1 IDEJA
+    Ne stari podatki, ne papir trading, ne druga sredstva. Ista pravila na
+    4-URNIH barih istega BTC-ja v istem obdobju. Isti trg, ista doba, isto
+    sredstvo — samo drobnejša ura.
+
+    Kaj to prinese: približno šestkrat več barov, in s tem število poslov z
+    ~11 na grobo ~70. To je še vedno malo, a je razlika med "nemogoče izmeriti"
+    in "na meji merljivosti".
+
+3.2 KAJ TA TEST JE IN KAJ NI
+    NI holdout. Isti trg, isto obdobje, podatki niso neodvisni. Tega ne bomo
+    trdili in tako ne sme biti predstavljeno.
+    JE resen test robustnosti: če je logika resnična, mora preživeti spremembo
+    hitrosti ure. Če na 4h barih razpade, smo se učili na naključju dnevnega
+    zapiranja ob polnoči UTC.
+
+3.3 KLJUČNA ODLOČITEV PRI IZVEDBI
+    Vse lookbacke je treba pomnožiti s 6, da ostane EKONOMSKI HORIZONT enak:
+        track_period     75 dni  → 450 barov
+        ma_med_len       50      → 300
+        ma_long_len     200      → 1200
+        ma_slope          5      →   30
+        track_slope_bars 10      →   60
+        confirm_bars      3      →   18
+        reentry_hold     15      →   90
+        exit_grace_bars   3      →   18
+    Če se lookbacki NE skalirajo, ne testiramo ure — testiramo drugo strategijo,
+    in rezultat ne pove ničesar.
+
+    Anualizacija: 365 × 6 = 2190 obdobij na leto namesto 365.
+    Stroški: 0,30 % na stran ostane, a promet bo višji — to je pošteno in mora
+    biti vključeno, ne izglajeno.
+
+3.4 KAJ POGLEDAMO
+    - izpostavljenost: mora ostati blizu 43,5 % (oz. blizu vrednosti po Koraku 1)
+    - DD-gap proti kupi-in-drži: mora ostati blizu +36,8 o. t.
+    - event study iz Koraka 0 ponovljen na 4h barih: predznaki morajo držati,
+      intervali pa bodo ožji, ker je opazovanj več
+    - število poslov
+
+3.5 SPREJEMNI KRITERIJ / KAJ POMENI NEUSPEH
+    Če se izpostavljenost in DD-gap grobo ujemata z dnevno različico, je logika
+    neodvisna od izbire ure — to je resničen argument in ga smemo uporabiti.
+    Če se močno razlikujeta, je dnevni rezultat vsaj deloma artefakt mreže
+    vzorčenja. Tudi to je uporabna informacija in mora biti objavljena.
+
+3.6 POCENI DODATEK, KO SO 4H PODATKI ENKRAT TU
+    Iz istih 4h barov sestaviti DNEVNE bare, rezane ob 04:00, 08:00, 12:00,
+    16:00 in 20:00 UTC namesto ob polnoči. Šest različic iste strategije na
+    istem trgu. Razpršenost rezultatov čez teh šest je neposredna mera, koliko
+    rezultata visi na dogovoru, kdaj se konča dan. Skoraj brez dodatnega dela.
+
+
+================================================================================
+4. ČESA NE DELAMO
+================================================================================
+- Nobenega nadaljnjega nastavljanja parametrov na dnevnem BTC-ju. Vsak dodaten
+  poskus poveča PBO (že zdaj 0,694) in ne prinese nič: pri 11–17 poslih je
+  najmanjša zaznavna razlika okoli pol Sortino točke, kar je več od katerekoli
+  obravnavane izboljšave.
+- Ne dotikamo se full/.
+- Ne odpiramo podatkov pred 2019 (odločitev naročnika: drug trg, brez institucij
+  in ETF-ov, tanka likvidnost).
+- Ne trdimo nikjer, da je karkoli od tega dokaz, da strategija ni prilagojena
+  preteklosti. Tak dokaz na razpoložljivih podatkih ne obstaja.
+
+
+================================================================================
+5. TVEGANJA
+================================================================================
+R1  Brisanje ni nevtralno.
+    Verjetnost: nizka. Zaščita: sprejemni kriterij 1.9 (Sortino 1,616 / 11 poslov).
+
+R2  Ansambel se primerja na drugem oknu kot izhodišče (ma_long_len 250 zahteva
+    daljše ogrevanje) in razlika je artefakt okna, ne strategije.
+    Verjetnost: VISOKA. To je najverjetnejša napaka v celem načrtu.
+    Zaščita: eksplicitno poravnati indeks in to preveriti s testom.
+
+R3  Na 4h barih se pozabi skalirati lookbacke → testiramo drugo strategijo.
+    Zaščita: skalirni faktor 6 zapisan na enem mestu, izpeljan, ne prepisan.
+
+R4  Manj poslov po Koraku 1 (17 → 11) naredi vse nadaljnje intervale širše in
+    kdo bo to bral kot poslabšanje strategije.
+    Zaščita: povedati vnaprej, v poročilu in ustno. Manjši vzorec je posledica
+    odstranitve pravila, ki je ustvarjalo posle brez vrednosti.
+
+R5  Kumulativno število poskusov raste in z njim PBO.
+    Zaščita: vsak nov poskus zabeležiti. Deflated Sharpe potrebuje število
+    poskusov; če jih ne štejemo, deflacije ni mogoče izračunati.
+
+
+================================================================================
+6. DEFINICIJA DOKONČANOSTI
+================================================================================
+[ ] Korak 1: 5 parametrov odstranjenih, ma_med_len zaklenjen in dokumentiran
+[ ] Korak 1: novi testi (1.8) napisani in zeleni
+[ ] Korak 1: sprejemni kriterij 1.9 izpolnjen (Sortino 1,616 / MaxDD −39,8 / 11 poslov)
+[ ] Korak 1: dashboard se naloži brez napake
+[ ] Korak 2: ensemble.py napisan, okno eksplicitno poravnano
+[ ] Korak 2: premija konice izračunana z intervalom
+[ ] Korak 3: 4h podatki zamrznjeni v testing/data/sources/ z manifestom
+[ ] Korak 3: skalirani lookbacki, event study ponovljen
+[ ] Korak 3: šest urnih zamikov izmerjenih
+[ ] Poročilo osveženo, vse številke z datumi
+[ ] Vse commitano na main
+
+
+================================================================================
+7. KAKO TO PREDSTAVITI NETEHNIČNEMU POSLUŠALCU
+================================================================================
+Ena stran, trije elementi:
+
+  1. EN GRAF — stara krivulja, nova krivulja, kupi-in-drži, ista slika, ista os.
+
+  2. TABELA DVEH STOLPCEV:
+
+     TRDIMO                                  NE TRDIMO
+     plitvejši padci kot kupi-in-drži        da zasluži več kot kupi-in-drži
+     (edino statistično potrjeno, p = 0,023)
+     vstopna logika ima smisel               da znamo napovedati smer
+     (merjeno na 700+ dneh, ne na 17 poslih)
+     odstranili smo pravila brez dokazov     da smo dokazali, da ni prilagojena
+                                             preteklosti
+
+  3. SEZNAM "KAKO SMO JO SKUŠALI ZLOMITI" — za netehničnega poslušalca bolj
+     prepričljiv od katerekoli številke.
+
+Stavek, s katerim se to pove:
+
+  "Strategije ne prodajamo kot napoved. Vsako pravilo smo preverili posebej —
+   na tisočih dni, ne na sedemnajstih poslih — in štiri niso prestala. Eno se v
+   šestih letih ni sprožilo niti enkrat. Drugo naj bi zaznavalo vrhove, v
+   resnici pa se je sprožalo na začetkih rasti in povzročilo tretjino vseh
+   poslov. Ta štiri smo odstranili. Kar ostane, je preprostejše in ima eno
+   dokazano lastnost: plitvejše padce."
+
+To je manjša trditev, kot bi si želeli. Je pa prva, ki drži. Če razliko med
+"dokazano" in "nedokazano" poveste sami, preden vas kdo vpraša, vam bo poslušalec
+bolj verjel, ne manj.
