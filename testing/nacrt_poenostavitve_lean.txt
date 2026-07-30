@@ -408,32 +408,160 @@ KORAK 4 — IZBIRA RAZLIČICE  ·  ODLOČENO 2026-07-31
 
 
 ================================================================================
-KORAK 5 — KAJ OSTAJA ODPRTO, PO PRIORITETI
+KORAK 5 — KAJ OSTAJA ODPRTO: TOČNI TESTI, PO PRIORITETI
 ================================================================================
+Vsi trije testi uporabljajo isto rutino kot testing/scripts/event_study.py, torej
+event study z krožnim bločnim bootstrapom, dolžina bloka = horizont, 2000 vzorcev.
+Vsi tečejo na testing/data/sources/BTC_binance_warmup.parquet, neto 0,30 % na
+stran, okno 2019-03-09 → 2026-07-29.
 
-5.1 below_tl — NAJPOMEMBNEJŠE
-    Nosi 13 od 21 poslov, a razlika ni dokazana. Postaviti mu tekmece (ATR
-    trailing stop, prebitje 50 MA, časovni izstop) in vse meriti z istim event
-    studyjem, a na NADALJNJEM MaxDD namesto na donosu. Izstop naj varuje pred
-    padcem, ne pred izgubljenim donosom. Stolpec je že izračunan v
-    event_study.py, a ga poročilo ne prikazuje.
+PRAVILO ZA VSE TRI, ki ga je treba spoštovati, sicer je delo zastonj:
+  Število opravljenih testov se ZAPIŠE, preden se pogleda rezultat. Trenutno
+  stanje je 137 preizkusov. Vsak spodnji test doda svoje, in brez te evidence
+  deflacije (deflated Sharpe, PBO) ni mogoče izračunati.
 
-5.2 above_tl — asimetrični mrtvi pas
-    Vstopni in izstopni pas sta oba 3 % zaradi simetrije, ne meritve. Prelet
-    vstopnega 1–6 % neodvisno od izstopnega. Nato primerjava z Donchian
-    prebojem (use_donchian je že v kodi, privzeto izklopljen).
-    Opomba: min_dist_entry_pct je bil ravno ta zamisel, a odposlan z vrednostjo
-    0, zato se sesede v above_tl. Zamisel je dobra, izvedba je bila mrtva.
 
-5.3 above_ma_med — ali sta potrebna dva trend filtra
-    Nad povprečnim dnevom doda +1,71 o. t., inkrementalno pa blokira le 65 dni.
-    Izmeriti dneve, na katerih se razhaja s track_rising_window, in nadaljnji
-    donos tam.
+--------------------------------------------------------------------------------
+5.1  below_tl — NAJVIŠJA PRIORITETA
+--------------------------------------------------------------------------------
+ZAKAJ: nosi 13 od 21 poslov, torej večino izstopne strani, razlika pa ni
+dokazana (−4,6 o. t. na 60 dni, razpon zajema ničlo).
 
-5.4 blow-off — NE odpirati brez novih podatkov
-    Pri 8 sprožitvah in 6 opravljenih testih (verjetnost vsaj enega značilnega
-    po naključju 26 %) tega ni mogoče razrešiti. Pustiti pri miru in ne
-    uporabljati kot argument v nobeno smer.
+NOVA SKRIPTA: testing/scripts/exit_alternatives.py
+
+TEKMECI, ki jih je treba implementirati (vsi kot zamenjava za below_tl, ostalo
+nespremenjeno):
+  A) ATR trailing stop     — izstop, ko cena pade N × ATR(14) pod najvišjo
+                             točko od vstopa;  N ∈ {1,5 · 2 · 2,5 · 3 · 4}
+  B) prebitje 50 MA        — izstop, ko close < ma_med;  brez pasu in s pasom
+                             1 % in 2 %
+  C) časovni izstop        — izstop po N barih od vstopa;  N ∈ {20 · 40 · 60 · 90}
+  D) chandelier / Donchian — izstop, ko close pade pod spodnjo mejo N-dnevnega
+                             kanala;  N ∈ {20 · 55 · 75}
+  E) obstoječi below_tl    — kontrolna skupina, prag 3 %
+
+KAJ SE MERI — in tu je bistvena sprememba glede na doslej:
+  PRIMARNO:   nadaljnji MaxDD na dneh sprožitve (5, 20, 60 barov naprej).
+              Izstop naj varuje pred padcem, ne pred izgubljenim donosom.
+              Stolpec je že izračunan v event_study.py (funkcija forward_maxdd),
+              a ga nobeno poročilo ne prikazuje. Pravi predznak je NEGATIVEN.
+  SEKUNDARNO: nadaljnji donos, isti horizonti.
+  KONTROLNO:  celoten backtest (Sortino, MaxDD, poslov) — a NE kot merilo izbire,
+              samo da se vidi, ali se katera različica obnaša divje.
+
+PRIMERJALNA SKUPINA: vsi dnevi, na katerih smo V POZICIJI. Ne vsi dnevi v
+vzorcu. Izstopno pravilo se posvetuje samo, kadar nekaj držimo, in primerjava s
+celotnim vzorcem meri stanje trga, ne pravila. (To je ista past, ki je bila
+odkrita pri blow-offu.)
+
+VEČKRATNO TESTIRANJE: 5 družin × do 5 nastavitev × 2 merili × 3 horizonti =
+do 150 testov. Bonferronijev prag je zato 0,05/150 ≈ 0,0003, kar je nedosegljivo.
+ZATO SE TEST NE ŠTEJE ZA ODLOČANJE O ZNAČILNOSTI. Šteje se za rangiranje:
+zanima nas, ali katera družina dosledno prekaša below_tl na nadaljnjem MaxDD
+čez VSE horizonte, ne ali je posamezna razlika značilna.
+
+PREVERBA NA DRUGI URI: družino, ki se uvrsti najvišje, pognati še na 4-urnih
+barih z dolžinami × 6 (kot v intraday_check.py). Če se uvrstitev premeša, je
+bila prednost šum — natanko tako, kot je padla dvotretjinska večina.
+
+KAJ BI TO REŠILO: ali je trackline najboljši razpoložljivi izstop ali le prvi,
+ki smo ga napisali. Ker nosi večino izstopne strani, je to najdražja neznanka.
+
+SPREJEMNI KRITERIJ: below_tl se zamenja SAMO, če tekmec prekaša na nadaljnjem
+MaxDD na vseh treh horizontih IN ohrani uvrstitev na 4-urnih barih. Karkoli manj
+od tega ni dovolj — pomeni, da smo našli šum.
+
+
+--------------------------------------------------------------------------------
+5.2  above_tl — asimetrični mrtvi pas
+--------------------------------------------------------------------------------
+ZAKAJ: jedro strategije, a nad povprečnim dnevom doda le +1,61 o. t. na 20 dni in
+noben razpon ne izloči ničle. Znotraj bikovskega režima pri 60 dneh predznak celo
+obrne.
+
+OZADJE, ki ga je treba vedeti: min_dist_entry_pct je BIL ravno ta zamisel —
+zahtevati za vstop več kot za izstop. Odposlan je bil z vrednostjo 0, zato se
+sesede v above_tl (0 dni razlike na 2700 dneh). Zamisel je dobra, izvedba je bila
+mrtva. Ta test jo oživi pravilno.
+
+NOVA SKRIPTA: testing/scripts/asymmetric_buffer.py
+
+IZVEDBA:
+  1. V strategy.py ločiti buf_entry in buf_exit; danes sta oba track_buf_pct = 3 %.
+     Sprememba je majhna: above_tl uporabi buf_entry, below_tl uporabi buf_exit.
+  2. Prelet buf_entry ∈ {1 · 2 · 3 · 4 · 5 · 6} × buf_exit ∈ {1 · 2 · 3 · 4 · 5}
+     = 30 kombinacij.
+  3. Za vsako kombinacijo event study na dneh sprožitve vstopa: nadaljnji donos
+     (primarno) in nadaljnji MaxDD (sekundarno), horizonti 5/20/60.
+
+DRUGI DEL — Donchian kot alternativa:
+  use_donchian je že v kodi in privzeto izklopljen. Vklopiti in primerjati z
+  above_tl NE po backtestu, ampak po nadaljnjem donosu na dneh sprožitve, na
+  isti podlagi. Prelet donchian_period ∈ {20 · 55 · 75} × donchian_top_frac
+  ∈ {0,65 · 0,75 · 0,85}.
+
+KAJ SE PRIČAKUJE IN KAJ BI BILO SUMLJIVO:
+  Hipoteza je, da je pravi buf_entry VIŠJI od buf_exit (vstopi previdno, izstopi
+  hitro). Če prelet pokaže obratno — da je najboljši buf_entry nižji od
+  buf_exit — je to najverjetneje prilagajanje temu vzorcu, ne ugotovitev.
+  Če najboljša kombinacija leži na ROBU mreže, mrežo razširiti, sicer je
+  "najboljša" vrednost artefakt meje.
+
+PREVERBA NA DRUGI URI: obvezna za najboljših tri kombinacije.
+
+KAJ BI TO REŠILO: ali je trackline pravi sprožilec VSTOPA ali le pravi sprožilec
+IZSTOPA. Danes tega ne vemo, ker ista številka opravlja oboje.
+
+
+--------------------------------------------------------------------------------
+5.3  above_ma_med — ali sta potrebna dva trend filtra
+--------------------------------------------------------------------------------
+ZAKAJ: značilen sam zase (+1,71 o. t. nad povprečnim dnevom na 20 dni), a
+inkrementalno blokira le 65 dni in razlika tam ni dokazana. Sum: prekriva se s
+track_rising_window.
+
+NOVA SKRIPTA: testing/scripts/filter_overlap.py
+
+IZVEDBA:
+  1. Prešteti štiri stanja po dneh:
+        oba resnična · samo above_ma_med · samo track_rising_window · nobeden
+     Če je "samo above_ma_med" pod ~100 dni, filter praktično nima svojega
+     prostora in je odveč, ne glede na ostalo.
+  2. Za vsako od štirih skupin izmeriti nadaljnji donos in nadaljnji MaxDD
+     (5/20/60). Ključna primerjava sta OBE SKUPINI, KJER SE RAZHAJATA — tam se
+     vidi, kateri filter nosi informacijo.
+  3. Izklopiti above_ma_med iz bull_condition in pognati poln protokol:
+     Sortino, MaxDD, poslov, PBO. PBO je obvezen, ker odstranitev filtra
+     spremeni prostor iskanja in s tem število poskusov.
+
+SPREJEMNI KRITERIJ ZA ODSTRANITEV — vsi trije hkrati:
+  (a) "samo above_ma_med" obsega manj kot ~100 dni;
+  (b) na dneh, kjer se filtra razhajata, above_ma_med ne prinaša boljšega
+      nadaljnjega izida od track_rising_window;
+  (c) izklop ne poslabša MaxDD (torej mere, ki jo produkt obljublja).
+Če katerikoli od treh pade, filter OSTANE.
+
+KAJ BI TO REŠILO: ali potrebujemo dva trend filtra ali enega. Če je odvečen,
+pade še en parameter in s tem prostor iskanja.
+
+
+--------------------------------------------------------------------------------
+5.4  blow-off — NE ODPIRATI
+--------------------------------------------------------------------------------
+Pri 8 sprožitvah in 6 že opravljenih testih (verjetnost vsaj enega značilnega po
+naključju 26 %) tega ni mogoče razrešiti. Vsak nadaljnji test na tem pravilu
+samo poveča število poskusov, ne da bi lahko prišel do odgovora.
+Pustiti pri miru. Ne uporabljati kot argument v nobeno smer.
+
+
+--------------------------------------------------------------------------------
+5.5  VRSTNI RED IN OCENA DELA
+--------------------------------------------------------------------------------
+  5.1  below_tl in tekmeci        ~1 dan     največ na kocki
+  5.3  above_ma_med prekrivanje   ~2 uri     najcenejši, lahko pade parameter
+  5.2  asimetrični mrtvi pas      ~pol dneva zahteva poseg v strategy.py
+
+5.3 pred 5.2, ker je cenejši in lahko odstrani parameter, preden dodamo novega.
 
 
 ================================================================================

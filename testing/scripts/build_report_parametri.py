@@ -21,6 +21,7 @@ EN = json.loads((ROOT / "testing" / "data" / "ensemble_BTC.json").read_text(enco
 MC = json.loads((ROOT / "testing" / "data" / "mc_tests_BTC.json").read_text(encoding="utf-8"))
 AU = json.loads((ROOT / "testing" / "data" / "audit_BTC.json").read_text(encoding="utf-8"))
 IN = json.loads((ROOT / "testing" / "data" / "intraday_BTC.json").read_text(encoding="utf-8"))
+CV = json.loads((ROOT / "testing" / "data" / "curves_BTC.json").read_text(encoding="utf-8"))
 OUT = ROOT / "testing" / "porocilo_parametri_BTC.html"
 
 # Plain-language name for every knob, so the page never makes the reader guess.
@@ -85,6 +86,65 @@ def sweep_chart(p, w=430, h=168) -> str:
     out.append(f'<text x="{pad_l-7}" y="{pad_t-4}" text-anchor="end" '
                f'style="font-size:10px">Sortino</text>')
     return "".join(out) + "</svg>"
+
+
+
+def equity_chart(clock, w=880, h=330) -> str:
+    """Linear axis, full resolution. No log scale and no downsampling: a log axis
+    hides how much of the gain is one late run, and downsampling makes a drawdown
+    look shallower than it was."""
+    idx = clock["index"]
+    series = [("danes", "var(--crit)", 2.4),
+              ("brez mrtvih gumbov", "var(--warn)", 4.6),
+              ("glasovanje: vecina", "var(--s1)", 2.4)]
+    bh = clock["benchmark"]["equity"]
+    allv = [v for n, _, _ in series for v in clock["curves"][n]] + bh
+    lo, hi = 0.0, max(allv) * 1.06
+    pad_l, pad_r, pad_t, pad_b = 46, 108, 16, 34
+    n = len(idx)
+
+    def X(i): return pad_l + i / (n - 1) * (w - pad_l - pad_r)
+    def Y(v): return pad_t + (1 - (v - lo) / (hi - lo)) * (h - pad_t - pad_b)
+
+    p = [f'<svg viewBox="0 0 {w} {h}" role="img">']
+    for g in range(0, int(hi) + 1):
+        p.append(f'<line x1="{pad_l}" y1="{Y(g):.1f}" x2="{w-pad_r}" y2="{Y(g):.1f}" '
+                 f'stroke="var(--grid)"/>')
+        p.append(f'<text x="{pad_l-7}" y="{Y(g)+4:.1f}" text-anchor="end">{g}×</text>')
+    years = {}
+    for i, d in enumerate(idx):
+        years.setdefault(d[:4], i)
+    for y, i in years.items():
+        p.append(f'<line x1="{X(i):.1f}" y1="{pad_t}" x2="{X(i):.1f}" y2="{h-pad_b}" '
+                 f'stroke="var(--grid)" stroke-dasharray="2 3"/>')
+        p.append(f'<text x="{X(i):.1f}" y="{h-pad_b+16:.0f}" text-anchor="middle">{y}</text>')
+
+    def path(vals):
+        return " ".join(f'{"M" if i == 0 else "L"}{X(i):.1f},{Y(v):.2f}'
+                        for i, v in enumerate(vals))
+
+    p.append(f'<path d="{path(bh)}" fill="none" stroke="var(--muted)" stroke-width="1.4" '
+             f'opacity=".55"/>')
+    p.append(f'<text x="{w-pad_r+6}" y="{Y(bh[-1])+4:.1f}" style="fill:var(--muted)">'
+             f'kupi in drži</text>')
+    for name, col, wd in series:
+        v = clock["curves"][name]
+        dash = ' stroke-dasharray="1 5" stroke-linecap="round"' if wd > 3 else ""
+        p.append(f'<path d="{path(v)}" fill="none" stroke="{col}" stroke-width="{wd}"'
+                 f'{dash}/>')
+    lab = [("danes", "var(--crit)"), ("brez mrtvih gumbov", "var(--warn)"),
+           ("glasovanje: vecina", "var(--s1)")]
+    NICE = {"danes": "danes", "brez mrtvih gumbov": "brez mrtvih gumbov",
+            "glasovanje: vecina": "glasovanje"}
+    used = []
+    for name, col in lab:
+        y = Y(clock["curves"][name][-1])
+        while any(abs(y - u) < 13 for u in used):
+            y += 13
+        used.append(y)
+        p.append(f'<text x="{w-pad_r+6}" y="{y+4:.1f}" style="fill:{col};font-weight:600">'
+                 f'{NICE[name]}</text>')
+    return "".join(p) + "</svg>"
 
 
 def hist(vals, marks, w=780, h=200, xlab="") -> str:
@@ -417,6 +477,97 @@ današnja nastavitev</b> ({pnt['maxdd']:.1f} % proti {maj['maxdd']:.1f} % pri ve
 slabost glasovanja — je še en obraz iste ugotovitve, da je današnja točka polepšana na obeh
 merilih hkrati.</p>""")
 
+
+    d1c, h4c = CV["clocks"]
+    m1 = d1c["metrics"]
+    A("<h2>Ali je glasovanje sploh kaj pomagalo? Poglejmo krivuljo</h2>")
+    A(f"""<p>Do zdaj smo primerjali številke. Tu sta obe različici na isti sliki, skupaj s
+kupi-in-drži, na navadni osi in v polni ločljivosti — brez logaritma, ki bi skril, koliko
+dobička pride iz enega samega vzpona, in brez redčenja točk, ki bi padec naredilo videti
+plitvejši, kot je bil.</p>""")
+    A('<div class="fig">' + equity_chart(d1c) + "</div>")
+    A(f"""<div class="fig"><table>
+<tr><th>različica</th><th>Sortino</th><th>največji padec</th><th>letni donos</th>
+<th>končni večkratnik</th><th>poslov</th></tr>
+<tr><td><b style="color:var(--crit)">danes</b></td>
+    <td class="n">{m1['danes']['sortino']:.3f}</td>
+    <td class="n">{m1['danes']['maxdd']:.1f} %</td>
+    <td class="n">{m1['danes']['cagr']:.1f} %</td>
+    <td class="n">{m1['danes']['final']:.2f}×</td>
+    <td class="n">{m1['danes']['trades']}</td></tr>
+<tr><td><b style="color:var(--warn)">brez mrtvih gumbov</b></td>
+    <td class="n">{m1['brez mrtvih gumbov']['sortino']:.3f}</td>
+    <td class="n">{m1['brez mrtvih gumbov']['maxdd']:.1f} %</td>
+    <td class="n">{m1['brez mrtvih gumbov']['cagr']:.1f} %</td>
+    <td class="n">{m1['brez mrtvih gumbov']['final']:.2f}×</td>
+    <td class="n">{m1['brez mrtvih gumbov']['trades']}</td></tr>
+<tr><td><b style="color:var(--s1)">glasovanje: večina</b></td>
+    <td class="n">{m1['glasovanje: vecina']['sortino']:.3f}</td>
+    <td class="n">{m1['glasovanje: vecina']['maxdd']:.1f} %</td>
+    <td class="n">{m1['glasovanje: vecina']['cagr']:.1f} %</td>
+    <td class="n">{m1['glasovanje: vecina']['final']:.2f}×</td>
+    <td class="n">{m1['glasovanje: vecina']['trades']}</td></tr>
+<tr><td style="color:var(--muted)">kupi in drži</td><td class="n">—</td>
+    <td class="n">{d1c['benchmark']['maxdd']:.1f} %</td>
+    <td class="n">{d1c['benchmark']['cagr']:.1f} %</td>
+    <td class="n">{d1c['benchmark']['equity'][-1]:.2f}×</td>
+    <td class="n">1</td></tr>
+</table></div>""")
+
+    A(f"""<div class="box good"><p><b>Prva ugotovitev: rumena črta se popolnoma skriva pod
+rdečo.</b> To ni napaka risanja — največja razlika med krivuljama je <b>točno
+{d1c['max_abs_curve_gap']:.0f}</b>. Trije gumbi, ki jih načrt briše
+(<code>vol_shock_mul</code>, <code>vol_lookback</code>, <code>min_dist_entry_pct</code>), so
+bili dokazano mrtvi: brisanje ne spremeni niti ene decimalke. <b>To je hkrati dokaz, da smo
+brisali pravo stvar, in dokaz, da brisanje ni ničesar pokvarilo.</b></p></div>""")
+
+    A(f"""<div class="box bad"><p><b>Druga ugotovitev, in tu moram biti nedvoumen: glasovanje
+ni izboljšalo nobenega merila.</b></p>
+<table style="margin:9px 0">
+<tr><th>merilo</th><th>danes</th><th>glasovanje</th><th>razlika</th></tr>
+<tr><td>Sortino</td><td class="n">{m1['danes']['sortino']:.3f}</td>
+    <td class="n">{m1['glasovanje: vecina']['sortino']:.3f}</td>
+    <td class="n" style="color:var(--crit)">{m1['glasovanje: vecina']['sortino']-m1['danes']['sortino']:+.3f}</td></tr>
+<tr><td>največji padec</td><td class="n">{m1['danes']['maxdd']:.1f} %</td>
+    <td class="n">{m1['glasovanje: vecina']['maxdd']:.1f} %</td>
+    <td class="n" style="color:var(--crit)">{m1['glasovanje: vecina']['maxdd']-m1['danes']['maxdd']:+.1f} o. t.</td></tr>
+<tr><td>letni donos</td><td class="n">{m1['danes']['cagr']:.1f} %</td>
+    <td class="n">{m1['glasovanje: vecina']['cagr']:.1f} %</td>
+    <td class="n" style="color:var(--crit)">{m1['glasovanje: vecina']['cagr']-m1['danes']['cagr']:+.1f} o. t.</td></tr>
+</table>
+<p><b>Slabše na vseh treh, in slabše tudi na 4-urnih barih.</b> Kdor bi gledal samo to tabelo,
+bi glasovanje zavrnil — in imel bi prav, če bi bila številka
+{m1['danes']['sortino']:.2f} resnična.</p></div>""")
+
+    A(f"""<p><b>Zakaj ga vseeno priporočamo — in kaj to v resnici je.</b> Glasovanje ni
+izboljšava. Je <b>popravek pričakovanja</b>. Izmerili smo, da je današnja nastavitev
+{sum(1 for v in ms['all'] if v < pt['sortino'])}. najboljša od {EN['members']} svojih sosedov
+in da je ta prednost statistično značilna (premija konice {prem:+.2f}, razpon
+[{ci[0]:+.2f}, {ci[1]:+.2f}]). Nastavitev, izbrana brez vpogleda v te podatke, bi pristala
+blizu povprečja soseske. Zato je nižja številka <b>ocena tega, kar se lahko ponovi</b>, višja
+pa vključuje del, ki se ne bo.</p>
+
+<p><b>Ampak pošteno je povedati tudi protiargument.</b> Padec se z glasovanjem <b>poglobi</b>
+({m1['danes']['maxdd']:.1f} % &rarr; {m1['glasovanje: vecina']['maxdd']:.1f} %), plitvejši padec
+pa je edina lastnost, ki jo produkt obljublja. Glasovanje torej žrtvuje nekaj tistega, kar
+prodajamo, da popravi številko, ki je ne prodajamo. V bran mu govori le to, da <b>prednost
+današnje nastavitve pri padcu ni statistično značilna</b> (razpon
+[{EN['ci_d_maxdd'][0]:+.1f}, {EN['ci_d_maxdd'][1]:+.1f}] o. t.), medtem ko je prednost pri
+Sortinu značilna in torej dokazano prilagojena. <b>Odločitev je tesna in je poslovna, ne
+tehnična.</b></p>
+
+<div class="box"><p><b>Kaj so 4-urni bari res prinesli — in to je poleg ovržene dvotretjinske
+večine drugi konkreten izplen.</b> Dnevni bari ne vidijo padca, ki se zgodi in popravi znotraj
+istega dneva, zato <b>lepšajo največji padec</b>:</p>
+<table style="margin:9px 0"><tr><th>različica</th><th>MaxDD dnevno</th>
+<th>MaxDD 4-urno</th><th>skrito</th></tr>
+{"".join(f'<tr><td>{n}</td><td class="n">{d1c["metrics"][n]["maxdd"]:.1f} %</td>'
+         f'<td class="n">{h4c["metrics"][n]["maxdd"]:.1f} %</td>'
+         f'<td class="n" style="color:var(--crit)">{CV["dd_understated"][n]:+.1f} o. t.</td></tr>'
+         for n in d1c["metrics"])}
+</table>
+<p>To ni statistična moč — te drobnejša ura ne more dati — ampak <b>natančnost</b>. Številka,
+ki jo je treba komunicirati, je 4-urna, ne dnevna.</p></div>""")
 
     A("<h2>Kaj bi se konkretno spremenilo</h2>")
     A(f"""<div class="fig"><table>

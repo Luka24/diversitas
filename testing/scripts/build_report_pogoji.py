@@ -302,6 +302,62 @@ razpon. To ni napaka grafa — nasprotno, ožja črta bi bila laž.</p>
 </div>
 </div></div>""")
 
+    A("""<h3 style="font-size:14.5px;margin:24px 0 8px">Zakaj ne navaden statistični
+test — na konkretnem primeru</h3>""")
+    A(f"""<p>To je edina tehnična podrobnost na strani, ki jo je vredno razumeti, ker
+<b>spremeni sklep</b>, ne le decimalke.</p>
+
+<p><b>Kaj bi naredil navaden test.</b> Vzame 747 dni, ko velja
+<code>bull_condition</code>, in reče: imam 747 neodvisnih dokazov. Iz tega izračuna, da je
+razlika +5,05 o. t. znana zelo natančno.</p>
+
+<p><b>Zakaj to ni res.</b> Predstavljajte si, da merim donos naslednjih 20 dni. V ponedeljek
+izmerim od ponedeljka do petka tri tedne naprej. V torek izmerim od torka do naslednjega
+torka. <b>Ti dve številki opisujeta skoraj isto obdobje</b> — delita 19 dni od 20. Ko potem
+oba dneva preštejem kot ločena dokaza, isto dogajanje preštejem dvakrat. In tako čez cel
+vzorec.</p>
+
+<p>Koliko točno se ponavlja, se da izmeriti. Spodaj je ujemanje med današnjo in jutrišnjo
+meritvijo istega nadaljnjega donosa:</p>
+
+<table style="max-width:560px;margin:0 0 14px">
+<tr><th class="l">nadaljnji donos</th><th>ujemanje z jutrišnjo meritvijo</th>
+<th>koliko dni do neodvisnosti</th></tr>
+<tr><td>5-dnevni</td><td>{ES['autocorr']['5']['1']:.2f}</td><td>~5</td></tr>
+<tr><td>20-dnevni</td><td><b>{ES['autocorr']['20']['1']:.2f}</b></td><td>~20</td></tr>
+<tr><td>60-dnevni</td><td><b>{ES['autocorr']['60']['1']:.2f}</b></td><td>~60</td></tr>
+</table>
+
+<p>Pri 20-dnevnem donosu je jutrišnja meritev <b>95 % ista številka</b> kot današnja. Torej
+747 dni <b>ni 747 dokazov, ampak približno 37</b> — toliko, kolikor je v njih ločenih
+20-dnevnih obdobij.</p>
+
+<p><b>Kaj naredi bločni bootstrap.</b> Namesto da bi jemal posamezne dni, jemlje
+<b>cele bloke zaporednih dni</b>, dolge toliko kot horizont. Če se ista trotedenska epizoda
+ponavlja, se v vzorcu pojavi kot ena epizoda, ne kot dvajset. Tako sestavi 2000 nadomestnih
+vzorcev in razpršenost njihovih rezultatov je pošten razpon negotovosti.</p>
+
+<p><b>In zdaj, zašto to spremeni sklep.</b> Ista razlika, ista strategija, isti podatki —
+samo pošteno preštet:</p>
+
+<table style="max-width:640px;margin:0 0 14px">
+<tr><th class="l">razlika pri <code>bull_condition</code></th>
+<th>navaden test</th><th>bločni bootstrap</th><th>koliko širše</th></tr>
+{"".join(
+  f'<tr><td>čez {h} dni: {v["diff"]:+.2f} o. t.</td>'
+  f'<td>[{v["ci_naive"][0]:+.2f}, {v["ci_naive"][1]:+.2f}]</td>'
+  f'<td><b>[{v["ci"][0]:+.2f}, {v["ci"][1]:+.2f}]</b></td>'
+  f'<td>{v["widen"]:.1f}×</td></tr>'
+  for h in ES["horizons"]
+  if (v := next(c for c in ES["conditions"] if c["key"] == "bull_condition")["m"]["donos"][str(h)]))}
+</table>
+
+<p>Pri 60 dneh bi navaden test rekel »razlika je med +9 in +15 o. t., torej očitno resnična«.
+Pošten razpon gre <b>od −5 do +32</b> in <b>zajema ničlo</b>. Ena metoda razglasi ugotovitev
+za dokazano, druga za nedokazano. <b>Vse, kar je na tej strani označeno kot »značilno«,
+je značilno po strožji metodi</b> — po ohlapni bi jih bilo označenih približno dvakrat
+toliko.</p>""")
+
     A("<h2>Vstopni pogoji</h2>")
     A('<div class="grid">' + "".join(card(c) for c in entry) + "</div>")
 
