@@ -121,8 +121,8 @@ READ = {
  "below_tl": (
    "Zrcalna slika vstopa: cena je <b>več kot 3 % pod</b> sredino zadnjih 75 dni.<br><br>"
    "Izstop se ne zgodi takoj. Pogoj mora veljati <b>3 dni zapored</b>, sicer nas vsak "
-   "enodnevni sunek vrže iz pozicije. Po odstranitvi blow-offa je to <b>edini preostali "
-   "izstop</b> in nosi celotno izstopno stran strategije.",
+   "enodnevni sunek vrže iz pozicije. To je <b>glavni izstop</b> — povzroči 13 od 21 poslov "
+   "in nosi večino izstopne strani strategije.",
    "track_period = 75 dni · track_buf_pct = 3 % · exit_grace_bars = 3 dni",
    "Pravi predznak, a razlika je premajhna glede na razpršenost.", "?"),
 
@@ -130,11 +130,11 @@ READ = {
    "Cena je <b>več kot 25 % nad</b> trackline <b>in</b> hkrati je RSI nad 80. RSI je "
    "kazalnik pregretosti od 0 do 100; nad 80 pomeni zelo hitro rast v kratkem času.<br><br>"
    "Naj bi ujel evforični skok tik pred zlomom. Izstop je <b>takojšen</b>, brez treh dni "
-   "čakanja.<br><br><b>Ta graf ga postavlja proti vsem dnevom, kar je napačna primerjava</b> "
-   "— izstopno pravilo se posvetuje samo, ko smo v poziciji in je cena že visoko. Pravilna "
-   "primerjava je v razdelku spodaj in daje drugačen odgovor.",
+   "čakanja.<br><br>Primerjan je z <b>drugimi enako raztegnjenimi dnevi</b>, ne z vsemi — "
+   "pravilo se posvetuje samo, ko je cena že več kot 25 % nad trackline, zato je to edina "
+   "smiselna primerjalna skupina.",
    "blowoff_dist_pct = 25 % · RSI prag = 80 · rsi_len = 14 dni",
-   "Ta graf je zavajajoč — glej popravljeno analizo spodaj.", "?"),
+   "Na 20 dni mu sledi opazno slabši donos, na 5 dni značilno globlji padec.", "ok"),
 
  "vol_shock": (
    "Nihajnost zadnjih 20 dni je <b>več kot 1,5-krat višja</b> od svojega 50-dnevnega "
@@ -149,12 +149,26 @@ BADGE = {"ok": ("dokazan", "var(--good)"), "?": ("nedokazan", "var(--warn)"),
          "bad": ("dela narobe", "var(--crit)")}
 
 
+# Each exit rule is measured against the days on which it is actually consulted.
+# blow-off only ever fires when price is already far above the trackline, so its
+# peer group is the other extended days, not the whole sample; vol-shock is gated
+# on below_tl in the code, so its peer group is the other below-trackline days.
+PEER = {
+    "blowoff":   (lambda: EX["blowoff_vs_extended"]["m"]["donos"],
+                  "primerjano med dnevi &gt; 25 % nad trackline"),
+    "vol_shock": (None, "primerjano med dnevi pod trackline"),
+}
+
+
 def card(r):
+    src, note = PEER.get(r["key"], (None, ""))
+    m = src() if src else r["m"]["donos"]
     rows = [(f"{h} dni", v["diff"], v["ci"], v["sig"])
-            for h in ES["horizons"] if (v := r["m"]["donos"][str(h)])]
+            for h in ES["horizons"]
+            if (v := m.get(str(h))) and not v.get("too_few")]
     what, params, txt, bk = READ[r["key"]]
     lab, col = BADGE[bk]
-    gate = "" if r["gate"] == "all" else " · primerjano znotraj dni pod trackline"
+    gate = f" · {note}" if note else ""
     return (f'<div class="card"><h3>{r["key"]}'
             f'<span class="badge" style="background:{col}">{lab}</span></h3>'
             f'<p class="d">{r["label"]} · velja na {r["n_fire"]} dneh '
@@ -165,7 +179,7 @@ def card(r):
 
 
 def main():
-    b = ES["blowoff_mechanism"]
+    b_ = ES["blowoff_mechanism"]
     base = AB["baseline"]
     abl = {a["name"]: a for a in AB["ablations"]}
     entry = [c for c in ES["conditions"] if c["side"] == "vstop"]
@@ -277,18 +291,27 @@ razpon. To ni napaka grafa — nasprotno, ožja črta bi bila laž.</p>
     A("<h2>Izstopni pogoji</h2>")
     A('<div class="grid">' + "".join(card(c) for c in exit_) + "</div>")
 
-    A("<h2>Blow-off: prva analiza je bila napačno zastavljena</h2>")
-    A("""<p>Zgornji graf primerja dneve, ko se blow-off sproži, z <b>vsemi ostalimi dnevi v
-vzorcu</b>. Videti je bilo, da se sproža ob dobrih trenutkih. <b>Ta primerjava je napačna</b>
-— in to je ista napaka, ki je bila pri vol-shocku že popravljena.</p>
-<p>Izstopno pravilo se nikoli ne posvetuje na povprečnem dnevu. Posvetuje se <b>samo takrat,
-ko smo v poziciji in je cena že daleč nad trackline</b>. Primerjati ga je torej treba z
-<b>drugimi enako raztegnjenimi dnevi</b>, ne s celim vzorcem, ki je večinoma nekaj
-popolnoma drugega.</p>""")
+    A("<h2>Blow-off: kaj v resnici počne</h2>")
     bx = EX["blowoff_vs_extended"]
-    A(f"""<p class="cap">Pravi primerjalni vzorec: <b>{bx['n_extended']} dni</b>, ko je bila
-cena več kot 25 % nad trackline. Od teh se jih <b>{bx['n_fire']}</b> sproži (RSI &gt; 80).
-Vprašanje je ozko: <i>ali RSI nad 80 doda karkoli k temu, da je cena že raztegnjena?</i></p>""")
+    A(f"""<p>Blow-off je edini izstop, ki se sproži <b>navzgor</b> — ob evforiji, ne ob
+padcu. Ker se posvetuje le, kadar je cena že daleč nad trackline, ga merimo proti prav tem
+dnevom: <b>{bx['n_extended']} dni</b>, ko je bila cena več kot 25 % nad trackline, od katerih
+se jih <b>{bx['n_fire']}</b> sproži. Vprašanje je ozko: <i>ali RSI nad 80 doda karkoli k
+temu, da je cena že raztegnjena?</i> Zastavili smo ga v dveh korakih.</p>""")
+
+    A("<h3 style='font-size:14.5px;margin:24px 0 8px'>Prvo vprašanje: ali zaznava vrhove?</h3>")
+    A(f'<p class="cap">Vseh {b_["n_fire"]} sprožitev, razvrščenih po tem, kaj je sledilo v '
+      f'naslednjih 60 dneh. Če pravilo zaznava vrhove, morajo pristati levo.</p>')
+    A('<div class="fig">' + blowoff_chart(b_) + "</div>")
+    A(f"""<div class="note"><p><b>Ne.</b> Mediana sprožitve pristane na
+<b>{b_['median_percentile_of_fwd60']}. percentilu</b> nadaljnjega 60-dnevnega donosa;
+{b_['share_in_best_quartile']} % sprožitev je v najboljši četrtini, {b_['share_in_worst_quartile']} %
+v najslabši. Kot napovednik vrha pravilo <b>ne deluje</b>.</p></div>""")
+
+    A("<h3 style='font-size:14.5px;margin:24px 0 8px'>Drugo vprašanje: ali torej ne dela "
+      "ničesar?</h3>")
+    A('<p class="cap">Vrh in nemir nista isto. Zato isto sprožitev izmerimo še proti '
+      'drugim raztegnjenim dnevom, in to na obeh merilih — donosu in globini padca.</p>')
     A('<div class="grid">')
     for lab, title, hint in (
         ("donos", "Nadaljnji donos", "za izstopno pravilo je pravi predznak <b>negativen</b>"),
@@ -302,21 +325,19 @@ Vprašanje je ozko: <i>ali RSI nad 80 doda karkoli k temu, da je cena že razteg
     d20 = bx["m"]["donos"]["20"]
     dd5 = bx["m"]["maxdd"]["5"]
     A(f"""<div class="note" style="border-left-color:var(--warn)">
-<p><b>Slika se obrne.</b> Proti pravemu primerjalnemu vzorcu blow-off <b>ni</b> narobe
-obrnjen:</p>
+<p><b>Da, dela — le nekaj drugega, kot je bilo mišljeno.</b></p>
 <ul style="margin:8px 0 0"><li>na <b>20 dni</b> mu sledi donos <b>{d20['diff']:+.1f} o. t.</b>
 slabši kot drugim raztegnjenim dnevom ({d20['mean_true']:+.1f} % proti
-{d20['mean_false']:+.1f} %) — to je prava smer za izstopno pravilo;</li>
+{d20['mean_false']:+.1f} %) — prava smer za izstopno pravilo;</li>
 <li>na <b>5 dni</b> mu sledi <b>značilno globlji</b> vmesni padec
 ({dd5['diff']:+.2f} o. t., razpon [{dd5['ci'][0]:+.2f}, {dd5['ci'][1]:+.2f}]).</li></ul>
 </div>""")
 
     fired = EX["blowoff_exits"]
     fs = EX.get("blowoff_exits_summary", {})
-    A("<h3 style='font-size:14.5px;margin:24px 0 8px'>Kaj se je zgodilo po vsakem dejanskem "
-      "izstopu</h3>")
+    A("<h3 style='font-size:14.5px;margin:24px 0 8px'>Preverba na dejanskih izstopih</h3>")
     A(f'<p class="cap">Vseh {len(fired)} izstopov, ki jih je blow-off res povzročil. Osem '
-      f'opazovanj samo zase ničesar ne dokaže — pokažejo pa, ali agregat govori resnico.</p>')
+      f'opazovanj samo zase ničesar ne dokaže — povedo pa, ali agregat govori resnico.</p>')
     A('<div class="fig"><table><tr><th>datum</th><th>% nad trackline</th><th>RSI</th>'
       '<th>cena čez 20 dni</th><th>cena čez 60 dni</th>'
       '<th>najgloblji padec v 60 dneh</th></tr>')
@@ -329,26 +350,23 @@ slabši kot drugim raztegnjenim dnevom ({d20['mean_true']:+.1f} % proti
           f'<td style="color:var(--crit)">{r["dd60"]:+.1f} %</td></tr>')
     A("</table></div>")
     A(f"""<div class="note" style="border-left-color:var(--good)">
-<p><b>Blow-off ni detektor vrhov. Je detektor turbulence — in to nam ustreza.</b></p>
+<p><b>Sodba: blow-off ni detektor vrhov, ampak detektor turbulence — in to je tisto, kar potrebujemo.</b></p>
 <p style="margin-top:8px">Cena je v 60 dneh padla po <b>{fs.get('n_price_fell_60d','?')} od
-{fs.get('n','?')}</b> izstopov, kar pomeni, da pravilo <i>ne</i> zna napovedati vrha. Ampak:
-po <b>vsakem</b> od {len(fired)} izstopov je v naslednjih 60 dneh sledil padec med 13 in 28 %
-(mediana {fs.get('median_dd60','?')} %). Pravilo zanesljivo izstopi pred nemirom, tudi kadar
-se cena na koncu pobere.</p>
-<p style="margin-top:8px">Backtest to potrdi z druge strani: <b>izklop blow-offa dvigne
-Sortino za {abl['brez_blowoff']['d_sortino']:+.2f}, a poglobi največji padec za
+{fs.get('n','?')}</b> izstopov, torej vrha res ne zna napovedati. Ampak po <b>vsakem</b> od
+{len(fired)} izstopov je v naslednjih 60 dneh sledil padec med 13 in 28 % (mediana
+{fs.get('median_dd60','?')} %). Pravilo zanesljivo izstopi pred nemirom, tudi kadar se cena
+na koncu pobere.</p>
+<p style="margin-top:8px">Celoten backtest to potrdi z zadnje strani: <b>izklop blow-offa
+dvigne Sortino za {abl['brez_blowoff']['d_sortino']:+.2f}, a poglobi največji padec za
 {abs(abl['brez_blowoff']['d_maxdd']):.1f} odstotne točke</b> ({base['maxdd']:.1f} % &rarr;
-{abl['brez_blowoff']['maxdd']:.1f} %). Pravilo stane donos in kupi mirnejšo vožnjo — kar je
-natanko posel, ki ga produkt obljublja.</p>
-<p style="margin-top:8px"><b>Popravek priporočila: blow-off OBDRŽATI.</b> Prejšnja različica
-te strani ga je uvrščala med odstranitve. Podlaga za to je bila napačna primerjalna
-skupina.</p></div>""")
+{abl['brez_blowoff']['maxdd']:.1f} %). Pravilo stane donos in kupi mirnejšo vožnjo — natanko
+posel, ki ga produkt obljublja. <b>Obdržati.</b></p></div>""")
 
-    A("<h2>Vol-shock: sodba potrjena, in močneje kot prej</h2>")
+    A("<h2>Vol-shock: pravilo, ki se ne sproži</h2>")
     vsw = EX["vol_shock_threshold_sweep"]
     va = EX["vol_shock_actionable"]
-    A(f"""<p>Pri vol-shocku je bila primerjava prava že od začetka. Sodba se ni spremenila, je
-pa zdaj podprta s treh strani.</p>
+    A(f"""<p>Vol-shock je vezan na <code>below_tl</code>, zato je merjen proti drugim dnevom
+pod trackline. Trije neodvisni pogledi dajo isti odgovor.</p>
 <ul class="cap"><li>Od {base['trades']} izstopov strategije jih je povzročil
 <b>{base['exit_reasons']['vol_shock']}</b>.</li>
 <li>Obstaja <b>{va['n_window']} dni</b>, ko bi lahko deloval — v poziciji smo, cena je pod
@@ -425,7 +443,7 @@ natančnosti. Za vsako je spodaj konkreten test, ki bi ga zaprl.</p>""")
        "pred padcem, ne pred izgubljenim donosom. Ta stolpec je že izračunan v "
        "<code>event_study.py</code>, a ga ta stran ne prikazuje.",
        "Ali je trackline najboljši razpoložljivi izstop ali le prvi, ki smo ga napisali. "
-       "Ker po odstranitvi blow-offa ostane sam, je to zdaj kritično."),
+       "Ker nosi večino izstopne strani, je to najpomembnejša odprta točka."),
       ("above_ma_med",
        "Značilen sam zase, a inkrementalno blokira le 65 dni in razlika tam ni dokazana. "
        "Sum: prekriva se s <code>track_rising_window</code>.",
