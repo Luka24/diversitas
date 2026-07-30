@@ -375,54 +375,34 @@ sloni na statistični značilnosti, ampak na mehaniki, in je zato edina trdna.
     A("</table></div>")
 
     # ── the point of the document: what is still open, and how to close it ──
-    A("<h2>Kaj ni dokazano in kako to preveriti</h2>")
-    A("""<p>Tri pravila ostajajo <b>nedokazana</b> — ne ovržena, samo neizmerjena z dovolj
-natančnosti. Za vsako je spodaj konkreten test, ki bi ga zaprl.</p>""")
-    A('<div class="fig"><table>'
-      '<tr><th style="width:14%">pogoj</th><th style="width:24%">kaj natanko ni jasno</th>'
-      '<th style="width:38%">test</th><th>kaj bi to rešilo</th></tr>')
+    A("<h2>Kaj ostaja odprto</h2>")
+    A("""<p>Tri pravila niso ovržena, le premalo natančno izmerjena. Za vsako je spodaj test,
+ki bi ga zaprl, po prioriteti.</p>""")
+    A('<div class="fig"><table><tr><th style="width:16%">pogoj</th>'
+      '<th style="width:30%">kaj ni jasno</th><th>test</th></tr>')
     OPEN = [
-      ("above_tl",
-       "Pozitiven predznak na vseh horizontih, a noben razpon ne izloči ničle. Znotraj "
-       "bikovskega režima pri 60 dneh celo obrne predznak.",
-       "<b>1.</b> Ločiti vstopni in izstopni mrtvi pas. Danes sta oba 3 %, kar je bila "
-       "odločitev za simetrijo, ne meritev. Prelet vstopnega 1–6 % neodvisno od izstopnega, "
-       "z event studyjem na vsaki kombinaciji.<br>"
-       "<b>2.</b> Zamenjati z Donchian prebojem (<code>use_donchian</code> je že v kodi, "
-       "privzeto izklopljen) in ju primerjati na isti podlagi — ne po backtestu, ampak po "
-       "nadaljnjem donosu na dneh sprožitve.",
-       "Ali je trackline sploh pravi sprožilec vstopa, ali le pravi sprožilec izstopa. To je "
-       "trenutno največja neznanka v strategiji, ker je <code>above_tl</code> njeno jedro."),
-      ("below_tl",
-       "Pravi predznak (−4,6 o. t. na 60 dni), a razpršenost je prevelika. Hkrati je to "
-       "edini preostali izstop, torej nosi celotno izstopno stran.",
-       "<b>1.</b> Postaviti mu tekmece in vse meriti z istim event studyjem: izstop na "
-       "ATR trailing stopu, izstop ob prebitju 50 MA, časovni izstop po N dneh.<br>"
-       "<b>2.</b> Meriti ne donosa, ampak <b>nadaljnji MaxDD</b> — izstop naj bi varoval "
-       "pred padcem, ne pred izgubljenim donosom. Ta stolpec je že izračunan v "
-       "<code>event_study.py</code>, a ga ta stran ne prikazuje.",
-       "Ali je trackline najboljši razpoložljivi izstop ali le prvi, ki smo ga napisali. "
-       "Ker nosi večino izstopne strani, je to najpomembnejša odprta točka."),
-      ("above_ma_med",
-       "Značilen sam zase, a inkrementalno blokira le 65 dni in razlika tam ni dokazana. "
-       "Sum: prekriva se s <code>track_rising_window</code>.",
-       "<b>1.</b> Izmeriti prekrivanje: na koliko dni sta oba resnična hkrati, in kakšen je "
-       "nadaljnji donos na dneh, kjer se <b>razhajata</b>.<br>"
-       "<b>2.</b> Izklopiti ga in pognati poln protokol — vključno s PBO, ker odstranitev "
-       "filtra spremeni število poskusov.",
-       "Ali potrebujemo dva trend filtra ali enega. Če je odvečen, pade še en parameter."),
+      ("below_tl", "Nosi večino izstopne strani (13 od 21 poslov), a razlika ni dokazana.",
+       "Postaviti mu tekmece — ATR trailing stop, prebitje 50 MA, časovni izstop — in vse "
+       "meriti z istim event studyjem, a na <b>nadaljnjem MaxDD</b> namesto na donosu. "
+       "Izstop naj varuje pred padcem, ne pred izgubljenim donosom."),
+      ("above_tl", "Jedro strategije, a nad povprečnim dnevom doda le +1,6 o. t. in noben "
+       "razpon ne izloči ničle.",
+       "Ločiti vstopni in izstopni mrtvi pas — danes sta oba 3 % zaradi simetrije, ne "
+       "meritve. Prelet vstopnega 1–6 % neodvisno od izstopnega. Nato primerjava z Donchian "
+       "prebojem (<code>use_donchian</code> je že v kodi)."),
+      ("above_ma_med", "Značilen sam zase, a inkrementalno blokira le 65 dni. Sum prekrivanja "
+       "s <code>track_rising_window</code>.",
+       "Izmeriti dneve, na katerih se filtra <b>razhajata</b>, in nadaljnji donos tam. Če je "
+       "odvečen, pade še en parameter."),
     ]
-    for k, unclear, test, solves in OPEN:
+    for k, unclear, test in OPEN:
         A(f'<tr><td><code>{k}</code></td><td style="font-size:12.5px">{unclear}</td>'
-          f'<td style="font-size:12.5px">{test}</td>'
-          f'<td style="font-size:12.5px">{solves}</td></tr>')
+          f'<td style="font-size:12.5px">{test}</td></tr>')
     A("</table></div>")
-
-    A(f"""<p class="cap"><b>Kako vse tri izvesti hkrati in ceneje.</b> Vsi trije testi so
-omejeni z istim: {base['trades']} poslov in {ES['n_days']} dni. Iste rutine pognane na
-<b>4-urnih barih istega BTC-ja v istem obdobju</b> dajo približno šestkrat več opazovanj.
-Pogoj je, da se vsi lookbacki pomnožijo s 6 — sicer ne testiramo drobnejše ure, ampak drugo
-strategijo. To je edini način, da vzorec zraste brez novih trgov in brez čakanja.</p>""")
+    A(f"""<p class="cap">Vsi trije so omejeni z istim: {base['trades']} poslov. Preverba na
+4-urnih barih pokaže, da drobnejša ura tega <b>ne odpravi</b> — ob pomnoženih dolžinah
+strategija naredi enako število poslov. Uporabna je za drugo vprašanje: ali je rezultat
+odvisen od tega, kdaj po dogovoru konča dan.</p>""")
 
     A(f"""<footer>
 Vir: Binance, zamrznjen posnetek <code>testing/data/sources/BTC_binance.parquet</code>.

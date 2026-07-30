@@ -138,25 +138,38 @@ najdemo naključje. Verjetnost, da je izbira najboljše nastavitve zgolj šum, j
 v bitcoinu namesto vse ali nič. Če produkt tega ne podpira ali tega preprosto nočemo, je
 rešitev preprosta: <b>naj različice glasujejo.</b> V poziciji smo, kadar je zanjo dovolj
 velik del soseske. Rezultat je spet vse-ali-nič, ohrani pa se tisto, zaradi česar smo
-povprečili — <b>ne stojimo več na eni sami točki.</b></p><div class="fig"><table><tr><th>različica</th><th>pozicija</th><th>Sortino</th><th>največji padec</th><th>promet</th><th>poslov</th></tr><tr><td>danes: ena tocka<br><span style="font-size:11.5px;color:var(--muted)">privzete vrednosti, vse-ali-nic</span></td><td><b style='color:var(--good)'>vse ali nič</b></td><td class="n">1.099</td><td class="n">-39.8 %</td><td class="n">16.0</td><td class="n">8</td></tr><tr><td>ansambel, zvezna pozicija<br><span style="font-size:11.5px;color:var(--muted)">povprecje 81 sosedov; zahteva delne pozicije</span></td><td><span style='color:var(--crit)'>delna</span></td><td class="n">0.820</td><td class="n">-41.8 %</td><td class="n">17.7</td><td class="n">40</td></tr><tr><td>glasovanje: več kot tretjina sosedov<br><span style="font-size:11.5px;color:var(--muted)">vse-ali-nic; v poziciji, ko je zanjo vec kot tretjina od 81 razlicic</span></td><td><b style='color:var(--good)'>vse ali nič</b></td><td class="n">0.670</td><td class="n">-40.7 %</td><td class="n">20.0</td><td class="n">10</td></tr><tr style="background:var(--band)"><td>glasovanje: večina sosedov<br><span style="font-size:11.5px;color:var(--muted)">vse-ali-nic; v poziciji, ko je zanjo vecina od 81 razlicic</span></td><td><b style='color:var(--good)'>vse ali nič</b></td><td class="n">0.878</td><td class="n">-43.1 %</td><td class="n">18.0</td><td class="n">9</td></tr><tr><td>glasovanje: dve tretjini sosedov<br><span style="font-size:11.5px;color:var(--muted)">vse-ali-nic; v poziciji, ko je zanjo dve tretjini od 81 razlicic</span></td><td><b style='color:var(--good)'>vse ali nič</b></td><td class="n">0.960</td><td class="n">-43.1 %</td><td class="n">16.0</td><td class="n">8</td></tr><tr><td>sredina ravnine, ena tocka<br><span style="font-size:11.5px;color:var(--muted)">vse-ali-nic; ma_long_len=225, confirm_bars=1, reentry_hold=15, exit_grace_bars=4</span></td><td><b style='color:var(--good)'>vse ali nič</b></td><td class="n">0.983</td><td class="n">-42.1 %</td><td class="n">16.0</td><td class="n">8</td></tr></table></div><div class="box good"><p><b>Priporočilo: navadna večina.</b> Pozicija ostane
-vse-ali-nič, število poslov se premakne z 8 na 9 in promet s
-16.0 na 18.0 — <b>operativno je to skoraj isto kot
-danes</b>. Sortino je 0.88 namesto 1.10, kar pa ni izguba:
-1.10 je bila številka, ki je vključevala prednost izbrane točke.</p></div><div class="box"><p><b>Zakaj ne dvotretjinska večina, ki izgleda bolje.</b>
-Dvotretjinsko glasovanje da 0.96 namesto 0.88. Vabljivo — a
-prag »dve tretjini« smo izbrali <b>potem, ko smo videli te številke</b>. To je natanko ista
-napaka, ki jo skušamo odpraviti, le eno nadstropje višje. <b>Navadna večina je edini prag, ki
-ga ni treba izbrati</b>: je očitna vrednost, določena vnaprej.</p></div><p><b>Še preprostejša možnost, če je tudi glasovanje preveč.</b> Obdrži eno samo
-nastavitev, a izberi <b>sredino najširše ravnine namesto najvišje točke</b>:
-<code>ma_long_len</code> = 225, <code>confirm_bars</code> = 1, <code>reentry_hold</code> = 15, <code>exit_grace_bars</code> = 4. To da Sortino
-0.98 pri enakem prometu kot danes. Pošteno pa je povedati, da to problema
-<b>ne odpravi</b> — še vedno stojimo na eni točki, le na položnejši. Glasovanje je
-načelno boljše, ta možnost pa je boljša od tega, da ne naredimo nič.</p>
-
-<p class="cap">Opozorilo k vsem trem: <b>vse binarne različice imajo globlji največji padec
-kot današnja nastavitev</b> (-39.8 % proti -43.1 % pri večini).
-To ni slabost glasovanja — je še en obraz iste ugotovitve, da je današnja točka polepšana
-na obeh merilih hkrati.</p><h2>Kaj bi se konkretno spremenilo</h2><div class="fig"><table>
+povprečili — <b>ne stojimo več na eni sami točki.</b></p><div class="fig"><table><tr><th>različica</th><th>pozicija</th><th>Sortino</th><th>največji padec</th><th>promet</th><th>poslov</th></tr><tr><td>danes: ena tocka<br><span style="font-size:11.5px;color:var(--muted)">privzete vrednosti, vse-ali-nic</span></td><td><b style='color:var(--good)'>vse ali nič</b></td><td class="n">1.099</td><td class="n">-39.8 %</td><td class="n">16.0</td><td class="n">8</td></tr><tr><td>ansambel, zvezna pozicija<br><span style="font-size:11.5px;color:var(--muted)">povprecje 81 sosedov; zahteva delne pozicije</span></td><td><span style='color:var(--crit)'>delna</span></td><td class="n">0.820</td><td class="n">-41.8 %</td><td class="n">17.7</td><td class="n">40</td></tr><tr><td>glasovanje: več kot tretjina sosedov<br><span style="font-size:11.5px;color:var(--muted)">vse-ali-nic; v poziciji, ko je zanjo vec kot tretjina od 81 razlicic</span></td><td><b style='color:var(--good)'>vse ali nič</b></td><td class="n">0.670</td><td class="n">-40.7 %</td><td class="n">20.0</td><td class="n">10</td></tr><tr style="background:var(--band)"><td>glasovanje: večina sosedov<br><span style="font-size:11.5px;color:var(--muted)">vse-ali-nic; v poziciji, ko je zanjo vecina od 81 razlicic</span></td><td><b style='color:var(--good)'>vse ali nič</b></td><td class="n">0.878</td><td class="n">-43.1 %</td><td class="n">18.0</td><td class="n">9</td></tr><tr><td>glasovanje: dve tretjini sosedov<br><span style="font-size:11.5px;color:var(--muted)">vse-ali-nic; v poziciji, ko je zanjo dve tretjini od 81 razlicic</span></td><td><b style='color:var(--good)'>vse ali nič</b></td><td class="n">0.960</td><td class="n">-43.1 %</td><td class="n">16.0</td><td class="n">8</td></tr><tr><td>sredina ravnine, ena tocka<br><span style="font-size:11.5px;color:var(--muted)">vse-ali-nic; ma_long_len=225, confirm_bars=1, reentry_hold=15, exit_grace_bars=4</span></td><td><b style='color:var(--good)'>vse ali nič</b></td><td class="n">0.983</td><td class="n">-42.1 %</td><td class="n">16.0</td><td class="n">8</td></tr></table></div><h3 class='s'>Katero od teh izbrati — preverjeno na dveh urah</h3><p>Razlika med najboljšimi različicami je desetinka Sortina, odločitev pa sloni na
+8 do 9 poslih. Na tolikšnem vzorcu desetinke ni mogoče izmeriti.
+Zato smo vse skupaj pognali <b>še enkrat na 4-urnih barih</b> istega bitcoina v istem obdobju,
+z vsemi dolžinami pomnoženimi s 6, da ostane ekonomski horizont enak. Če se vrstni red ob
+spremembi ure ohrani, je resničen; če se premeša, je bil šum.</p><div class="fig"><table><tr><th>različica</th><th>Sortino<br>dnevno</th><th>Sortino<br>4-urno</th><th>uvrstitev</th><th>ocena</th></tr><tr><td>sredina ravnine</td><td class="n">0.983</td><td class="n">1.152</td><td class="n">2. &rarr; 1.</td><td style="font-size:12.5px;color:var(--good)">1. na 4h, 2. dnevno — <b>najbolj stabilna</b></td></tr><tr><td>danes: ena točka</td><td class="n">1.099</td><td class="n">0.993</td><td class="n">1. &rarr; 2.</td><td style="font-size:12.5px;color:var(--warn)">pade z ure na uro: 1,10 &rarr; 0,99</td></tr><tr><td>glasovanje: večina</td><td class="n">0.878</td><td class="n">0.904</td><td class="n">4. &rarr; 3.</td><td style="font-size:12.5px;color:var(--good)">3.–4. na obeh urah, <b>brez preskokov</b></td></tr><tr><td>glasovanje: dve tretjini</td><td class="n">0.960</td><td class="n">0.851</td><td class="n">3. &rarr; 4.</td><td style="font-size:12.5px;color:var(--crit)"><b>preskoči z 2. na 4. mesto</b> — šum</td></tr><tr><td>ansambel, zvezna pozicija</td><td class="n">0.820</td><td class="n">0.846</td><td class="n">5. &rarr; 5.</td><td style="font-size:12.5px;color:var(--muted)">zadnja na obeh; zahteva delne pozicije</td></tr></table></div><div class="box bad"><p><b>Dvotretjinsko glasovanje je padlo.</b> Na dnevnih barih je
+bilo drugo najboljše (0.96), na 4-urnih pade na četrto
+(0.85). Prag »dve tretjini« smo izbrali
+potem, ko smo videli dnevne številke, in ob spremembi ure se je izbira razblinila. <b>To je
+tisto, kar smo iskali: dokaz, da je bila ena od možnosti prilagojena podatkom.</b></p></div><div class="box good"><p><b>Priporočilo: glasovanje z navadno večino.</b></p>
+<p style="margin-top:8px">Sredina ravnine ima na obeh urah nekoliko višji Sortino, a razlika
+<b>ni ločljiva od šuma na nobeni</b> (+0.10, razpon
+[-0.32, +0.60] dnevno; +0.25, razpon
+[-0.12, +0.66] na 4h). Ko dveh možnosti ni mogoče ločiti po
+rezultatu, se odloči po načelu — in tu je načelo jasno: <b>vrednosti »sredine ravnine« so bile
+izbrane z gledanjem teh podatkov</b> (kot najvišje drseče povprečje preleta),
+<b>prag navadne večine pa ne.</b> Je edina številka na tej strani, ki je določena vnaprej.</p>
+<p style="margin-top:8px">Operativno se skoraj nič ne spremeni: pozicija ostane vse-ali-nič,
+poslov 8 &rarr; 9, promet 16.0 &rarr;
+18.0. Sortino, ki ga navajamo, je 0.88 namesto
+1.10.</p></div><div class="box"><p><b>Kaj je test na 4-urnih barih pokazal in česa ni.</b>
+Pokazal je, da ena od možnosti ni zdržala spremembe ure — to je bil njegov namen in ga je
+opravil. <b>Ni pa prinesel več poslov:</b> ker so vse dolžine pomnožene s 6, se strategija
+obnaša v ekonomskem času enako in naredi
+8 poslov namesto
+9. Drobnejša ura torej <b>ne rešuje
+premajhnega vzorca</b> — rešuje samo vprašanje, ali je rezultat odvisen od tega, kdaj po
+dogovoru konča dan. Odgovor: deloma je, saj današnja nastavitev pade z
+1.10 na
+0.99.</p></div><p class="cap">Opozorilo k vsem različicam: <b>vse imajo globlji največji padec kot
+današnja nastavitev</b> (-39.8 % proti -43.1 % pri večini). To ni
+slabost glasovanja — je še en obraz iste ugotovitve, da je današnja točka polepšana na obeh
+merilih hkrati.</p><h2>Kaj bi se konkretno spremenilo</h2><div class="fig"><table>
 <tr><th>kaj</th><th>danes</th><th>po predlogu</th></tr>
 <tr><td>številk, ki jih je mogoče nastavljati</td><td class="n">14</td>
     <td class="n"><b>6</b></td></tr>
@@ -170,33 +183,7 @@ na obeh merilih hkrati.</p><h2>Kaj bi se konkretno spremenilo</h2><div class="fi
 </table></div>
 <p class="cap">Da: po tem popravku bo backtest izgledal <b>slabše</b>. To ni poslabšanje
 strategije — prejšnja številka preprosto ni bila resnična. Bolje, da to izvemo zdaj kot pri
-pravem denarju.</p><h2>Je kaj od tega neodvisno preverjeno?</h2><p>To je najpomembnejše vprašanje na strani, zato naj bo odgovor brez ovinkov:
-<b>ne.</b> Razlikovati je treba dva pomena.</p><div class="fig"><table>
-<tr><th style="width:52%">pomen »neodvisno«</th><th>drži?</th></tr>
-<tr><td>V teh testih ne nastavljamo nobene številke — vrednosti so ves čas fiksne.</td>
-    <td><b style="color:var(--good)">DA</b></td></tr>
-<tr><td>Rezultati niso pod vplivom tega, da je nekdo te podatke že videl, preden je izbral
-    številke.</td><td><b style="color:var(--crit)">NE</b></td></tr>
-</table></div>
-<p>Privzete vrednosti izhajajo iz skripte, napisane ob gledanju zgodovine bitcoina, in vseh
-137 preizkusov je bilo opravljenih na istem oknu. <b>Koliko to šteje, smo
-izmerili</b> — to je premija konice iz Ugotovitve 2: današnje nastavitve so
-77. najboljše od 81 svojih sosedov,
-kar se brez vpogleda v podatke ne zgodi.</p>
-<p>Iz tega sledita dve pravili za branje vseh številk na tej strani:</p>
-<ul class="cap">
-<li><b>Ugotovitve o tem, kaj ne dela, so trdne.</b> Ne slonijo na statistični značilnosti,
-ampak na mehaniki — pravilo, ki se v sedmih letih sproži ničkrat, se ne sproži ne glede na to,
-kdo je izbral prag.</li>
-<li><b>Ugotovitve o tem, kaj dela, so šibke.</b> Lahko držijo, lahko pa so lastnost tega
-obdobja. Nobena od njih ni preživela preizkusa na podatkih, ki jih nismo videli — ker takih
-podatkov pod danimi omejitvami ni.</li>
-</ul>
-<p class="cap"><b>Kaj bi to spremenilo.</b> Edina prava rešitev so opazovanja, ki na izbiro
-številk niso mogla vplivati. Ker ostajamo pri bitcoinu in ne čakamo, je najbližja možnost
-isti trg z drobnejšo uro (4-urni odseki), kar da približno šestkrat več meritev. To ni
-neodvisen vzorec in tega ne bomo trdili — je pa edini način, da se natančnost izboljša brez
-novih trgov in brez čakanja.</p><h2>Česa ta analiza ne dokaže</h2><p>Vse je merjeno na istem bitcoinu, na katerem so bile nastavitve izbrane. Noben
+pravem denarju.</p><h2>Česa ta analiza ne dokaže</h2><p>Vse je merjeno na istem bitcoinu, na katerem so bile nastavitve izbrane. Noben
 izračun na teh podatkih tega ne more popraviti — za to bi bili potrebni podatki, ki jih še
 nismo videli.</p>
 <p>Kar ta stran <b>zares</b> podpira, je torej ozko in se glasi: <i>vemo, koliko od uspeha
