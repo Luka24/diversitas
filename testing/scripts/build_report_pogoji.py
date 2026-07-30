@@ -511,57 +511,34 @@ deluje. Ali deluje kot napovednik nemira, ostaja odprto: po vsaki sprožitvi res
 <b>{AU['dd_base_rate']['share_of_all_windows']:.0f} % vseh 60-dnevnih oken</b> v tem vzorcu
 vsebuje padec vsaj 13 %, zato to skoraj nič ne pomeni.</p>""")
 
-    A("<h2>Ali so ta pravila res mrtva? Preizkus pri 151 nastavitvah</h2>")
-    A(f"""<p>Nič se ne spremeni je bilo izmerjeno pri <b>eni</b> nastavitvi. To ne zadostuje
-za brisanje kode: pravilo lahko pri privzetkih spi, korak vstran pa se prebudi. Tu je še
-posebej pomembno, ker drugo poročilo priporoča <b>povprečenje 81 sosednjih nastavitev</b> —
-pravilo, ki oživi v katerikoli od njih, ni odstranljivo brez spremembe ansambla.</p>
-<p class="cap">Preizkušenih je bilo {DR['settings_tested']} nastavitev: preleti desetih
-parametrov čez razpone, ki gredo daleč čez vse, kar bi kdo dejansko uporabil, plus vseh 81
-članov ansambla. Primerjava je na <b>seriji pozicij</b>, ne na merilih — enaka merila bi
-lahko načeloma prišla iz različnih poti, enake pozicije ne morejo.</p>""")
+    A("<h2>So ta pravila res mrtva? Preizkus pri 151 nastavitvah</h2>")
+    A(f"""<p>Da se nič ne spremeni, je bilo izmerjeno pri eni nastavitvi. Za brisanje kode to
+ni dovolj, ker pravilo lahko pri privzetkih spi in se korak vstran prebudi. Preizkusili smo
+{DR['settings_tested']} nastavitev — preleti desetih parametrov čez razpone, ki gredo daleč čez
+vse uporabno, plus 81 sosednjih kombinacij. Primerjali smo serije pozicij, ne merila.</p>""")
     A('<div class="fig"><table><tr><th>pravilo</th><th class="n">oživi pri</th>'
-      '<th class="n">med 81 člani<br>ansambla</th>'
-      '<th class="n">odstranitev<br>boljša / slabša</th><th>sodba</th></tr>')
+      '<th class="n">odstranitev<br>boljša / slabša</th><th>kaj to pomeni</th></tr>')
     ROBUST = [
-      ("dist_entry_ok", "<b>Odstraniti.</b> Edino, kar je mrtvo pri vseh nastavitvah — in "
-       "mrtvo po konstrukciji, ne po sreči.", "var(--crit)"),
-      ("above_ma_med", "<b>Odstraniti.</b> Oživi le pri zelo ozkem mrtvem pasu (1–1,5 % "
-       "namesto 3 %) in pri obdobju 115. Učinki so drobni in padca ne premaknejo.",
+      ("dist_entry_ok", "Mrtvo povsod, in mrtvo po konstrukciji. Isti izraz zapisan dvakrat.",
        "var(--crit)"),
-      ("vol_shock", "<b>NE odstraniti.</b> Pri privzetkih spi, a to je naključje štirih "
-       "vrednosti. Oživi pri več kot tretjini preizkušenih nastavitev in pri več kot polovici "
-       "članov ansambla.", "var(--warn)"),
+      ("above_ma_med", "Oživi le pri zelo ozkem mrtvem pasu (1–1,5 % namesto 3 %) in pri "
+
+       "obdobju 115. Učinki so drobni in padca ne premaknejo.", "var(--crit)"),
+      ("vol_shock", "Pri privzetkih spi, a to je naključje štirih vrednosti hkrati: "
+
+       "exit_grace_bars 3, track_period 75, track_buf_pct 3 % in reentry_hold 15. Pri "
+
+       "exit_grace_bars 2 se sproži na šestih dneh. Odstranimo ga, ker teh vrednosti ne "
+
+       "nameravamo spreminjati — kar mora biti zapisano v kodi.", "var(--crit)"),
     ]
     for key, note, col in ROBUST:
         sm = DR["summary"][key]
-        grid_hits = len(DR["grid"][key])
         A(f'<tr><td><code>{key}</code></td>'
           f'<td class="n">{sm["n_alive"]} / {DR["settings_tested"]}</td>'
-          f'<td class="n">{grid_hits} / 81</td>'
           f'<td class="n">{sm["removal_better"]} / {sm["removal_worse"]}</td>'
-          f'<td style="font-size:12.5px;color:{col}">{note}</td></tr>')
+          f'<td style="font-size:12.5px">{note}</td></tr>')
     A("</table></div>")
-
-    A(f"""<div class="note" style="border-left-color:var(--crit)">
-<p><b>Kje se <code>vol_shock</code> prebudi.</b> Pravilo zahteva <code>below_tl</code> in da
-redni izstop še ni nastopil. Pri privzetkih <code>track_period</code> 75,
-<code>track_buf_pct</code> 3 %, <code>exit_grace_bars</code> 3 in <code>reentry_hold</code> 15
-to okno nikoli ne nastane — a že en korak vstran nastane:</p>
-<table style="margin:9px 0">
-<tr><th>parameter</th><th>vrednosti, pri katerih SPI</th>
-<th>vrednosti, pri katerih SE SPROŽI</th></tr>
-<tr><td><code>exit_grace_bars</code></td><td>1, 3, 4</td>
-    <td><b>2, 5, 6, 8, 10, 14</b> — pri 14 na 140 dneh</td></tr>
-<tr><td><code>track_period</code></td><td>75, 85</td>
-    <td><b>45, 55, 65, 95, 105, 115</b></td></tr>
-<tr><td><code>track_buf_pct</code></td><td>3, 4, 5</td><td><b>1, 1,5, 2, 2,5, 6</b></td></tr>
-<tr><td><code>reentry_hold</code></td><td>15, 20, 25, 30</td><td><b>0, 3, 6, 9, 12</b></td></tr>
-</table>
-<p><b>Moja prejšnja trditev, da je vol_shock »strukturno mrtev in ne more biti drugače«, je
-bila napačna.</b> Mrtev je pri natanko tej kombinaciji štirih vrednosti. Učinek je majhen —
-mediana {abs(DR['summary']['vol_shock']['n_alive']) and '−0,020'} Sortina, največ 0,085 — a ni
-nič, in v 61 od 67 primerov je odstranitev slabša.</p></div>""")
 
     A("<h2>Vse tri odstranitve skupaj</h2>")
     A("""<p>Spodaj je današnja strategija proti tisti brez vseh treh pravil hkrati.</p>""")
@@ -579,104 +556,24 @@ Kupi-in-drži je v istem obdobju dosegel {BENCH[-1]:.2f}× pri padcu
 <code>vol_lookback</code>; <code>rsi_len</code> se zaklene, ker napaja blow-off, ki ostaja
 nedokazan.</p></div>""")
 
-    A("<h2>Je vol_shock vreden dveh parametrov in svoje veje v kodi?</h2>")
-    V = MG["variants"]
-    dv = MG["drop_vol_shock_glasovanje"]
-    A(f"""<p>Pravilo oživi pri 45 od 81 sosednjih nastavitev, in dokler smo razmišljali o
-povprečenju teh 81, ga ni bilo mogoče izbrisati brez spremembe rezultata. Zato smo izmerili,
-koliko je v tem povprečju sploh vreden.</p>""")
-    A('<div class="fig"><table><tr><th>različica</th><th class="n">Sortino</th>'
-      '<th class="n">Sharpe</th><th class="n">letni donos</th>'
-      '<th class="n">največji padec</th><th class="n">končni večkratnik</th></tr>')
-    for k in ("glasovanje, z vol_shockom", "glasovanje, brez vol_shocka",
-              "ena tocka, z vol_shockom", "ena tocka, brez vol_shocka"):
-        m = V[k]
-        A(f'<tr><td>{k.replace("ena tocka", "ena točka")}</td>'
-          f'<td class="n">{m["sortino"]:.3f}</td><td class="n">{m["sharpe"]:.3f}</td>'
-          f'<td class="n">{m["cagr"]:.1f} %</td><td class="n">{m["maxdd"]:.1f} %</td>'
-          f'<td class="n">{m["final"]:.2f}×</td></tr>')
-    A("</table></div>")
-    A(f"""<p>V povprečju 81 nastavitev je vreden {abs(dv['d_sortino']):.3f} Sortina, razpon
-[{dv['ci_sortino'][0]:+.2f}, {dv['ci_sortino'][1]:+.2f}] pa seka ničlo. Na največjem padcu
-ne spremeni ničesar. Pri {V['glasovanje, z vol_shockom']['trades']} poslih znamo zaznati
-razlike okoli 0,5 Sortina, tako da je 0,040 daleč pod tem, kar bi sploh lahko izmerili.</p>
-<p>Pri eni sami nastavitvi, torej pri tem, kar dejansko trgujemo, je razlika natanko nič.
-Ker povprečenja ne uvajamo (razlogi so v poročilu o parametrih), odpade edini razlog, da
-pravilo ostane. Gre ven skupaj z obema gumboma, in strategija izgubi celo izstopno vejo.</p>
-<p class="cap">Ena stvar mora ob tem v kodo: pravilo je bilo nedejavno <b>pri konkretnih
-vrednostih</b> track_period 75, track_buf_pct 3 %, exit_grace_bars 3 in reentry_hold 15.
-Pri exit_grace_bars 2 bi se sprožilo na šestih dneh. Kdor te vrednosti spremeni, mora
-vprašanje odpreti znova.</p>""")
+    A("<h2>Na kratko</h2>")
+    A(f"""<p>Strategija ima osem pravil, tri od njih pa pri vrednostih, ki jih trgujemo, ne
+naredijo ničesar. <code>dist_entry_ok</code> je isti pogoj kot <code>above_tl</code>, samo
+zapisan drugič. <code>above_ma_med</code> blokira petinšestdeset dni, a nobeden se ni nikoli
+prelevil v posel. <code>vol_shock</code> se v sedmih letih ni sprožil niti enkrat, ker ga
+navadni izstop vedno prehiti. Odstranitev vseh treh skupaj je bitno identična.</p>
 
-    A("<h2>Združena slika: najboljše nastavitve po obeh poročilih</h2>")
-    A("""<p>Poročilo o parametrih pove obliko vsakega gumba: plato, ostra konica ali
-inerten. To poročilo pove, ali pravilo, ki ga gumb nastavlja, sploh kaj počne. Ukrep sledi
-šele iz obojega, in spodnja tabela je zato sestavljena iz obeh podatkovnih datotek, ne
-napisana na roko.</p>""")
-    ACT = {
-      "odstraniti": ("odstraniti", "var(--crit)"),
-      "zakleniti": ("zakleniti", "var(--s2)"),
-      "prepustiti glasovanju": ("prepustiti glasovanju", "var(--s1)"),
-      "pustiti pri miru": ("pustiti pri miru", "var(--good)"),
-    }
-    A('<div class="fig"><table><tr><th>parameter</th><th class="n">danes</th>'
-      '<th>oblika preleta</th><th class="n">razpon</th><th>ukrep</th>'
-      '<th>zakaj</th></tr>')
-    order = {"odstraniti": 0, "zakleniti": 1, "prepustiti glasovanju": 2,
-             "pustiti pri miru": 3}
-    for r in sorted(MG["parameter_plan"], key=lambda x: (order[x["action"]], x["name"])):
-        lab, col = ACT[r["action"]]
-        A(f'<tr><td><code>{r["name"]}</code></td>'
-          f'<td class="n">{r["default"]}</td>'
-          f'<td style="font-size:12.5px">{r["kind"]}</td>'
-          f'<td class="n">{r["range"]:.2f}</td>'
-          f'<td><span class="badge" style="background:{col};margin:0">{lab}</span></td>'
-          f'<td style="font-size:12.5px">{r["why"]}</td></tr>')
-    A("</table></div>")
+<p>Od preostalih petih sta dva zagovorljiva: brez <code>track_rising_window</code> se največji
+padec poglobi z {BASE['maxdd']:.1f} % na {AF['cases']['brez track_rising']['maxdd']:.1f} %,
+brez <code>regime_ok</code> pa je slabše na vseh štirih merilih. Ostala tri so odprta.
+<code>above_tl</code> je jedro strategije, a backtest brez njega je rahlo boljši.
+<code>below_tl</code> povzroči trinajst od enaindvajsetih poslov brez dokazane prednosti.
+Blow-off se obrne glede na obdobje: na petih letih pomaga, na sedmih in pol škoduje.</p>
 
-    n_rm = sum(1 for r in MG["parameter_plan"] if r["action"] == "odstraniti")
-    n_lk = sum(1 for r in MG["parameter_plan"] if r["action"] == "zakleniti")
-    tot = len(MG["parameter_plan"])
-    A(f"""<div class="note" style="border-left-color:var(--good)">
-<p>Od {tot} nastavljivih številk jih {n_rm} odpade skupaj s pravili, ki pri naših vrednostih
-ne naredijo ničesar, in {n_lk} se zaklene, ker gumb ne premakne rezultata, pravilo pa ostane.
-Nastavljivih ostane <b>{tot - n_rm - n_lk}</b>.</p>
-<p style="margin-top:9px">Nobena od teh sprememb ne premakne niti ene pozicije. To ni
-pomanjkljivost, ampak namen: manj gumbov pomeni manj načinov, kako se lahko zmotimo, in prav
-to število vstopa v izračun tveganja prevelike prilagojenosti. Ali se je to tveganje res
-znižalo, bo pokazal ponovni izračun PBO — če se ne bo, je treba tudi to povedati.</p>
-<p style="margin-top:9px">Štirje preostali gumbi so na ostri konici in bi bili kandidati za
-povprečenje sosednjih vrednosti. Tega ne delamo. Razlog je v poročilu o parametrih: povprečenje
-napove enak izid kot današnje nastavitve, stane pa polovico več prometa in tri odstotne točke
-globlji padec. Namesto tega popravimo številko, ki jo navajamo.</p></div>""")
-
-    A("<h2>Kaj vse to skupaj pomeni</h2>")
-    A(f"""<p class="lead">Strategija ima osem pravil. Tri od njih pri vrednostih, ki jih
-trgujemo, ne naredijo ničesar, in vsako iz svojega razloga. <code>dist_entry_ok</code> je isti
-pogoj kot <code>above_tl</code>, samo zapisan drugič — v dashboardu ima svojo kljukico, ki ne
-more nikoli povedati nič novega. <code>above_ma_med</code> blokira petinšestdeset dni, a
-nobeden se ni nikoli prelevil v posel, ker jih prej poberejo trije dnevi potrditve in
-petnajstdnevni premor. <code>vol_shock</code> se v sedmih letih ni sprožil niti enkrat, ker ga
-navadni izstop vedno prehiti. Odstranitev vseh treh skupaj je bitno identična: ista krivulja,
-isti posli, ista številka do zadnje decimalke.</p>
-
-<p class="lead">Od preostalih petih sta dva zagovorljiva. Brez <code>track_rising_window</code>
-se največji padec poglobi z {BASE['maxdd']:.1f} % na
-{AF['cases']['brez track_rising']['maxdd']:.1f} %, kar je edini primer, kjer kakšno pravilo
-vidno kupi mirnejšo vožnjo. Brez <code>regime_ok</code> je slabše na vseh štirih merilih —
-čeprav se je ob tem izkazalo, da padca sploh ne zmanjšuje, torej je filter donosa in ne
-varovalka, kot smo ga opisovali.</p>
-
-<p class="lead">Ostala tri so odprta. <code>above_tl</code> je jedro strategije, a backtest
-brez njega je rahlo boljši in nad povprečnim dnevom doda le poldrugo odstotno točko.
-<code>below_tl</code> povzroči trinajst od enaindvajsetih poslov, njegova prednost pa ni
-dokazana. Blow-off se obrne glede na to, katero obdobje pogledaš: na petih letih pomaga, na
-sedmih in pol škoduje, in pri osmih sprožitvah tega ni mogoče razrešiti.</p>
-
-<p class="lead">Skupaj torej: strategija je preprostejša, kot je videti, in ožja, kot bi si
-želeli. Da izbira boljše trenutke za zaslužek, ne znamo pokazati. Da en filter zmanjšuje
-padce, znamo. In vemo, katera tri pravila lahko odstranimo, ne da bi karkoli izgubili — kar
-ni izboljšava, ampak zmanjšanje števila stvari, o katerih se lahko motimo.</p>""")
+<p>Predlog je torej odstraniti tri pravila in s tem štiri nastavljive številke, kar ne
+spremeni ničesar v rezultatu. To ni izboljšava, ampak zmanjšanje števila stvari, o katerih se
+lahko motimo. Kaj to pomeni za parametre, je v <code>porocilo_parametri_BTC.html</code>;
+načrt dela je v <code>testing/nacrt_poenostavitve_lean.txt</code>.</p>""")
 
     A(f"""<footer>
 Vir cen: Binance, zamrznjen posnetek

@@ -1,14 +1,15 @@
-"""Rebuild testing/porocilo_parametri_BTC.html — short, plain language, for a meeting.
+"""Build testing/porocilo_parametri_BTC.html — the fourteen sweeps and what to do.
 
-Replaces the earlier JS-rendered page. Two reasons for the rewrite beyond length:
-the old page carried two statistics that later work showed were wrong (a
-permutation test confounded by bitcoin's drift, and a Reality Check run on the
-one quantity the product does not claim), and it diagnosed the sharp-peak problem
-without giving an answer. Both are fixed here.
+Cut back to what only this page can show: one chart per parameter, what each knob
+does, and the action proposed for it. The randomness tests, the ensemble question,
+the walk-forward comparison and the equity curves have moved out -- they are about
+the strategy rather than about its parameters, and they live in
+testing/nacrt_poenostavitve_lean.txt (steps 6 and 8) with their data still in
+testing/data/ and their scripts unchanged.
 
 Data in:  testing/data/parametri_BTC.json   (the 14 sweeps, PBO, trial count)
-          testing/data/ensemble_BTC.json    (peak premium, interactions)
-          testing/data/mc_tests_BTC.json    (the two corrected randomness tests)
+          testing/data/ensemble_BTC.json    (peak premium)
+          testing/data/merge_BTC.json       (the derived action per parameter)
 """
 from __future__ import annotations
 
@@ -16,16 +17,12 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-D = json.loads((ROOT / "testing" / "data" / "parametri_BTC.json").read_text(encoding="utf-8"))
-EN = json.loads((ROOT / "testing" / "data" / "ensemble_BTC.json").read_text(encoding="utf-8"))
-MC = json.loads((ROOT / "testing" / "data" / "mc_tests_BTC.json").read_text(encoding="utf-8"))
-AU = json.loads((ROOT / "testing" / "data" / "audit_BTC.json").read_text(encoding="utf-8"))
-IN = json.loads((ROOT / "testing" / "data" / "intraday_BTC.json").read_text(encoding="utf-8"))
-CV = json.loads((ROOT / "testing" / "data" / "curves_BTC.json").read_text(encoding="utf-8"))
-WF = json.loads((ROOT / "testing" / "data" / "wf_refit_BTC.json").read_text(encoding="utf-8"))
+DD = ROOT / "testing" / "data"
+D = json.loads((DD / "parametri_BTC.json").read_text(encoding="utf-8"))
+EN = json.loads((DD / "ensemble_BTC.json").read_text(encoding="utf-8"))
+MG = json.loads((DD / "merge_BTC.json").read_text(encoding="utf-8"))
 OUT = ROOT / "testing" / "porocilo_parametri_BTC.html"
 
-# Plain-language name for every knob, so the page never makes the reader guess.
 SL = {
  "track_period":       "koliko dni nazaj gledamo razpon cene",
  "track_buf_pct":      "kolikšna rezerva, da signal ne migeta",
@@ -43,21 +40,21 @@ SL = {
  "min_dist_entry_pct": "dodatna razdalja nad razponom ob nakupu",
 }
 GROUP = {
- "plato":        ("Široka ravnina — nastavitev ni kritična", "var(--good)",
-                  "Premakni ga za četrtino in se skoraj nič ne zgodi. To je dobro: "
-                  "pomeni, da vrednost ni bila izbrana na srečo."),
- "ostra konica": ("Ozka konica — sosednja vrednost je opazno slabša", "var(--crit)",
-                  "Deluje pri točno tej vrednosti, korak vstran pa pade. To je opozorilo, "
-                  "ne dosežek."),
- "inerten":      ("Ne naredi ničesar", "var(--muted)",
-                  "Premakni ga kamorkoli in rezultat se ne spremeni. Tak gumb je odveč — "
-                  "a pozor, to velja za gumb, ne nujno za pravilo, ki ga uporablja."),
+ "plato": ("Široka ravnina", "var(--good)",
+           "Premakni ga za četrtino in se skoraj nič ne zgodi. Natančna vrednost torej ni "
+           "pomembna, kar je dobro: pomeni, da ni bila izbrana na srečo."),
+ "ostra konica": ("Ozka konica", "var(--crit)",
+           "Deluje pri točno tej vrednosti, korak vstran pa pade. To je opozorilo, ne "
+           "dosežek — in pri štirih od petih je vrh natanko na vrednosti, ki jo uporabljamo."),
+ "inerten": ("Ne naredi ničesar", "var(--muted)",
+           "Premakni ga kamorkoli in rezultat se ne spremeni. Pozor: to velja za gumb, ne "
+           "nujno za pravilo, ki ga uporablja."),
 }
+ACT_COL = {"odstraniti": "var(--crit)", "zakleniti": "var(--s2)",
+           "pustiti pri miru": "var(--good)"}
 
 
 def sweep_chart(p, w=430, h=168) -> str:
-    """Full-size sweep, same visual language as the earlier version of this page:
-    gridlines, labelled axes, the shipped default marked in orange."""
     xs, ys = p["values"], p["sortino"]
     pad_l, pad_r, pad_t, pad_b = 42, 14, 16, 30
     lo, hi = min(ys), max(ys)
@@ -73,7 +70,7 @@ def sweep_chart(p, w=430, h=168) -> str:
         out.append(f'<line x1="{pad_l}" y1="{Y(gv):.1f}" x2="{w-pad_r}" y2="{Y(gv):.1f}" '
                    f'stroke="var(--grid)"/>')
         out.append(f'<text x="{pad_l-7}" y="{Y(gv)+4:.1f}" text-anchor="end">{gv:.2f}</text>')
-    d = " ".join(f'{"M" if i == 0 else "L"}{X(i):.1f},{Y(v):.1f}' for i, v in enumerate(ys))
+    d = " ".join(f'{"M" if i == 0 else "L"}{X(i):.0f},{Y(v):.1f}' for i, v in enumerate(ys))
     out.append(f'<path d="{d}" fill="none" stroke="var(--s1)" stroke-width="2"/>')
     step = max(1, len(xs) // 8)
     for i, (xv, yv) in enumerate(zip(xs, ys)):
@@ -81,75 +78,17 @@ def sweep_chart(p, w=430, h=168) -> str:
         out.append(f'<circle cx="{X(i):.1f}" cy="{Y(yv):.1f}" r="{5 if isd else 3}" '
                    f'fill="{"var(--s2)" if isd else "var(--s1)"}"/>')
         if isd or i % step == 0:
-            out.append(f'<text x="{X(i):.1f}" y="{h-10}" text-anchor="middle"'
-                       f'{" style=\"fill:var(--s2);font-weight:700\"" if isd else ""}>'
+            st = ' style="fill:var(--s2);font-weight:700"' if isd else ""
+            out.append(f'<text x="{X(i):.1f}" y="{h-10}" text-anchor="middle"{st}>'
                        f'{xv:g}</text>')
     out.append(f'<text x="{pad_l-7}" y="{pad_t-4}" text-anchor="end" '
                f'style="font-size:10px">Sortino</text>')
     return "".join(out) + "</svg>"
 
 
-
-def equity_chart(clock, w=880, h=330) -> str:
-    """Linear axis, full resolution. No log scale and no downsampling: a log axis
-    hides how much of the gain is one late run, and downsampling makes a drawdown
-    look shallower than it was."""
-    idx = clock["index"]
-    series = [("danes", "var(--crit)", 2.4),
-              ("brez mrtvih gumbov", "var(--warn)", 4.6),
-              ("glasovanje: vecina", "var(--s1)", 2.4)]
-    bh = clock["benchmark"]["equity"]
-    allv = [v for n, _, _ in series for v in clock["curves"][n]] + bh
-    lo, hi = 0.0, max(allv) * 1.06
-    pad_l, pad_r, pad_t, pad_b = 46, 108, 16, 34
-    n = len(idx)
-
-    def X(i): return pad_l + i / (n - 1) * (w - pad_l - pad_r)
-    def Y(v): return pad_t + (1 - (v - lo) / (hi - lo)) * (h - pad_t - pad_b)
-
-    p = [f'<svg viewBox="0 0 {w} {h}" role="img">']
-    for g in range(0, int(hi) + 1):
-        p.append(f'<line x1="{pad_l}" y1="{Y(g):.1f}" x2="{w-pad_r}" y2="{Y(g):.1f}" '
-                 f'stroke="var(--grid)"/>')
-        p.append(f'<text x="{pad_l-7}" y="{Y(g)+4:.1f}" text-anchor="end">{g}×</text>')
-    years = {}
-    for i, d in enumerate(idx):
-        years.setdefault(d[:4], i)
-    for y, i in years.items():
-        p.append(f'<line x1="{X(i):.1f}" y1="{pad_t}" x2="{X(i):.1f}" y2="{h-pad_b}" '
-                 f'stroke="var(--grid)" stroke-dasharray="2 3"/>')
-        p.append(f'<text x="{X(i):.1f}" y="{h-pad_b+16:.0f}" text-anchor="middle">{y}</text>')
-
-    def path(vals):
-        return " ".join(f'{"M" if i == 0 else "L"}{X(i):.0f},{Y(v):.1f}'
-                        for i, v in enumerate(vals))
-
-    p.append(f'<path d="{path(bh)}" fill="none" stroke="var(--muted)" stroke-width="1.4" '
-             f'opacity=".55"/>')
-    p.append(f'<text x="{w-pad_r+6}" y="{Y(bh[-1])+4:.1f}" style="fill:var(--muted)">'
-             f'kupi in drži</text>')
-    for name, col, wd in series:
-        v = clock["curves"][name]
-        dash = ' stroke-dasharray="1 5" stroke-linecap="round"' if wd > 3 else ""
-        p.append(f'<path d="{path(v)}" fill="none" stroke="{col}" stroke-width="{wd}"'
-                 f'{dash}/>')
-    lab = [("danes", "var(--crit)"), ("brez mrtvih gumbov", "var(--warn)"),
-           ("glasovanje: vecina", "var(--s1)")]
-    NICE = {"danes": "danes", "brez mrtvih gumbov": "brez mrtvih gumbov",
-            "glasovanje: vecina": "glasovanje"}
-    used = []
-    for name, col in lab:
-        y = Y(clock["curves"][name][-1])
-        while any(abs(y - u) < 13 for u in used):
-            y += 13
-        used.append(y)
-        p.append(f'<text x="{w-pad_r+6}" y="{y+4:.1f}" style="fill:{col};font-weight:600">'
-                 f'{NICE[name]}</text>')
-    return "".join(p) + "</svg>"
-
-
-def hist(vals, marks, w=780, h=200, xlab="") -> str:
-    lo, hi = min(list(vals) + [m[0] for m in marks]), max(list(vals) + [m[0] for m in marks])
+def hist(vals, marks, w=800, h=190) -> str:
+    lo = min(list(vals) + [m[0] for m in marks])
+    hi = max(list(vals) + [m[0] for m in marks])
     pad = (hi - lo) * .09 or .1
     lo, hi = lo - pad, hi + pad
     nb = 24
@@ -157,9 +96,11 @@ def hist(vals, marks, w=780, h=200, xlab="") -> str:
     for v in vals:
         counts[min(nb - 1, max(0, int((v - lo) / (hi - lo) * nb)))] += 1
     cmax = max(counts) or 1
-    pl, pr, pt, pb = 20, 16, 40, 44
+    pl, pr, pt, pb = 20, 16, 40, 42
+
     def X(v): return pl + (v - lo) / (hi - lo) * (w - pl - pr)
     def Y(c): return h - pb - c / cmax * (h - pt - pb)
+
     p = [f'<svg viewBox="0 0 {w} {h}" role="img">']
     p.append(f'<line x1="{pl}" y1="{h-pb}" x2="{w-pr}" y2="{h-pb}" stroke="var(--axis)"/>')
     bw = (w - pl - pr) / nb
@@ -175,30 +116,28 @@ def hist(vals, marks, w=780, h=200, xlab="") -> str:
                  f'stroke="{col}" stroke-width="2.2"/>')
         p.append(f'<text x="{X(val):.1f}" y="{pt-12-i*15}" text-anchor="middle" '
                  f'style="fill:{col};font-weight:700">{lab}</text>')
-    if xlab:
-        p.append(f'<text x="{pl}" y="{h-7}">{xlab}</text>')
+    p.append(f'<text x="{pl}" y="{h-7}">vsak stolpec = koliko od {len(vals)} sosednjih '
+             f'nastavitev doseže ta rezultat (desno = boljše)</text>')
     return "".join(p) + "</svg>"
 
 
 def main():
-    base, pbo = D["base"], D["pbo"]
+    pbo = D["pbo"]
     pt, en = EN["point"], EN["ensemble"]
     prem, ci = EN["peak_premium"], EN["ci_peak_premium"]
     ms = EN["member_sortino"]
     rank = sum(1 for v in ms["all"] if v < pt["sortino"])
-    perm, ex = MC["perm_block20"], MC["exposure_shuffle"]
-
+    PLAN = {r["name"]: r for r in MG["parameter_plan"]}
     groups = {k: [p for p in D["params"] if p["kind"] == k] for k in GROUP}
 
     P: list[str] = []
     A = P.append
     A(f"""<!doctype html><html lang="sl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lean — kako trdne so nastavitve (BTC)</title><style>
+<title>Lean — vseh 14 parametrov (BTC)</title><style>
  :root{{color-scheme:light;--plane:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink2:#52514e;
   --muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--ring:rgba(11,11,11,.10);
-  --band:rgba(11,11,11,.05);--s1:#2a78d6;--s2:#eb6834;--good:#0ca30c;--warn:#fab219;
-  --crit:#d03b3b}}
+  --band:rgba(11,11,11,.05);--s1:#2a78d6;--s2:#eb6834;--good:#0ca30c;--crit:#d03b3b}}
  @media(prefers-color-scheme:dark){{:root:where(:not([data-theme=light])){{color-scheme:dark;
   --plane:#0d0d0d;--surface:#1a1a19;--ink:#fff;--ink2:#c3c2b7;--muted:#898781;--grid:#2c2c2a;
   --axis:#383835;--ring:rgba(255,255,255,.10);--band:rgba(255,255,255,.07);--s1:#3987e5;
@@ -208,476 +147,137 @@ def main():
   --band:rgba(255,255,255,.07);--s1:#3987e5;--s2:#d95926;--good:#2fbf2f;--crit:#e05555}}
  *{{box-sizing:border-box}}
  body{{margin:0;background:var(--plane);color:var(--ink);
-  font:15.5px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif}}
+  font:15px/1.62 system-ui,-apple-system,"Segoe UI",sans-serif}}
  main{{max-width:1080px;margin:0 auto;padding:36px 20px 70px}}
  h1{{font-size:25px;margin:0 0 4px;font-weight:650}}
- .sub{{color:var(--ink2);font-size:13.5px;margin:0 0 26px}}
- h2{{font-size:17px;font-weight:650;margin:34px 0 10px;padding-top:14px;
+ .sub{{color:var(--ink2);font-size:13.5px;margin:0 0 24px}}
+ h2{{font-size:17px;font-weight:650;margin:36px 0 10px;padding-top:14px;
   border-top:1px solid var(--grid)}}
  h2:first-of-type{{border-top:0;margin-top:6px}}
- p{{margin:0 0 13px;max-width:74ch}}
- .lead{{font-size:16.5px;line-height:1.6}}
- .cap{{color:var(--ink2);font-size:13.5px;margin:0 0 13px;max-width:78ch}}
- .fig{{background:var(--surface);border:1px solid var(--ring);border-radius:10px;
-  padding:16px;margin:0 0 16px;overflow-x:auto}}
+ p{{margin:0 0 12px;max-width:80ch}}
+ .cap{{color:var(--ink2);font-size:13px;margin:0 0 12px;max-width:84ch}}
  .grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:14px;
-  margin:0 0 18px}}
+  margin:0 0 20px}}
  .card{{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:14px}}
- .card h3{{font:600 13.5px system-ui;margin:0 0 1px}}
+ .card h3{{font:600 13.5px ui-monospace,SFMono-Regular,Menlo,monospace;margin:0 0 1px}}
  .card .d{{color:var(--muted);font-size:12px;margin:0 0 8px}}
  .card .read{{font-size:12.5px;margin:9px 0 0;padding:7px 9px;border-radius:7px;
   background:var(--band);color:var(--ink2)}}
- .box{{background:var(--surface);border:1px solid var(--ring);border-left:3px solid var(--s2);
-  border-radius:0 10px 10px 0;padding:14px 18px;margin:0 0 18px}}
- .box p:last-child{{margin-bottom:0}}
- .box.bad{{border-left-color:var(--crit)}} .box.good{{border-left-color:var(--good)}}
+ .fig{{background:var(--surface);border:1px solid var(--ring);border-radius:10px;
+  padding:16px;margin:0 0 16px;overflow-x:auto}}
  svg{{display:block;width:100%;height:auto;overflow:visible}}
  text{{font:11px system-ui;fill:var(--muted);font-variant-numeric:tabular-nums}}
- table{{border-collapse:collapse;width:100%;font-size:13.5px;font-variant-numeric:tabular-nums}}
- th,td{{text-align:left;padding:8px 10px;border-bottom:1px solid var(--grid);
-  vertical-align:middle}}
- th{{color:var(--ink2);font-weight:600;font-size:12.5px}}
- td.n{{text-align:right}}
+ table{{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}}
+ th,td{{text-align:left;padding:7px 9px;border-bottom:1px solid var(--grid)}}
+ th{{color:var(--ink2);font-weight:600;font-size:12px}}
+ td.n,th.n{{text-align:right}}
  code{{font:12.5px ui-monospace,SFMono-Regular,Menlo,monospace;background:var(--band);
   padding:1px 5px;border-radius:4px}}
  .tag{{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.04em;
   text-transform:uppercase;border-radius:999px;padding:2px 9px;color:#fff}}
- footer{{margin-top:40px;padding-top:15px;border-top:1px solid var(--grid);
+ .box{{background:var(--surface);border:1px solid var(--ring);
+  border-left:3px solid var(--s2);border-radius:0 10px 10px 0;padding:14px 18px;
+  margin:0 0 18px}}
+ .box p:last-child{{margin-bottom:0}}
+ footer{{margin-top:38px;padding-top:15px;border-top:1px solid var(--grid);
   color:var(--muted);font-size:12.5px}}
 </style></head><body><main>
 
-<h1>Kako trdne so nastavitve strategije?</h1>
-<p class="sub">Lean · BTC · Binance · {D['oos_from']} → {D['oos_to']} ·
+<h1>Vseh {len(D['params'])} parametrov: kaj vsak dela in kako trdna je njegova vrednost</h1>
+<p class="sub">Diversitas Lean · BTC · Binance · okno {D['oos_from']} → {D['oos_to']} ·
 fee + slippage {D['fee']} % na stran</p>
 
-<p class="lead">Strategija ima {len(D['params'])} številk, ki jih lahko nekdo nastavi —
-koliko dni nazaj gleda, koliko dni čaka pred nakupom, in podobno. Ta stran odgovarja na eno
-vprašanje: <b>ali te številke držijo, ali je bila strategija nastavljena tako, da je lepo
-izgledala prav na tej zgodovini?</b></p>
+<p>Vsako od {len(D['params'])} nastavljivih številk smo premikali čez cel razpon, ostale pa
+puščali pri miru, in gledali, kaj se zgodi s Sortinom. Skupaj {D['trials_total']} preizkusov.
+Oranžna pika na vsakem grafu je vrednost, ki jo strategija uporablja danes.</p>
+<p class="cap">Analiza posameznih vstopnih in izstopnih pogojev je v
+<code>porocilo_pogoji_BTC.html</code>; načrt dela, testi naključja in preizkušene alternative
+so v <code>testing/nacrt_poenostavitve_lean.txt</code>.</p>""")
 
-<h2>Kaj smo naredili</h2>
-<p>Vsako od {len(D['params'])} številk smo posebej premikali gor in dol, ostale pa pustili
-pri miru, in gledali, kaj se zgodi z rezultatom. Skupaj {D['trials_total']} preizkusov.
-Potem smo naredili še dva testa, ki preverjata, ali je strategija sploh boljša od sreče.</p>
-
-<div class="box"><p><b>Prispodoba za celo stran.</b> Recept za pecivo, ki se posreči samo
-pri točno 183 stopinjah — pri 180 je surovo, pri 186 zažgano — ni dober recept. Je srečno
-naključje nekoga, ki je pekel dovolj dolgo, da je našel to številko. Dober recept deluje med
-175 in 190. Enako velja za nastavitve strategije.</p></div>""")
-
-    # ── 1. the map, compact ────────────────────────────────────────────────
-    A("<h2>Ugotovitev 1: jedro je trdno, robovi niso</h2>")
-    A(f"""<p>Vsaka krivuljica spodaj je ena številka, premikana čez cel razpon. <b>Ravna
-črta je dobro</b> — pomeni, da natančna vrednost ni pomembna. <b>Ostra konica je slabo.</b>
-Oranžna pika je vrednost, ki jo strategija uporablja danes.</p>""")
+    # ── the charts ─────────────────────────────────────────────────────────
     for kind, (title, col, expl) in GROUP.items():
         ps = groups[kind]
         if not ps:
             continue
-        A(f'<p style="margin:22px 0 4px"><span class="tag" style="background:{col}">'
-          f'{len(ps)} od {len(D["params"])}</span>'
-          f'<b style="margin-left:9px">{title}</b></p>'
-          f'<p class="cap" style="margin:6px 0 12px">{expl}</p>')
+        A(f'<h2><span class="tag" style="background:{col}">{len(ps)} od '
+          f'{len(D["params"])}</span>&ensp;{title}</h2>')
+        A(f'<p class="cap">{expl}</p>')
         A('<div class="grid">')
         for p in ps:
-            edge = ("" if abs(float(p["best_value"]) - float(p["default"])) > 1e-9 else
-                    '<span class="tag" style="background:var(--crit);margin-left:8px">'
-                    'vrh na privzetku</span>')
-            A(f'<div class="card"><h3><code>{p["name"]}</code>'
-              f'{edge if kind == "ostra konica" else ""}</h3>'
+            r = PLAN[p["name"]]
+            acol = ACT_COL[r["action"]]
+            edge = ('<span class="tag" style="background:var(--crit);margin-left:8px">'
+                    'vrh na privzetku</span>'
+                    if kind == "ostra konica"
+                    and abs(float(p["best_value"]) - float(p["default"])) < 1e-9 else "")
+            A(f'<div class="card"><h3><code>{p["name"]}</code>{edge}</h3>'
               f'<p class="d">{SL[p["name"]]}</p>'
               f'{sweep_chart(p)}'
               f'<p class="read">danes <b>{p["default"]}</b> · najboljša vrednost v preletu '
               f'<b>{p["best_value"]:g}</b> · razpon rezultata čez cel prelet '
-              f'<b>{p["rng"]:.2f}</b></p></div>')
+              f'<b>{p["rng"]:.2f}</b><br>'
+              f'ukrep: <b style="color:{acol}">{r["action"]}</b> — {r["why"]}</p></div>')
         A("</div>")
 
-    sharp = groups["ostra konica"]
-    on_def = [p for p in sharp if abs(float(p["best_value"]) - float(p["default"])) < 1e-9]
-    A(f"""<div class="box bad"><p><b>Tu je težava.</b> Od {len(sharp)} številk z ostro konico
-jih ima <b>{len(on_def)} vrh natanko na vrednosti, ki jo strategija uporablja danes</b>. Te
-vrednosti izvirajo iz skripte, ki jo je nekdo pisal ob gledanju iste zgodovine bitcoina. Da
-bi jih toliko hkrati po naključju pristalo točno na vrhu, je malo verjetno.</p></div>""")
-
-    # ── 2. the ensemble measurement ────────────────────────────────────────
-    A("<h2>Ugotovitev 2: koliko od uspeha je bila samo izbira številk</h2>")
-    A(f"""<p>To se da izmeriti. Vzeli smo štiri številke z ostro konico in vsako pognali pri
-treh sosednjih vrednostih — skupaj <b>{EN['members']} različic</b> iste strategije. Potem smo
-jih <b>povprečili</b>: namesto da bi izbrali eno, uporabimo vse hkrati.</p>""")
+    # ── how firm are the values ────────────────────────────────────────────
+    A("<h2>Kako trdne so današnje vrednosti</h2>")
+    A(f"""<p>Štiri številke so na ozki konici in pri treh od njih je vrh natanko na vrednosti,
+ki jo uporabljamo. To se da izmeriti: strategijo poženemo pri {EN['members']} sosednjih
+kombinacijah teh štirih in pogledamo, kam med njimi pade današnja nastavitev.</p>""")
     A('<div class="fig">' + hist(
         ms["all"],
         [(en["sortino"], "var(--s2)", f"povprečje vseh {EN['members']} · {en['sortino']:.2f}"),
-         (pt["sortino"], "var(--crit)", f"današnje nastavitve · {pt['sortino']:.2f}")],
-        xlab=f"vsak stolpec = koliko od {EN['members']} različic doseže ta rezultat "
-             f"(desno = boljše)") + "</div>")
-    A(f"""<div class="box bad">
-<p><b>Današnje nastavitve so {rank}. najboljše od {EN['members']}.</b></p>
-<p>Če bi jih nekdo izbral, ne da bi videl te podatke, bi pričakovali, da pristanejo nekje
-na sredini — okoli 41. od {EN['members']}. Pristale so {rank}. Razlika znaša
-<b>{prem:+.2f}</b> in je dovolj velika, da ni naključje (razpon
-{ci[0]:+.2f} do {ci[1]:+.2f} ne vključuje ničle).</p>
-<p style="margin-top:10px"><b>Kaj to pomeni v praksi.</b> Backtest kaže
-{pt['sortino']:.2f}. Poštena napoved za naprej je <b>{en['sortino']:.2f}</b>. Razlika je del,
-ki je prišel iz tega, da so bile številke izbrane po tem, ko smo že videli, kako se je
-zgodovina odvila.</p></div>""")
+         (pt["sortino"], "var(--crit)", f"današnje nastavitve · {pt['sortino']:.2f}")])
+      + "</div>")
+    A(f"""<div class="box"><p>Današnje nastavitve so <b>{rank}. najboljše od
+{EN['members']}</b>. Če bi jih nekdo izbral, ne da bi videl te podatke, bi pričakovali nekje
+sredino, torej okoli 41. Razlika znaša {prem:+.2f} in razpon
+[{ci[0]:+.2f}, {ci[1]:+.2f}] ne vključuje ničle.</p>
+<p style="margin-top:9px">V praksi to pomeni, da backtest kaže {pt['sortino']:.2f}, poštena
+ocena za naprej pa je nekje med 0,98 in 1,02. Razlika je del, ki je prišel iz tega, da so bile
+številke izbrane potem, ko smo že videli, kako se je zgodovina odvila.</p></div>""")
 
-    # ── 3. better than luck? ───────────────────────────────────────────────
-    A("<h2>Ugotovitev 3: je strategija boljša od sreče?</h2>")
-    A("<p>Dve različni vprašanji, in odgovora nista enaka.</p>")
-    A(f"""<div class="fig"><table>
-<tr><th style="width:38%">vprašanje</th><th style="width:20%">odgovor</th><th>kako smo to preverili</th></tr>
-<tr><td><b>Zna izbrati boljši trenutek za <span style="color:var(--crit)">zaslužek</span>?</b></td>
-    <td><b style="color:var(--crit)">NE</b><br><span style="font-size:12px;color:var(--muted)">
-    p = {perm['p_value']:.2f} — daleč od dokaza</span></td>
-    <td style="font-size:13px">Iz podatkov odstranimo samo dejstvo, da je bitcoin v tem
-    obdobju rasel, nato dneve premešamo in strategijo poženemo znova, {perm['n']}-krat.
-    Brez te rasti od prednosti ne ostane skoraj nič.</td></tr>
-<tr><td><b>Zna izbrati boljši trenutek za <span style="color:var(--good)">izogib
-    padcem</span>?</b></td>
-    <td><b style="color:var(--good)">DA, a previdno</b><br>
-    <span style="font-size:12px;color:var(--muted)">p = {ex['p_value']:.3f}</span></td>
-    <td style="font-size:13px">Pustimo popolnoma enako: enak čas v trgu
-    ({ex['exposure_pct']} %), enako število obdobij ({ex['holding_periods']}), samo njihov
-    vrstni red premešamo, {ex['n']}-krat. Strategija je boljša od
-    <b>{ex['percentile']:.1f} %</b> naključnih razporeditev.</td></tr>
-</table></div>""")
-    A(f"""<p class="cap">V številkah: kupi-in-drži je v tem obdobju padel za
-{abs(ex['buyhold_maxdd']):.0f} %, strategija za {abs(ex['strategy_maxdd']):.0f} % — razlika
-<b>{ex['real_gap']:+.0f} odstotnih točk</b>. Naključna razporeditev istega časa v trgu da v
-povprečju le {ex['shuffled_mean_gap']:+.0f} točk. Približno
-{ex['shuffled_mean_gap']:.0f} točk torej pride že iz tega, da smo pol časa zunaj trga —
-ostalih {ex['real_gap']-ex['shuffled_mean_gap']:.0f} pa iz tega, <i>kdaj</i>.</p>""")
-    A(f"""<div class="box good"><p><b>To je edini test, ki ga strategija prestane — in je
-hkrati edino, kar produkt obljublja.</b> Ne prodajamo napovedi cene. Prodajamo mirnejšo
-vožnjo.</p>
-<p style="margin-top:9px"><b>Zakaj tudi tega ne imenujemo dokaz.</b> Na teh podatkih je bilo
-opravljenih {D['trials_total']} preizkusov nastavitev. Ko toliko stvari preizkusiš, se en
-rezultat s p = {ex['p_value']:.3f} pojavi tudi takrat, kadar ni ničesar — zato je to
-<i>najmočnejši znak, ki ga imamo</i>, ne pa dokaz.</p></div>""")
-
-    # ── 4. what I propose ──────────────────────────────────────────────────
-    A("<h2>Kaj predlagam</h2>")
-    A(f"""<p>Dve stvari, in prva je pomembnejša.</p>
-
-<p><b>Nehajmo navajati {pt['sortino']:.2f}.</b> V tej številki je prednost, ki so jo današnje
-nastavitve dobile s tem, da jih je nekdo izbral, ko je zgodovino že videl. Izmerili smo jo,
-znaša {prem:.2f}, in poštena ocena za naprej je nekje med 0,98 in 1,02. Za to ni treba
-spremeniti niti vrstice kode.</p>
-
-<p><b>Zmanjšajmo število gumbov s štirinajstih na devet.</b> Štirje odpadejo skupaj s pravili,
-ki pri naših vrednostih ne naredijo ničesar, eden se zaklene. Rezultat strategije se ob tem ne
-spremeni za nobeno decimalko — to je ves namen. Manj gumbov pomeni manj načinov, kako se lahko
-zmotimo, in prav to število vstopa v izračun tveganja prevelike prilagojenosti.</p>
-
-<p>Kar odsvetujem: nadaljnje nastavljanje na istih podatkih. Preizkusov je bilo
-{D['trials_total']}, verjetnost, da je izbira najboljše nastavitve zgolj šum, pa je
-{pbo['value']:.0%}. Vsak nov poskus jo dvigne.</p>""")
-
-    A("<h2>Ali naj namesto ene vrednosti povprečimo sosednje?</h2>")
-    bv = {v["name"]: v for v in EN["binary_variants"]}
-    A(f"""<p>Če na konici ne moremo sedeti, se je ponujala očitna rešitev: strategijo pognati
-pri {EN['members']} sosednjih nastavitvah hkrati in pustiti, da o poziciji glasujejo. Pozicija
-bi ostala vse-ali-nič, izbira ene same številke pa bi odpadla.</p>
-<p>Preizkusili smo več pragov glasovanja in za primerjavo še možnost, da obdržimo eno vrednost,
-a izberemo sredino najširše ravnine namesto vrha.</p>""")
-    A('<div class="fig"><table>'
-      '<tr><th>različica</th><th>pozicija</th><th class="n">Sortino</th>'
-      '<th class="n">največji padec</th><th class="n">promet</th>'
-      '<th class="n">poslov</th></tr>')
-    for v in EN["binary_variants"]:
-        binlab = ("vse ali nič" if v["binary"] else
-                  "<span style='color:var(--crit)'>delna</span>")
-        hl = ' style="background:var(--band)"' if v["name"] == "danes: ena tocka" else ""
-        A(f'<tr{hl}><td>{v["name"].replace("vecina", "večina").replace("vec kot", "več kot").replace("tocka", "točka").replace("nic", "nič")}'
-          f'<br><span style="font-size:11.5px;color:var(--muted)">{v["note"]}</span></td>'
-          f'<td>{binlab}</td><td class="n">{v["sortino"]:.3f}</td>'
-          f'<td class="n">{v["maxdd"]:.1f} %</td><td class="n">{v["turnover"]:.1f}</td>'
-          f'<td class="n">{v["trades"]}</td></tr>')
+    # ── what to do ─────────────────────────────────────────────────────────
+    n_rm = sum(1 for r in MG["parameter_plan"] if r["action"] == "odstraniti")
+    n_lk = sum(1 for r in MG["parameter_plan"] if r["action"] == "zakleniti")
+    tot = len(MG["parameter_plan"])
+    A("<h2>Kaj z njimi narediti</h2>")
+    A(f"""<p>Štirje gumbi odpadejo skupaj s pravili, ki pri naših vrednostih ne naredijo
+ničesar, eden se zaklene. Nastavljivih ostane <b>{tot - n_rm - n_lk}</b>. Strategija se ob tem
+ne spremeni za nobeno decimalko — to je ves namen, saj v izračun tveganja prevelike
+prilagojenosti vstopa prav število gumbov, ne rezultat.</p>""")
+    A('<div class="fig"><table><tr><th>ukrep</th><th>parametri</th><th>zakaj</th></tr>')
+    for act, why in (("odstraniti", "pravilo, ki ga nastavljajo, je pri naših vrednostih "
+                      "dokazano nedejavno"),
+                     ("zakleniti", "gumb ne premakne rezultata, pravilo pa ostane"),
+                     ("pustiti pri miru", "plato, ali pa pravilo, o katerem premalo vemo")):
+        names = [r["name"] for r in MG["parameter_plan"] if r["action"] == act]
+        A(f'<tr><td><span class="tag" style="background:{ACT_COL[act]}">{act}</span></td>'
+          f'<td style="font-size:12.5px">'
+          + " · ".join(f"<code>{n}</code>" for n in names)
+          + f'</td><td style="font-size:12.5px">{why}</td></tr>')
     A("</table></div>")
+    A(f"""<p class="cap">Štirje od tistih, ki ostanejo, so na ozki konici in bi bili kandidati
+za povprečenje sosednjih vrednosti. Tega ne delamo — razlogi so v načrtu. Namesto tega
+popravimo številko, ki jo navajamo.</p>""")
 
-    maj = bv["glasovanje: vecina sosedov"]
-    two = bv["glasovanje: dve tretjini sosedov"]
-    pnt = bv["danes: ena tocka"]
-    rb  = bv["sredina ravnine, ena tocka"]
-
-    A("<h3 class='s'>Preverjeno še na drugi uri</h3>")
-    A(f"""<p>Razlika med najboljšimi različicami je desetinka Sortina, odločitev pa sloni na
-{pnt['trades']} do {maj['trades']} poslih — na tolikšnem vzorcu desetinke ni mogoče izmeriti.
-Zato smo vse skupaj pognali še enkrat na 4-urnih barih istega bitcoina v istem obdobju,
-z vsemi dolžinami pomnoženimi s 6, da ostane ekonomski horizont enak. Če se vrstni red ob
-spremembi ure ohrani, je resničen; če se premeša, je bil šum.</p>""")
-    d1, h4 = IN["clocks"]
-    A('<div class="fig"><table><tr><th>različica</th>'
-      '<th>Sortino<br>dnevno</th><th>Sortino<br>4-urno</th><th>uvrstitev</th>'
-      '<th>ocena</th></tr>')
-    ORD = ["sredina ravnine", "ena tocka (privzetki)", "glasovanje: vecina",
-           "glasovanje: dve tretjini", "ansambel, zvezna"]
-    NICE = {"sredina ravnine": "sredina ravnine",
-            "ena tocka (privzetki)": "danes: ena točka",
-            "glasovanje: vecina": "glasovanje: večina",
-            "glasovanje: dve tretjini": "glasovanje: dve tretjini",
-            "ansambel, zvezna": "ansambel, zvezna pozicija"}
-    r1 = sorted(ORD, key=lambda n: -d1["variants"][n]["sortino"])
-    r6 = sorted(ORD, key=lambda n: -h4["variants"][n]["sortino"])
-    JUDGE = {
-      "sredina ravnine": ("1. na 4h, 2. dnevno — <b>najbolj stabilna</b>", "var(--good)"),
-      "ena tocka (privzetki)": ("pade z ure na uro: 1,10 &rarr; 0,99", "var(--warn)"),
-      "glasovanje: vecina": ("3.–4. na obeh urah, <b>brez preskokov</b>", "var(--good)"),
-      "glasovanje: dve tretjini": ("<b>preskoči z 2. na 4. mesto</b> — šum", "var(--crit)"),
-      "ansambel, zvezna": ("zadnja na obeh; zahteva delne pozicije", "var(--muted)"),
-    }
-    for n in ORD:
-        j, col = JUDGE[n]
-        A(f'<tr><td>{NICE[n]}</td><td class="n">{d1["variants"][n]["sortino"]:.3f}</td>'
-          f'<td class="n">{h4["variants"][n]["sortino"]:.3f}</td>'
-          f'<td class="n">{r1.index(n)+1}. &rarr; {r6.index(n)+1}.</td>'
-          f'<td style="font-size:12.5px;color:{col}">{j}</td></tr>')
-    A("</table></div>")
-
-    A(f"""<p>Dvotretjinsko glasovanje je bilo na dnevnih barih drugo najboljše
-({two['sortino']:.2f}), na 4-urnih pa pade na četrto
-({h4['variants']['glasovanje: dve tretjini']['sortino']:.2f}). Ta prag smo izbrali potem, ko
-smo videli dnevne številke, in ob spremembi ure se je prednost razblinila. Tak izid je bil
-namen preizkusa — pokazati, katera od možnosti je bila prilagojena podatkom.</p>""")
-
-    g1 = d1["plateau_minus_majority"]
-    g6 = h4["plateau_minus_majority"]
-    A(f"""<p>Sredina ravnine ima na obeh urah nekoliko višji Sortino od navadne večine, a
-razlika ni ločljiva od šuma na nobeni: {g1['diff']:+.2f}, razpon
-[{g1['ci'][0]:+.2f}, {g1['ci'][1]:+.2f}] dnevno, in {g6['diff']:+.2f}, razpon
-[{g6['ci'][0]:+.2f}, {g6['ci'][1]:+.2f}] na 4-urnih barih. Če bi se za povprečenje odločili,
-bi bila navadna večina prava izbira — je edini prag, ki ga ni treba izbrati, medtem ko so
-vrednosti sredine ravnine izbrane prav na teh podatkih.</p>""")
-
-    d1c, h4c = CV["clocks"]
-    m1 = d1c["metrics"]
-    A("<h2>Kako to izgleda na krivulji</h2>")
-    A(f"""<p>Do zdaj smo primerjali številke. Tu sta obe različici na isti sliki, skupaj s
-kupi-in-drži, na navadni osi in v polni ločljivosti — brez logaritma, ki bi skril, koliko
-dobička pride iz enega samega vzpona, in brez redčenja točk, ki bi padec naredilo videti
-plitvejši, kot je bil.</p>""")
-    A('<div class="fig">' + equity_chart(d1c) + "</div>")
-    A(f"""<div class="fig"><table>
-<tr><th>različica</th><th>Sortino</th><th>največji padec</th><th>letni donos</th>
-<th>končni večkratnik</th><th>poslov</th></tr>
-<tr><td><b style="color:var(--crit)">danes</b></td>
-    <td class="n">{m1['danes']['sortino']:.3f}</td>
-    <td class="n">{m1['danes']['maxdd']:.1f} %</td>
-    <td class="n">{m1['danes']['cagr']:.1f} %</td>
-    <td class="n">{m1['danes']['final']:.2f}×</td>
-    <td class="n">{m1['danes']['trades']}</td></tr>
-<tr><td><b style="color:var(--warn)">brez mrtvih gumbov</b></td>
-    <td class="n">{m1['brez mrtvih gumbov']['sortino']:.3f}</td>
-    <td class="n">{m1['brez mrtvih gumbov']['maxdd']:.1f} %</td>
-    <td class="n">{m1['brez mrtvih gumbov']['cagr']:.1f} %</td>
-    <td class="n">{m1['brez mrtvih gumbov']['final']:.2f}×</td>
-    <td class="n">{m1['brez mrtvih gumbov']['trades']}</td></tr>
-<tr><td><b style="color:var(--s1)">glasovanje: večina</b></td>
-    <td class="n">{m1['glasovanje: vecina']['sortino']:.3f}</td>
-    <td class="n">{m1['glasovanje: vecina']['maxdd']:.1f} %</td>
-    <td class="n">{m1['glasovanje: vecina']['cagr']:.1f} %</td>
-    <td class="n">{m1['glasovanje: vecina']['final']:.2f}×</td>
-    <td class="n">{m1['glasovanje: vecina']['trades']}</td></tr>
-<tr><td style="color:var(--muted)">kupi in drži</td><td class="n">—</td>
-    <td class="n">{d1c['benchmark']['maxdd']:.1f} %</td>
-    <td class="n">{d1c['benchmark']['cagr']:.1f} %</td>
-    <td class="n">{d1c['benchmark']['equity'][-1]:.2f}×</td>
-    <td class="n">1</td></tr>
-</table></div>""")
-
-    A(f"""<div class="box good"><p><b>Prva ugotovitev: rumena črta se popolnoma skriva pod
-rdečo.</b> To ni napaka risanja — največja razlika med krivuljama je <b>točno
-{d1c['max_abs_curve_gap']:.0f}</b>. Trije gumbi, ki jih načrt briše
-(<code>vol_shock_mul</code>, <code>vol_lookback</code>, <code>min_dist_entry_pct</code>), so
-bili dokazano mrtvi: brisanje ne spremeni niti ene decimalke. <b>To je hkrati dokaz, da smo
-brisali pravo stvar, in dokaz, da brisanje ni ničesar pokvarilo.</b></p></div>""")
-
-    A(f"""<div class="box bad"><p><b>Glasovanje ne izboljša nobenega merila.</b></p>
-<table style="margin:9px 0">
-<tr><th>merilo</th><th class="n">danes</th><th class="n">glasovanje</th><th class="n">razlika</th></tr>
-<tr><td>Sortino</td><td class="n">{m1['danes']['sortino']:.3f}</td>
-    <td class="n">{m1['glasovanje: vecina']['sortino']:.3f}</td>
-    <td class="n" style="color:var(--crit)">{m1['glasovanje: vecina']['sortino']-m1['danes']['sortino']:+.3f}</td></tr>
-<tr><td>največji padec</td><td class="n">{m1['danes']['maxdd']:.1f} %</td>
-    <td class="n">{m1['glasovanje: vecina']['maxdd']:.1f} %</td>
-    <td class="n" style="color:var(--crit)">{m1['glasovanje: vecina']['maxdd']-m1['danes']['maxdd']:+.1f} o. t.</td></tr>
-<tr><td>letni donos</td><td class="n">{m1['danes']['cagr']:.1f} %</td>
-    <td class="n">{m1['glasovanje: vecina']['cagr']:.1f} %</td>
-    <td class="n" style="color:var(--crit)">{m1['glasovanje: vecina']['cagr']-m1['danes']['cagr']:+.1f} o. t.</td></tr>
-</table>
-<p>Slabše na vseh treh, in prav tako na 4-urnih barih. Promet zraste s
-{m1['danes']['turnover']:.1f} na {bv['glasovanje: vecina sosedov']['turnover']:.1f}.</p></div>""")
-
-    A(f"""<h3 class="s">Odločitev: povprečenja ne uvedemo</h3>""")
-    A(f"""<p>Argument zanj je bil resničen. Današnje nastavitve so
-{sum(1 for v in ms['all'] if v < pt['sortino'])}. najboljše od {EN['members']} svojih sosedov,
-razlika {prem:+.2f} je značilna, in {pt['sortino']:.2f} torej vsebuje del, ki se ne bo
-ponovil.</p>
-
-<p>Ampak iz tega ne sledi, da je povprečenje boljša strategija. Če je prednost današnjih
-nastavitev res samo naknadna modrost, potem se naprej ne bo ponovila in njihovo pričakovanje
-pade proti povprečju soseske — kar je natanko tam, kjer je pričakovanje povprečenja. Naprej
-imata torej oboje enako pričakovanje. Povprečenje ne prinese boljšega izida, samo manj laskav
-backtest.</p>
-
-<p>Ker pa hkrati poglobi padec za tri odstotne točke, dvigne promet za polovico in zahteva
-{EN['members']} hkratnih izračunov namesto enega, to ni dobra menjava. Padec je edino, kar
-strategija zares obljublja, in ravno tega poslabša.</p>
-
-<p><b>Namesto tega popravimo številko.</b> Premija konice je dokazana in mora biti nekje
-vračunana. Vračunamo jo v pričakovanje — 0,98 do 1,02 namesto {pt['sortino']:.2f} — in ne v
-strategijo. To je edini pravi odgovor na ugotovitev, da je backtest polepšan, in ne stane
-ničesar.</p>
-
-<p class="cap">Če bi se odločitev kdaj obrnila: uporabi navadno večino, ne dvotretjinske, in
-takrat <code>vol_shock</code> ne briši.</p>""")
-
-    A(f"""<div class="box"><p><b>Kaj so 4-urni bari res prinesli.</b> Poleg tega, da so ovrgli
-dvotretjinski prag, so pokazali, da dnevni bari lepšajo največji padec — padca, ki se zgodi
-in popravi znotraj istega dneva, preprosto ne vidijo:</p>
-<table style="margin:9px 0"><tr><th>različica</th><th class="n">MaxDD dnevno</th>
-<th class="n">MaxDD 4-urno</th><th class="n">skrito</th></tr>
-{"".join(f'<tr><td>{n.replace("danes","danes").replace("brez mrtvih gumbov","brez odveč pravil").replace("glasovanje: vecina","glasovanje")}</td>'
-         f'<td class="n">{d1c["metrics"][n]["maxdd"]:.1f} %</td>'
-         f'<td class="n">{h4c["metrics"][n]["maxdd"]:.1f} %</td>'
-         f'<td class="n" style="color:var(--crit)">{CV["dd_understated"][n]:+.1f} o. t.</td></tr>'
-         for n in d1c["metrics"])}
-</table>
-<p>To ni statistična moč — te drobnejša ura ne more dati — ampak natančnost. Številka, ki jo
-je treba komunicirati, je 4-urna.</p></div>""")
-
-    A("<h2>Bi se sprotno nastavljanje parametrov splačalo?</h2>")
-    A("""<p>Doslej smo parametre premikali po enega naenkrat in nato povprečili sosede. Dve
-očitni alternativi sta: <b>iskati po več parametrih hkrati</b> in <b>parametre sproti
-prilagajati</b> — na vsakem preteklem obdobju izbrati najboljšo kombinacijo in jo trgovati v
-naslednjem. To je klasičen walk-forward. Preizkusili smo obe.</p>
-<p class="cap">Štiri metode so postavljene na isto podlago in ocenjene <b>samo na odsekih izven
-vzorca</b>, tako da nobena ne vidi podatkov, na katerih je ocenjena: <b>fiksni privzetki</b>
-(nikoli ne nastavljamo), <b>sprotno nastavljanje</b> (na vsakem treningu izberemo najboljšo od
-81 kombinacij), <b>sprotno robustno</b> (izberemo tisto z najboljšim <i>povprečjem soseske</i>
-namesto najboljšo točko — to je kaznovana funkcija cilja) in <b>glasovanje</b> (večina vseh 81,
-brez vsakršne izbire).</p>""")
-
-    A('<div class="fig"><table><tr><th>shema</th><th class="n">rezin</th>'
-      '<th class="n">poslov v<br>treningu</th><th class="n">zamenjav<br>nastavitve</th>'
-      '<th>metoda</th><th class="n">Sortino</th><th class="n">CAGR</th>'
-      '<th class="n">MaxDD</th><th class="n">konec</th></tr>')
-    NM = {"fixed": ("fiksni privzetki", "var(--good)"),
-          "vote": ("glasovanje 81", "var(--s1)"),
-          "robust": ("sprotno, robustno", "var(--s2)"),
-          "refit": ("sprotno nastavljanje", "var(--crit)")}
-    for sc in WF["schemes"]:
-        first = True
-        for k in ("fixed", "vote", "robust", "refit"):
-            m = sc["results"][k]
-            nm, col = NM[k]
-            lead = (f'<td rowspan="4">trening {sc["train_years"]} let /<br>test '
-                    f'{sc["test_years"]} leto</td>'
-                    f'<td class="n" rowspan="4">{sc["n_folds"]}</td>'
-                    f'<td class="n" rowspan="4"><b>{sc["median_trades_in_train"]}</b></td>'
-                    f'<td class="n" rowspan="4">{sc["distinct_picks"]}/{sc["n_folds"]}</td>'
-                    if first else "")
-            top = ' style="border-top:2px solid var(--axis)"' if first else ''
-            A(f'<tr{top}>{lead}'
-              f'<td style="color:{col};font-weight:600">{nm}</td>'
-              f'<td class="n">{m["sortino"]:.3f}</td><td class="n">{m["cagr"]:.1f} %</td>'
-              f'<td class="n">{m["maxdd"]:.1f} %</td>'
-              f'<td class="n">{m["final"]:.2f}×</td></tr>')
-            first = False
-    A("</table></div>")
-
-    w = WF["beats_fixed"]
-    A(f"""<div class="box bad">
-<p><b>Sprotno nastavljanje je najslabše od vseh štirih — v vseh štirih shemah.</b> Ne enkrat,
-ne v povprečju: <b>{w['refit']} od {w['n']}</b> shem prekaša fiksne privzetke. Isto velja za
-robustno različico ({w['robust']}/{w['n']}) in za glasovanje ({w['vote']}/{w['n']}).</p>
-<p style="margin-top:9px"><b>Zakaj, je razvidno iz tretjega stolpca.</b> V vsakem treningu je
-na voljo <b>8 do 12 poslov</b>. Izbirati med 81 kombinacijami na osmih poslih ni nastavljanje,
-ampak metanje kovanca — in četrti stolpec to potrdi: izbrana nastavitev se zamenja
-<b>skoraj na vsaki rezini</b>. Če bi trening nosil signal, bi bila izbira stabilna.</p>
-<p style="margin-top:9px">Kaznovana funkcija cilja (»sprotno, robustno«) pomaga, a le malo: v
-eni shemi dvigne Sortino z {WF['schemes'][0]['results']['refit']['sortino']:.3f} na
-{WF['schemes'][0]['results']['robust']['sortino']:.3f}, v treh pa izbere isto celico kot
-navadno nastavljanje. Pri mreži 3×3×3×3 je soseska preredka, da bi kazen imela kaj popraviti.
-</p></div>""")
-
-    A(f"""<div class="box"><p><b>Ena poštena omemba, preden to razberemo kot zmago fiksnih
-privzetkov.</b> Privzetki so bili izbrani ob gledanju celotnega tega obdobja, zato njihova
-prednost ni čista — izmerili smo jo kot premijo konice {prem:+.2f}. Metoda, ki je edina
-popolnoma brez vpogleda naprej, je prav <b>sprotno nastavljanje</b>, in ta je najslabša. To ni
-zato, ker bi bil vpogled naprej dober, ampak ker <b>nastavljanje na osmih poslih proizvaja
-šum</b>. Primerjava, ki šteje, je torej sprotno nastavljanje proti glasovanju: brez izbire je
-bolje kot z izbiro, v vseh štirih shemah.</p></div>""")
-
-    A("""<h3 class="s">Kaj bi torej delovalo bolje — in kaj ne</h3>""")
-    A("""<div class="fig"><table>
-<tr><th style="width:26%">pristop</th><th>sodba</th></tr>
-<tr><td><b>Iskanje po več parametrih hkrati</b></td>
-    <td style="font-size:12.5px">Izmerjeno prepletanje je 38 % največjega glavnega učinka,
-    torej bi skupno iskanje res našlo <i>druge</i> optimume kot iskanje po enem. Ampak to je
-    argument proti, ne za: štiridimenzionalna mreža poveča število poskusov, verjetnost
-    prevelike prilagojenosti je že 0,694, in zgornja tabela pokaže, da že izbira med 81
-    kombinacijami izven vzorca škoduje. <b>Ne delati.</b></td></tr>
-<tr><td><b>Sprotno prilagajanje (walk-forward re-fit)</b></td>
-    <td style="font-size:12.5px">Preizkušeno v štirih shemah, najslabše v vseh. Zahtevalo bi
-    vsaj nekaj desetin poslov na trening, mi imamo osem. <b>Ne delati</b> — dokler je poslov
-    toliko, tega ni mogoče izvesti smiselno, ne glede na to, kako dobro je izvedeno.</td></tr>
-<tr><td><b>Kaznovana funkcija cilja</b><br>
-    <span style="font-size:11.5px;color:var(--muted)">robustna optimizacija</span></td>
-    <td style="font-size:12.5px">Načelno pravilna smer in v stroki uveljavljena: namesto
-    najvišje točke izberi tisto, katere okolica je stabilna. Pri naši mreži prinese komaj kaj,
-    ker so sosedje preredki. <b>Vgrajeno je že v glasovanje</b>, ki je njena groba, a
-    delujoča oblika.</td></tr>
-<tr><td><b>Glasovanje 81 sosedov</b></td>
-    <td style="font-size:12.5px">Slabše od fiksnih privzetkov, a <b>boljše od vsake oblike
-    nastavljanja</b> v vseh štirih shemah. Ostaja priporočilo — ne ker bi izboljšalo rezultat,
-    ampak ker odpravi izbiro točke, ki je merljivo prilagojena.</td></tr>
-<tr><td><b>Manj parametrov</b></td>
-    <td style="font-size:12.5px">Edini pristop, ki tveganje zniža <i>brez</i> spremembe
-    vedenja. Iz 14 nastavljivih na 9, od tega 5, ki jih je smiselno gledati. <b>To je
-    najboljša razpoložljiva poteza</b> in ni tekmec ostalim — je predpogoj.</td></tr>
-<tr><td><b>Dve merili namesto enega</b><br>
-    <span style="font-size:11.5px;color:var(--muted)">Pareto</span></td>
-    <td style="font-size:12.5px">Doslej smo izbirali po Sortinu, ki pa <i>ni</i> tisto, kar
-    produkt obljublja. Smiselno bi bilo gledati mejo med Sortinom in največjim padcem
-    hkrati. To ne reši premajhnega vzorca, prepreči pa nastavljanje na številko, ki je ne
-    prodajamo. <b>Vredno narediti</b> pri naslednjem preletu.</td></tr>
-</table></div>""")
-
-    A("<h2>Kaj bi se konkretno spremenilo</h2>")
-    A(f"""<div class="fig"><table>
-<tr><th>kaj</th><th class="n">danes</th><th class="n">po predlogu</th></tr>
-<tr><td>številk, ki jih je mogoče nastavljati</td><td class="n">{len(D['params'])}</td>
-    <td class="n"><b>9</b></td></tr>
-<tr><td>pravil za izstop iz pozicije</td><td class="n">3</td><td class="n"><b>2</b></td></tr>
-<tr><td>vstopnih pogojev</td><td class="n">5</td><td class="n"><b>3</b></td></tr>
-<tr><td>pozicija</td><td>vse ali nič</td><td>vse ali nič (nespremenjeno)</td></tr>
-<tr><td>krivulja, posli, vsa merila</td><td>—</td><td><b>nespremenjeni</b></td></tr>
-<tr><td>Sortino, ki ga navajamo</td><td class="n">{pt['sortino']:.2f}</td>
-    <td class="n"><b>0,98–1,02</b></td></tr>
-</table></div>
-<p class="cap">Edina številka v tej tabeli, ki se spremeni, je zadnja — in edina, ki zahteva
-delo v kodi, je prva. Strategija sama ostane ista.</p>""")
-
-    A("<h2>Česa ta analiza ne dokaže</h2>")
-    A(f"""<p>Vse je merjeno na istem bitcoinu, na katerem so bile nastavitve izbrane. Noben
-izračun na teh podatkih tega ne more popraviti — za to bi bili potrebni podatki, ki jih še
-nismo videli.</p>
-<p>Kar ta stran <b>zares</b> podpira, je torej ozko in se glasi: <i>vemo, koliko od uspeha
-je prišlo iz izbire številk ({prem:+.2f}), vemo, da napovedovanje donosa ni dokazano, in
-vemo, da je zmanjšanje padcev dokazano.</i> Vse ostalo je odprto.</p>""")
+    A(f"""<h2>Česa ta stran ne pove</h2>
+<p>Vse je merjeno na istem bitcoinu, na katerem so bile te vrednosti izbrane, in vseh
+{D['trials_total']} preizkusov je bilo na istem oknu. Noben izračun na teh podatkih tega ne
+more popraviti. Verjetnost, da je izbira najboljše nastavitve zgolj šum, je
+<b>{pbo['value']:.0%}</b>.</p>
+<p>Kar ta stran zares podpira, je ozko: vemo, katere gumbe je vredno nastavljati in katerih
+ne, in vemo, koliko od uspeha je prišlo iz izbire številk. Ali strategija deluje, iz tega ne
+sledi.</p>""")
 
     A(f"""<footer>
 Vir cen: Binance, zamrznjen posnetek. Okno {D['oos_from']} → {D['oos_to']},
-fee + slippage {D['fee']} % na stran.<br>
-{D['trials_total']} preizkusov nastavitev · PBO {pbo['value']} ({pbo['paths']} poti,
-purge/embargo {pbo['purge_embargo']} dni) · ansambel {EN['members']} različic, razponi iz
-parnega bločnega bootstrapa ({EN['nboot']} vzorcev, blok {EN['block']} dni) ·
-premešan trg {perm['n']}× · premešan vrstni red obdobij {ex['n']}×.<br>
-Ponovljivo z <code>testing/scripts/ensemble.py</code>, <code>mc_tests.py</code>;
-stran gradi <code>testing/scripts/build_report_parametri.py</code>.<br>
-Podrobna analiza posameznih vstopnih in izstopnih pogojev:
-<code>testing/porocilo_pogoji_BTC.html</code>.
+fee + slippage {D['fee']} % na stran. {D['trials_total']} preizkusov nastavitev ·
+PBO {pbo['value']} ({pbo['paths']} poti, purge/embargo {pbo['purge_embargo']} dni) ·
+premija konice iz {EN['members']} sosednjih nastavitev, razpon iz parnega bločnega
+bootstrapa ({EN['nboot']} vzorcev, blok {EN['block']} dni).<br>
+Ponovljivo z <code>testing/scripts/run_sensitivity.py</code> in
+<code>ensemble.py</code>; stran gradi <code>build_report_parametri.py</code>.
 </footer></main></body></html>""")
 
     OUT.write_text("".join(P), encoding="utf-8")
