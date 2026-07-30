@@ -20,14 +20,18 @@ NAREJENO IN ZAKLJUČENO
   ✔ alternativni pristopi k nastavljanju preizkušeni in ovrženi
   ✔ revizija lastnih trditev proti baznim stopnjam in večkratnemu testiranju
 
+ODLOČENO 2026-08-01
+  ✔ KORAK C  GLASOVANJA NE UVEDEMO. Obrazložitev v §6.
+             Namesto tega popravimo številko, ki jo navajamo. To je vse, kar je
+             premija konice zares zahtevala, in ne stane ničesar.
+
 OSTAJA ZA IZVEDBO
-  ☐ KORAK A  odstraniti 2 parametra, zakleniti 3          ~1 ura   ničesar ne spremeni
+  ☐ KORAK A  odstraniti 4 parametre, zakleniti 1          ~1 ura   ničesar ne spremeni
   ☐ KORAK B  ponovno izračunati PBO in deflated Sharpe    ~1 ura   pokaže korist A
-  ☐ KORAK C  odločiti o poziciji (glasovanje ali ne)      odločitev naročnika
   ☐ KORAK D  trije odprti testi, po prioriteti            ~2 dni
 
-Vrstni red je obvezen: A in B gresta skupaj (brisanje brez ponovnega PBO ne pokaže
-koristi), C je poslovna odločitev in ne tehnična, D je raziskava in ne popravek.
+A in B gresta skupaj: brisanje brez ponovnega PBO ne pokaže nobene koristi, ker
+se rezultat strategije ne spremeni. D je raziskava, ne popravek, in lahko počaka.
 
 
 --------------------------------------------------------------------------------
@@ -149,7 +153,7 @@ IZSTOPNI (vsak zase zadostuje — logični ALI; preverjajo se v tem vrstnem redu
     Pri 8 sprožitvah tega ni mogoče razrešiti. NE uporabljati kot argument v
     nobeno smer.
 
-  vol_shock             PRAVILO OBDRŽATI, OBA GUMBA ZAKLENITI
+  vol_shock             ODSTRANITI (sodba sledi iz Koraka C)
     Pri privzetkih se ne sproži nikoli: 0 od 21 izstopov, 41 dni priložnosti,
     0 sprožitev, odstranitev bitno identična.
     A TO NI STRUKTURNA LASTNOST — je naključje štirih vrednosti hkrati:
@@ -157,41 +161,50 @@ IZSTOPNI (vsak zase zadostuje — logični ALI; preverjajo se v tem vrstnem redu
         track_period      spi pri 75, 85    oživi pri 45, 55, 65, 95, 105, 115
         track_buf_pct     spi pri 3, 4, 5   oživi pri 1; 1,5; 2; 2,5; 6
         reentry_hold      spi pri 15+       oživi pri 0, 3, 6, 9, 12
-    Oživi pri 67 od 151 nastavitev in pri 45 od 81 članov ansambla.
-    ODLOČILNA MERITEV: v ansamblu, ki bi ga trgovali, je vreden ΔSortino 0,040,
-    razpon [−0,16; +0,04] seka ničlo, padec nespremenjen. Pri 12 poslih je
-    najmanjša zaznavna razlika okoli 0,5 Sortina — 0,040 je dvanajstkrat pod tem.
-    Zato: pravilo ostane (ne spremenimo vedenja), gumba se zakleneta (dobimo
-    celotno statistično korist).
+    Oživi pri 67 od 151 nastavitev in pri 45 od 81 članov ansambla, zato je bila
+    sodba prej "obdržati" — ker bi brisanje spremenilo ansambel.
 
+    KER ANSAMBLA NE UVEDEMO (§6), TA RAZLOG ODPADE. Pri vrednostih, ki jih
+    dejansko trgujemo, je pravilo dokazano nedejavno, zato gre ven skupaj z
+    obema gumboma. V ansamblu bi bilo vredno ΔSortino 0,040, razpon
+    [−0,16; +0,04] seka ničlo in padec je nespremenjen — kar je pri 12 poslih
+    dvanajstkrat pod mejo zaznavnosti. Tega ne obdržimo.
+
+    OBVEZNO OB BRISANJU: v config.py zapisati, da je bilo pravilo odstranjeno
+    PRI KONKRETNIH vrednostih track_period 75, track_buf_pct 3, exit_grace_bars 3
+    in reentry_hold 15, in da bi ga bilo treba ponovno pretehtati, če se katera
+    od njih spremeni. To ni teoretična opomba — pri exit_grace_bars 2 bi se
+    pravilo sprožilo na 6 dneh.
 
 --------------------------------------------------------------------------------
 4.  KORAK A — PARAMETRI: ŠTIRJE UKREPI
 --------------------------------------------------------------------------------
-Ocena dela ~1 ura. Cilj: 14 nastavljivih številk → 9, od tega 5, ki jih je
-smiselno gledati. Vedenje strategije se NE spremeni.
+Ocena dela ~1 ura. Cilj: 14 nastavljivih številk → 9. Vedenje strategije se
+NE spremeni za nobeno decimalko.
 
-A.1  ODSTRANITI (2) — pravilo je mrtvo, gumb odpade z njim
+A.1  ODSTRANITI (4) — pravilo je pri naših vrednostih dokazano nedejavno
        min_dist_entry_pct   mrtev pri vseh 151 nastavitvah, po konstrukciji
        ma_med_len           oživi pri 3 od 151, padca ne premakne
+       vol_shock_mul        pravilo 0 sprožitev od 21 izstopov
+       vol_lookback         isto pravilo
+     Z njimi odpadeta dva pogoja (dist_entry_ok, above_ma_med) in ena izstopna
+     veja (vol_shock). Vse tri odstranitve so bitno identične.
 
-A.2  ZAKLENITI (3) — pravilo OSTANE, gumb se umakne s seznama nastavljivih
-       rsi_len        = 14    inerten (razpon 0,120); napaja blow-off
-       vol_shock_mul  = 1,5   v ansamblu 0,040 Sortina, razpon seka ničlo
-       vol_lookback   = 20    inerten (razpon 0,021)
+A.2  ZAKLENITI (1) — pravilo OSTANE, gumb se umakne s seznama nastavljivih
+       rsi_len = 14   inerten (razpon 0,120); napaja blow-off, ki ostaja nedokazan
      Zaklepanje ne spremeni NITI ENE pozicije, a zniža število nastavljivih
      številk — in prav to vstopa v PBO in deflated Sharpe. Za statistiko šteje
      število nastavljivih ŠTEVILK, ne število vrstic KODE.
 
-A.3  PREPUSTITI GLASOVANJU (4) — ostra konica, vrednost naj določi večina
-       ma_long_len · confirm_bars · reentry_hold · exit_grace_bars
-     Velja samo, če se sprejme Korak C. Sicer ostanejo pri privzetkih.
-
-A.4  PUSTITI PRI MIRU (5) — plato ali pravilo, ki ga ne odpiramo
+A.3  PUSTITI PRI MIRU (9) — ostanejo nastavljivi, a se jih ne dotikamo
        track_period · track_buf_pct · ma_slope · track_slope_bars
+       ma_long_len · confirm_bars · reentry_hold · exit_grace_bars
        blowoff_dist_pct
-     blowoff_dist_pct je NAMENOMA izvzet iz glasovanja: nastavljati pravilo, o
-     katerem ne vemo, ali sploh koristi, bi bilo nastavljanje šuma.
+     Štirje od teh so na ostri konici. Ker glasovanja ne uvajamo (§6), ostanejo
+     pri privzetkih — s POPRAVLJENIM PRIČAKOVANJEM, ne s popravljeno vrednostjo.
+     blowoff_dist_pct se ne nastavlja: pravilo je nedokazano v obe smeri, in
+     nastavljati pravilo, o katerem ne vemo, ali koristi, bi bilo nastavljanje
+     šuma.
 
 A.5  KAJ SE SPREMENI V KODI
      lean/diversitas/config.py
@@ -199,14 +212,16 @@ A.5  KAJ SE SPREMENI V KODI
        vol_lookback dopisati komentar, da so zaklenjeni, z razlogom in datumom
        (po vzoru obstoječega komentarja o odstranitvi ER)
      lean/diversitas/strategy.py
-       compute_features(): odstraniti df["dist_entry_ok"] iz bull_condition in
-       df["above_ma_med"] iz bull_condition. ma_med SAM PUSTITI — dashboard ga
-       riše. df["vol_shock"], df["rsi"], df["blowoff"] OSTANEJO.
-       run_state_machine(): NE spreminjati. Vse tri izstopne veje ostanejo.
-       build_summary(): ne odstranjevati ničesar.
+       compute_features(): odstraniti df["dist_entry_ok"] in df["above_ma_med"]
+       iz bull_condition ter df["vol_shock"] v celoti. ma_med in annual_vol SAM
+       PUSTITI — dashboard ju riše. df["rsi"] in df["blowoff"] OSTANETA.
+       run_state_machine(): iz izstopne veje odstraniti vol_shock_arr. Ostaneta
+       below_tl (z exit_grace_bars) in blowoff.
+       build_summary(): odstraniti ključ "vol_shock".
      lean/diversitas/dashboard.py
        odstraniti kljukico "Distance >= X%" (vrstica ~1563) — je dvojnik tiste
-       nad njo. Odstraniti kljukico "Above 50 MA (trend)". Ostalo pustiti.
+       nad njo. Odstraniti kljukico "Above 50 MA (trend)". Odstraniti prikaz
+       vol-shocka. Ostalo pustiti.
      shared/warmup.py
        PREVERITI, da required_history(LeanConfig()) ostane 220. Po odstranitvi
        ma_med_len je maksimum še vedno ma_long_len = 200 → 220. Če se spremeni,
@@ -226,7 +241,7 @@ A.7  NOVI TESTI (brez njih korak ni dokončan)
      - LeanConfig nima več odstranjenih polj
      - bull_condition ima natanko tri člene: above_tl, track_rising_window,
        regime_ok (plus btc_filter_ok in donchian_ok, ki sta konstantna)
-     - vse tri izstopne veje so še vedno v state machine
+     - v state machine sta natanko dve izstopni veji: below_tl in blowoff
      - required_history(LeanConfig()) == 220
      - pozicijska serija je identična pred in po posegu
 
@@ -248,50 +263,55 @@ preskočiti.
 
 
 --------------------------------------------------------------------------------
-6.  KORAK C — POZICIJA: ODPRTA ODLOČITEV, NE PRIPOROČILO
+6.  KORAK C — POZICIJA: ODLOČENO, GLASOVANJA NE UVEDEMO
 --------------------------------------------------------------------------------
-
-To je edini del načrta, kjer se dokazi ne izidejo na eno stran. Prejšnje različice
-tega dokumenta so glasovanje navajale kot priporočilo. PO PREGLEDU 2026-08-01 TO
-NI VEČ USTREZNO: glasovanje je slabše na vseh štirih merilih, tudi na tistem,
-ki ga produkt edino obljublja.
 
 ŠTEVILKE (5-letno okno, neto)
                               Sortino  Sharpe    CAGR    MaxDD   konec  promet
   privzetki, ena točka          1,219   0,783   21,6 %  −39,8 %   2,67×    16,0
   glasovanje 81 sosedov         1,021   0,665   17,3 %  −43,1 %   2,22×    24,0
 
-ZA GLASOVANJE
+ARGUMENT, KI JE GLASOVANJE ZAGOVARJAL
   Premija konice +0,279, razpon [+0,08; +0,55], ZNAČILNA. Privzetki so 77. od 81
-  svojih sosedov; brez vpogleda v podatke bi pristali blizu 41. Nižja številka je
-  torej ocena tega, kar se lahko ponovi.
-  Prednost privzetkov pri PADCU ni značilna (razpon [−1,5; +13,1] o. t.), medtem
-  ko je prednost pri Sortinu značilna in torej dokazano prilagojena.
+  svojih sosedov; brez vpogleda v podatke bi pristali blizu 41. Prednost je torej
+  merljivo prilagojena.
 
-PROTI GLASOVANJU
+ZAKAJ TA ARGUMENT NE ZDRŽI DO SKLEPA
+  Če je prednost privzetkov res zgolj naknadna modrost, potem se ta prednost
+  NAPREJ NE BO PONOVILA — pričakovanje za privzetke pade proti povprečju soseske.
+  Ampak to je natanko tam, kjer je pričakovanje za glasovanje. NAPREJ IMATA OBOJE
+  ENAKO PRIČAKOVANJE. Glasovanje ne prinese boljšega izida, samo manj laskav
+  backtest.
+  Premija konice torej ni argument za spremembo strategije. Je argument za
+  spremembo ŠTEVILKE, KI JO NAVAJAMO — in to je zastonj.
+
+KAJ GLASOVANJE STANE
   Padec se poglobi z −39,8 % na −43,1 %, plitvejši padec pa je EDINA lastnost,
-  ki jo produkt obljublja. Glasovanje torej žrtvuje nekaj tistega, kar prodajamo,
-  da popravi številko, ki je ne prodajamo.
-  Promet zraste s 16,0 na 24,0 — za polovico. To je realen strošek, ne le številka.
-  In walk-forward preizkus (§7.4) pokaže, da fiksni privzetki prekašajo glasovanje
-  v vseh štirih shemah izven vzorca.
+  ki jo produkt obljublja.
+  Promet zraste s 16,0 na 24,0, za polovico — to je gotov strošek proti negotovi
+  koristi.
+  Walk-forward (§8.1) pokaže, da fiksni privzetki prekašajo glasovanje izven
+  vzorca v VSEH ŠTIRIH shemah.
+  Operativno pomeni 81 hkratnih izračunov namesto enega.
 
-KAR JE OBVEZNO NE GLEDE NA ODLOČITEV
-  Številka, ki jo komuniciramo, ni 1,219. Poštena ocena je 0,98 do 1,02, ker je
-  prednost privzetkov merljivo prilagojena. To velja tudi, če pozicije ne
-  spremenimo — in je najpomembnejši posamezen ukrep v celem dokumentu, ker ne
-  zahteva nobene spremembe kode.
+KAJ GLASOVANJE VSEENO PRINESE
+  Manjši razpon možnih izidov. Člani se raztezajo od 0,529 do 1,230; glasovanje
+  po konstrukciji pristane blizu sredine. Če se izkaže, da so privzetki krhka
+  točka in ne le srečna, to zaleže. Tega ne moremo izmeriti.
 
-ZASILNA MOŽNOST, ČE GLASOVANJE NI IZVEDLJIVO
-  Ena vrednost, a sredina najširše ravnine namesto najvišje točke:
-  ma_long_len 225 · confirm_bars 1 · reentry_hold 15 · exit_grace_bars 4.
-  Daje 0,983 pri enakem prometu kot danes. Problema NE odpravi — še vedno
-  stojimo na eni točki, le na položnejši.
+SKLEP
+  NE uvajamo. Gotov strošek (promet, globlji padec, 81 izračunov) proti koristi,
+  ki je ne znamo pokazati in ki po zgornjem razmisleku najverjetneje ne obstaja
+  v pričakovanju.
 
-  OPOZORILO: te štiri vrednosti so bile izbrane kot najvišje drseče povprečje
-  preleta NA TEH PODATKIH. Prag navadne večine pri glasovanju pa ni bil izbran na
-  podatkih. To je edini argument, ki glasovanje postavlja pred sredino ravnine.
+  ZATO PA JE OBVEZNO TO: številka, ki jo komuniciramo, ni 1,219, ampak 0,98 do
+  1,02. Premija konice je dokazana in mora biti nekje vračunana. Vračunamo jo v
+  pričakovanje, ne v strategijo. To je edini pravi odgovor na ugotovitev, da je
+  backtest polepšan, in ne zahteva nobene spremembe kode.
 
+ČE BI SE ODLOČITEV KDAJ OBRNILA
+  Uporabi navadno večino, ne dvotretjinske — ta je padla na drugi uri (§8.4).
+  In vol_shock takrat NE briši (§3).
 
 --------------------------------------------------------------------------------
 7.  KORAK D — KAR OSTAJA ODPRTO
@@ -469,15 +489,16 @@ poseg v strategy.py, tretji je metodološki popravek za naprej.
 --------------------------------------------------------------------------------
 11. DEFINICIJA DOKONČANOSTI
 --------------------------------------------------------------------------------
-  [ ] A  min_dist_entry_pct in ma_med_len odstranjena
-  [ ] A  rsi_len, vol_shock_mul, vol_lookback zaklenjeni in dokumentirani
-  [ ] A  dashboard: odstranjeni dvojnik "Distance >= X%" in "Above 50 MA"
+  [ ] A  min_dist_entry_pct, ma_med_len, vol_shock_mul, vol_lookback odstranjeni
+  [ ] A  v config.py zapisano, pri katerih vrednostih je bil vol_shock nedejaven
+  [ ] A  rsi_len zaklenjen in dokumentiran
+  [ ] A  dashboard: odstranjeni dvojnik "Distance >= X%", "Above 50 MA", vol-shock
   [ ] A  required_history(LeanConfig()) == 220 potrjeno s testom
   [ ] A  pozicijska serija identična pred in po (sprejemni kriterij A.6)
   [ ] A  novi testi (A.7) zeleni
   [ ] B  PBO in deflated Sharpe na novo, s številom preizkusov zapisanim vnaprej
   [ ] B  če PBO ne pade, to zapisano v poročilu
-  [ ] C  odločitev o poziciji sprejeta in zapisana, z obema argumentoma
+  [x] C  odločitev o poziciji sprejeta: glasovanja ne uvedemo (§6)
   [ ] C  komunicirana številka spremenjena z 1,219 na 0,98–1,02
   [ ] D  7.1 below_tl in tekmeci
   [ ] D  7.2 asimetrični mrtvi pas
@@ -560,7 +581,13 @@ preveč optimistična, in vsakič jo je podrl test, ki je meril širše.
     Prvi je odgovarjal na vprašanje, ki ga produkt ne postavlja. Drugi je bil
     ob prvem zagonu obrnjen v predznaku (p = 0,972 namesto 0,028).
 
-  GLASOVANJE   priporočilo → odprta odločitev
-    Ta pregled. Glasovanje je slabše na vseh štirih merilih, tudi na tistem, ki
-    ga produkt edino obljublja. Argument zanj je resničen, a enostranski, in
-    dokument ga je navajal močneje, kot dokazi dopuščajo.
+  GLASOVANJE   priporočilo → odprta odločitev → NE UVEDEMO
+    Zadnji korak je bil premislek, ne nova meritev: če je prednost privzetkov
+    naknadna modrost, se naprej ne bo ponovila, torej imata privzetki in
+    glasovanje NAPREJ ENAKO PRIČAKOVANJE. Glasovanje ne prinese boljšega izida,
+    le manj laskav backtest — kar dosežemo ceneje tako, da popravimo številko.
+
+  ŠTEVILO ODSTRANLJIVIH PARAMETROV, drugič   9 z zaklepanjem → 9 z brisanjem
+    Ista končna številka, drugačna pot. Ker glasovanja ni, je vol_shock pri naših
+    vrednostih dokazano nedejaven in gre ven skupaj z obema gumboma, namesto da
+    bi ju zaklenili. Koda izgubi celo izstopno vejo.
