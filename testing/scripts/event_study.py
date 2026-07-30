@@ -153,7 +153,7 @@ def autocorr(x: np.ndarray, lags=(1, 5, 10, 20)) -> dict:
 def main() -> dict:
     smod = engine.strategy_module("lean")
     cfg = engine.make_config("lean")
-    raw = pd.read_parquet(ROOT / "testing" / "data" / "sources" / f"{SYMBOL}_binance.parquet")
+    raw = pd.read_parquet(ROOT / "testing" / "data" / "sources" / f"{SYMBOL}_binance_warmup.parquet")
     df = trim_warmup(smod.run_strategy(raw, btc_daily=None, config=cfg).df)
     close = raw["close"].reindex(df.index).to_numpy(float)
     rng = np.random.default_rng(SEED)

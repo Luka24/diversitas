@@ -124,7 +124,7 @@ def exit_reasons(df, cfg) -> dict:
 
 
 def main():
-    raw = pd.read_parquet(ROOT / "testing" / "data" / "sources" / f"{SYMBOL}_binance.parquet")
+    raw = pd.read_parquet(ROOT / "testing" / "data" / "sources" / f"{SYMBOL}_binance_warmup.parquet")
     rng = np.random.default_rng(SEED)
     out = {"symbol": SYMBOL, "fee_per_side_pct": FEE, "nboot": NBOOT, "block": BLOCK}
 

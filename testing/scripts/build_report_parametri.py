@@ -51,20 +51,38 @@ GROUP = {
 }
 
 
-def spark(p, w=168, h=34) -> str:
+def sweep_chart(p, w=430, h=168) -> str:
+    """Full-size sweep, same visual language as the earlier version of this page:
+    gridlines, labelled axes, the shipped default marked in orange."""
     xs, ys = p["values"], p["sortino"]
+    pad_l, pad_r, pad_t, pad_b = 42, 14, 16, 30
     lo, hi = min(ys), max(ys)
     span = max(hi - lo, 0.05)
-    lo, hi = lo - span * .2, hi + span * .2
-    def X(i): return 2 + i / max(len(xs) - 1, 1) * (w - 4)
-    def Y(v): return 3 + (1 - (v - lo) / (hi - lo)) * (h - 6)
+    lo, hi = lo - span * .22, hi + span * .22
+
+    def X(i): return pad_l + i / max(len(xs) - 1, 1) * (w - pad_l - pad_r)
+    def Y(v): return pad_t + (1 - (v - lo) / (hi - lo)) * (h - pad_t - pad_b)
+
+    out = [f'<svg viewBox="0 0 {w} {h}" role="img">']
+    for f in (0.0, 0.5, 1.0):
+        gv = lo + (hi - lo) * f
+        out.append(f'<line x1="{pad_l}" y1="{Y(gv):.1f}" x2="{w-pad_r}" y2="{Y(gv):.1f}" '
+                   f'stroke="var(--grid)"/>')
+        out.append(f'<text x="{pad_l-7}" y="{Y(gv)+4:.1f}" text-anchor="end">{gv:.2f}</text>')
     d = " ".join(f'{"M" if i == 0 else "L"}{X(i):.1f},{Y(v):.1f}' for i, v in enumerate(ys))
-    dot = ""
-    for i, xv in enumerate(xs):
-        if abs(float(xv) - float(p["default"])) < 1e-9:
-            dot = f'<circle cx="{X(i):.1f}" cy="{Y(ys[i]):.1f}" r="3.4" fill="var(--s2)"/>'
-    return (f'<svg viewBox="0 0 {w} {h}" role="img" style="width:{w}px">'
-            f'<path d="{d}" fill="none" stroke="var(--s1)" stroke-width="1.8"/>{dot}</svg>')
+    out.append(f'<path d="{d}" fill="none" stroke="var(--s1)" stroke-width="2"/>')
+    step = max(1, len(xs) // 8)
+    for i, (xv, yv) in enumerate(zip(xs, ys)):
+        isd = abs(float(xv) - float(p["default"])) < 1e-9
+        out.append(f'<circle cx="{X(i):.1f}" cy="{Y(yv):.1f}" r="{5 if isd else 3}" '
+                   f'fill="{"var(--s2)" if isd else "var(--s1)"}"/>')
+        if isd or i % step == 0:
+            out.append(f'<text x="{X(i):.1f}" y="{h-10}" text-anchor="middle"'
+                       f'{" style=\"fill:var(--s2);font-weight:700\"" if isd else ""}>'
+                       f'{xv:g}</text>')
+    out.append(f'<text x="{pad_l-7}" y="{pad_t-4}" text-anchor="end" '
+               f'style="font-size:10px">Sortino</text>')
+    return "".join(out) + "</svg>"
 
 
 def hist(vals, marks, w=780, h=200, xlab="") -> str:
@@ -128,7 +146,7 @@ def main():
  *{{box-sizing:border-box}}
  body{{margin:0;background:var(--plane);color:var(--ink);
   font:15.5px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif}}
- main{{max-width:940px;margin:0 auto;padding:36px 20px 70px}}
+ main{{max-width:1080px;margin:0 auto;padding:36px 20px 70px}}
  h1{{font-size:25px;margin:0 0 4px;font-weight:650}}
  .sub{{color:var(--ink2);font-size:13.5px;margin:0 0 26px}}
  h2{{font-size:17px;font-weight:650;margin:34px 0 10px;padding-top:14px;
@@ -139,6 +157,13 @@ def main():
  .cap{{color:var(--ink2);font-size:13.5px;margin:0 0 13px;max-width:78ch}}
  .fig{{background:var(--surface);border:1px solid var(--ring);border-radius:10px;
   padding:16px;margin:0 0 16px;overflow-x:auto}}
+ .grid{{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:14px;
+  margin:0 0 18px}}
+ .card{{background:var(--surface);border:1px solid var(--ring);border-radius:10px;padding:14px}}
+ .card h3{{font:600 13.5px system-ui;margin:0 0 1px}}
+ .card .d{{color:var(--muted);font-size:12px;margin:0 0 8px}}
+ .card .read{{font-size:12.5px;margin:9px 0 0;padding:7px 9px;border-radius:7px;
+  background:var(--band);color:var(--ink2)}}
  .box{{background:var(--surface);border:1px solid var(--ring);border-left:3px solid var(--s2);
   border-radius:0 10px 10px 0;padding:14px 18px;margin:0 0 18px}}
  .box p:last-child{{margin-bottom:0}}
@@ -186,16 +211,23 @@ Oranžna pika je vrednost, ki jo strategija uporablja danes.</p>""")
         ps = groups[kind]
         if not ps:
             continue
-        A(f'<div class="fig"><p style="margin:0 0 4px"><span class="tag" '
-          f'style="background:{col}">{len(ps)} od {len(D["params"])}</span> '
-          f'<b style="margin-left:8px">{title}</b></p>'
-          f'<p class="cap" style="margin:6px 0 10px">{expl}</p><table>')
+        A(f'<p style="margin:22px 0 4px"><span class="tag" style="background:{col}">'
+          f'{len(ps)} od {len(D["params"])}</span>'
+          f'<b style="margin-left:9px">{title}</b></p>'
+          f'<p class="cap" style="margin:6px 0 12px">{expl}</p>')
+        A('<div class="grid">')
         for p in ps:
-            A(f'<tr><td style="width:190px"><code>{p["name"]}</code></td>'
-              f'<td style="font-size:12.5px;color:var(--ink2)">{SL[p["name"]]}</td>'
-              f'<td style="width:180px">{spark(p)}</td>'
-              f'<td class="n" style="width:70px">{p["default"]}</td></tr>')
-        A("</table></div>")
+            edge = ("" if abs(float(p["best_value"]) - float(p["default"])) > 1e-9 else
+                    '<span class="tag" style="background:var(--crit);margin-left:8px">'
+                    'vrh na privzetku</span>')
+            A(f'<div class="card"><h3><code>{p["name"]}</code>'
+              f'{edge if kind == "ostra konica" else ""}</h3>'
+              f'<p class="d">{SL[p["name"]]}</p>'
+              f'{sweep_chart(p)}'
+              f'<p class="read">danes <b>{p["default"]}</b> · najboljša vrednost v preletu '
+              f'<b>{p["best_value"]:g}</b> · razpon rezultata čez cel prelet '
+              f'<b>{p["rng"]:.2f}</b></p></div>')
+        A("</div>")
 
     sharp = groups["ostra konica"]
     on_def = [p for p in sharp if abs(float(p["best_value"]) - float(p["default"])) < 1e-9]

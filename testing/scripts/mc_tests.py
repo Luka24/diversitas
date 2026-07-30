@@ -92,7 +92,7 @@ def spells(pos: np.ndarray) -> list[tuple[int, int]]:
 
 
 def main():
-    raw = pd.read_parquet(ROOT / "testing" / "data" / "sources" / f"{SYMBOL}_binance.parquet")
+    raw = pd.read_parquet(ROOT / "testing" / "data" / "sources" / f"{SYMBOL}_binance_warmup.parquet")
     rng = np.random.default_rng(SEED)
     real_r, real_pos = run_on(raw)
     real_s = sortino(real_r)

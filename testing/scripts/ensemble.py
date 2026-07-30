@@ -134,7 +134,7 @@ def robust_value(xs, ys):
 
 
 def main():
-    raw = pd.read_parquet(ROOT / "testing" / "data" / "sources" / f"{SYMBOL}_binance.parquet")
+    raw = pd.read_parquet(ROOT / "testing" / "data" / "sources" / f"{SYMBOL}_binance_warmup.parquet")
     ret_full = raw["close"].pct_change().fillna(0.0)
     rng = np.random.default_rng(SEED)
 
