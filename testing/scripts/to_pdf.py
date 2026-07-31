@@ -19,6 +19,7 @@ that mark where a rule changes the position simply vanish.
 """
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -80,21 +81,32 @@ def main() -> int:
             continue
         staged = prepare(src, tmp)
         pdf = src.with_suffix(".pdf")
+        # Render to a scratch path and swap it in. Printing straight onto the
+        # target fails when a viewer has it open, and -- worse -- leaves the old
+        # file in place, which any check based on size alone reads as success.
+        scratch = tmp / (src.stem + ".pdf")
+        scratch.unlink(missing_ok=True)
         cmd = [str(exe), "--headless=new", "--disable-gpu", "--no-sandbox",
+               f"--user-data-dir={tmp / 'profile'}",   # never touch the live profile
                "--no-pdf-header-footer", "--virtual-time-budget=8000",
-               f"--print-to-pdf={pdf}", staged.as_uri()]
+               f"--print-to-pdf={scratch}", staged.as_uri()]
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        if not pdf.exists() or pdf.stat().st_size < 20_000:
-            # older builds spell the flag differently
+        if not scratch.exists():
             cmd[cmd.index("--no-pdf-header-footer")] = "--print-to-pdf-no-header"
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        if pdf.exists() and pdf.stat().st_size > 20_000:
-            pages = pdf.read_bytes().count(b"/Type /Page") or \
-                    pdf.read_bytes().count(b"/Type/Page")
-            print(f"  {pdf.name:32} {pdf.stat().st_size/1024:>6.0f} kB · ~{pages} strani")
-        else:
+        if not scratch.exists() or scratch.stat().st_size < 20_000:
             print(f"  NAPAKA pri {src.name}: {(r.stderr or '')[-300:]}")
             rc = 1
+            continue
+        try:
+            os.replace(scratch, pdf)
+        except PermissionError:
+            print(f"  ZAKLENJEN {pdf.name} — zapri ga v pregledovalniku in poženi znova")
+            rc = 1
+            continue
+        pages = pdf.read_bytes().count(b"/Type /Page") or pdf.read_bytes().count(b"/Type/Page")
+        print(f"  {pdf.name:32} {pdf.stat().st_size/1024:>6.0f} kB · ~{pages} strani")
+
     shutil.rmtree(tmp, ignore_errors=True)
     return rc
 
