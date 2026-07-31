@@ -1,0 +1,570 @@
+================================================================================
+IZVEDBENI NAČRT — KORAKI A, B, D IN KAR V NAČRTU MANJKA
+================================================================================
+Datum   : 2026-07-31
+Podlaga : testing/nacrt_poenostavitve_lean.txt (odločitve)
+          testing/naslednji_koraki.txt         (kaj povem)
+Ta list : kako se to naredi, po vrsticah kode in po ukazih
+
+Ta dokument je natančnejši od obeh zgornjih. Namenjen je izvedbi, ne
+predstavitvi. Kdor ga bere med delom, naj ga bere od zgoraj navzdol in naj ne
+preskakuje sprejemnih kriterijev.
+
+
+################################################################################
+A — POENOSTAVITEV
+################################################################################
+Cilj: 14 nastavljivih številk -> 9. Pozicijska serija ostane IDENTIČNA.
+Trajanje: ~1 ura + testi.
+
+--------------------------------------------------------------------------------
+A.0  PRED PRVIM POSEGOM — zamrzni referenco
+--------------------------------------------------------------------------------
+To je edini korak, ki ga ni mogoče nadomestiti pozneje.
+
+  Nova skripta: testing/scripts/freeze_reference.py
+  Kaj naredi:
+    1. požene današnjo strategijo na BTC_binance_warmup.parquet
+    2. zapiše pozicijsko serijo v testing/data/reference_positions.parquet
+       (indeks + pozicija, nič drugega)
+    3. zapiše SHA256 te serije v testing/data/reference_positions.sha256
+    4. zapiše tudi git commit hash, ob katerem je bila narejena
+
+  Zakaj tako: primerjava metrik ne zadostuje. Sortino se lahko ujema na tri
+  decimalke, pot pa je druga. Primerjamo SERIJO POZICIJ, ker enake metrike lahko
+  pridejo iz različnih poti, enake pozicije pa ne morejo.
+
+  Poženi in commitaj PREDEN karkoli spremeniš:
+    .venv/Scripts/python.exe testing/scripts/freeze_reference.py
+    git add testing/data/reference_positions.* && git commit -m "Freeze reference"
+
+--------------------------------------------------------------------------------
+A.1  lean/diversitas/config.py
+--------------------------------------------------------------------------------
+ODSTRANI ŠTIRI POLJA:
+    min_dist_entry_pct: float = 0.0
+    ma_med_len: int = 50
+    vol_shock_mul: float = 1.5
+    vol_lookback: int = 20
+
+  POZOR pri ma_med_len: 50-dnevno povprečje se še vedno RIŠE v dashboardu.
+  Konstanto premakni v strategy.py kot modulno konstanto MA_MED_LEN = 50 z
+  opombo, da ni več nastavljiva. Ne briši izračuna povprečja.
+
+  POZOR pri vol_lookback: annual_vol se še vedno prikazuje. Enako — konstanta
+  VOL_LOOKBACK = 20 v strategy.py.
+
+DODAJ DVA KOMENTARJA. Oba morata povedati ZAKAJ in KJE JE DOKAZ, po vzoru
+obstoječega komentarja o odstranitvi ER.
+
+  # vol-shock odstranjen 2026-07-31. Povzročil je 0 od 21 izstopov v 2700 dneh
+  # (2019-03-09 -> 2026-07-29). Obstaja 41 dni, ko bi lahko deloval — v poziciji
+  # smo, cena pod trackline, redni izstop še ni nastopil — in na nobenem se ne
+  # sproži, ker ga izstop na below_tl vedno prehiti.
+  #
+  # TO NI STRUKTURNA LASTNOST. Velja PRI KONKRETNIH vrednostih
+  #     track_period = 75 · track_buf_pct = 3 % · exit_grace_bars = 3 ·
+  #     reentry_hold = 15
+  # Pravilo oživi pri 67 od 151 preizkušenih nastavitev; pri exit_grace_bars = 2
+  # bi se sprožilo na 6 dneh, pri track_period = 45 na 17 dneh.
+  # ČE SE KATERA OD TEH ŠTIRIH SPREMENI, JE TREBA VPRAŠANJE ODPRETI ZNOVA.
+  # Dokaz: testing/scripts/dead_rules_robust.py, testing/data/dead_rules_BTC.json
+
+  # rsi_len zaklenjen na 14 (2026-07-31). Prelet 7..28 premakne Sortino za 0,120,
+  # kar je pod mejo zaznavnosti pri 11 poslih. Pravilo, ki ga napaja (blow-off),
+  # ostaja nedokazano v obe smeri, zato njegovih nastavitev ne spreminjamo —
+  # nastavljati pravilo, o katerem ne vemo, ali koristi, bi bilo nastavljanje šuma.
+  # Dokaz: testing/porocilo_pogoji_BTC.html, razdelek o blow-offu.
+
+--------------------------------------------------------------------------------
+A.2  lean/diversitas/strategy.py
+--------------------------------------------------------------------------------
+compute_features():
+
+  ODSTRANI (vrstica ~88):
+      df["dist_entry_ok"] = df["dist_pct"] >= (cfg.track_buf_pct + cfg.min_dist_entry_pct)
+
+  ODSTRANI (vrstica ~111):
+      df["vol_shock"] = (df["annual_vol"] > (vol_avg50 * cfg.vol_shock_mul)) & df["below_tl"]
+
+  SPREMENI bull_condition (vrstica ~99). Bilo:
+      above_tl & above_ma_med & track_rising_window & dist_entry_ok
+      & regime_ok & btc_filter_ok & donchian_ok
+  Novo:
+      above_tl & track_rising_window & regime_ok & btc_filter_ok & donchian_ok
+
+  PUSTI PRI MIRU — vse to dashboard uporablja:
+      ma_med, df["above_ma_med"]        (stolpec ostane, iz POGOJA gre ven)
+      annual_vol, vol_avg50
+      df["rsi"], df["blowoff"]
+
+  ZAMENJAJ cfg.ma_med_len z modulno konstanto MA_MED_LEN = 50
+  ZAMENJAJ cfg.vol_lookback z modulno konstanto VOL_LOOKBACK = 20
+
+run_state_machine():
+
+  ODSTRANI branje:
+      vol_shock_arr = df["vol_shock"].fillna(False).to_numpy()
+
+  ODSTRANI vejo (vrstica ~174):
+      elif vol_shock_arr[i]:
+          cur_sig = S_BEAR
+          bars_since_sig = 0
+
+  Izstopna veriga ima po tem natanko dve možnosti:
+      if below_arr[i] and below_c >= cfg.exit_grace_bars:   -> BEAR
+      elif blowoff_arr[i]:                                   -> BEAR
+
+build_summary():
+  ODSTRANI ključ "vol_shock".
+
+--------------------------------------------------------------------------------
+A.3  lean/diversitas/dashboard.py
+--------------------------------------------------------------------------------
+V seznamu gates (~vrstica 1553) ODSTRANI DVE VRSTICI:
+    ("Above 50 MA (trend)", ...)     pravilo ni več del pogoja
+    (f"Distance >= {...}", ...)      dvojnik vrstice nad njo
+
+  Ostanejo tri: "Above trackline + buffer", "Trackline rising", "Regime OK".
+  Naslov nad seznamom pravi "all must PASS for BULL" — to zdaj drži za tri.
+
+ODSTRANI prikaz vol-shocka (4 mesta) in min_dist_entry_pct (1 mesto).
+
+POZOR: dashboard bere summary. Sklic na izbrisan ključ ne pade ob uvozu, ampak
+šele ob nalaganju strani. Po posegu OBVEZNO odpri dashboard in preveri, da se
+naloži.
+
+--------------------------------------------------------------------------------
+A.4  lean/diversitas/backtest.py
+--------------------------------------------------------------------------------
+2 sklica na vol_shock — odstrani. Preveri, ali kateri od njih vpliva na izračun
+ali je samo prikaz.
+
+--------------------------------------------------------------------------------
+A.5  shared/warmup.py — NE spreminjaj, samo preveri
+--------------------------------------------------------------------------------
+required_history() bere polja po imenu prek getattr. Po odstranitvi ma_med_len in
+vol_lookback bo tiho preskočil obe. Maksimum ostane:
+    max(ma_long_len 200, track_period 75, donchian_period 55, rsi_len 14) = 200
+    + max(ma_slope 5, track_slope_bars 10) = 10  + 10 slack  = 220
+Test to mora potrditi. Če se številka spremeni, so dashboardi prekratki na
+podatkih in okno se skrajša — kar je natanko napaka, ki je bila odpravljena
+2026-07-30.
+
+--------------------------------------------------------------------------------
+A.6  testing/scripts/ — pomožne skripte
+--------------------------------------------------------------------------------
+Sklici na odstranjene parametre: features.py, run_feature_matrix.py,
+run_sensitivity.py, run_improvements.py, improvements.py, run_feature_ab.py,
+run_external.py.
+
+PRAVILO: kjer je sklic del PRELETA, ta prelet odstrani. NE podtikaj privzete
+vrednosti — parametra ni več in prelet ne pomeni nič.
+
+Skripte, ki so bile napisane med to analizo in morajo še naprej delovati:
+  event_study.py · ablation.py · ablation_full.py · exit_rules.py ·
+  dead_rules_robust.py · ensemble.py · mc_tests.py · intraday_check.py ·
+  curves.py · audit_claims.py · merge_verdict.py · wf_refit.py
+  Nekatere od njih namenoma izklapljajo vol_shock prek vol_shock_mul=999. Po
+  odstranitvi parametra bo to vrglo napako. Popravi tako, da tisti primer
+  preprosto odpade — ne z zamenjavo za nekaj drugega.
+
+--------------------------------------------------------------------------------
+A.7  NOVI TESTI — brez njih korak ni dokončan
+--------------------------------------------------------------------------------
+  testing/tests/test_simplification.py
+
+  1. test_removed_fields_are_gone
+     LeanConfig nima polj min_dist_entry_pct, ma_med_len, vol_shock_mul,
+     vol_lookback
+
+  2. test_bull_condition_has_three_variable_terms
+     bull_condition = above_tl & track_rising_window & regime_ok
+     (btc_filter_ok in donchian_ok sta konstantna in ne štejeta)
+
+  3. test_state_machine_has_two_exits
+     iz BULL vodita natanko dve veji: below_tl z exit_grace_bars, in blowoff
+
+  4. test_required_history_unchanged
+     required_history(LeanConfig()) == 220
+
+  5. test_positions_identical_to_reference        <- NAJPOMEMBNEJŠI
+     pozicijska serija se ujema z reference_positions.parquet na VSAKEM baru.
+     Ne primerjaj metrik. Primerjaj serijo.
+
+  6. test_dashboard_summary_keys
+     build_summary() ne vrača več ključa "vol_shock", vrača pa vse, kar
+     dashboard bere
+
+--------------------------------------------------------------------------------
+A.8  SPREJEMNI KRITERIJ — številke zapisane VNAPREJ
+--------------------------------------------------------------------------------
+  .venv/Scripts/python.exe testing/scripts/ablation_full.py
+
+  Izhodišče mora biti, okno 2021-07-01 -> 2026-06-30, neto 0,30 %/stran:
+      Sortino          1,219
+      Sharpe           0,783
+      CAGR            21,6 %
+      MaxDD          −39,8 %
+      končni večkratnik 2,67×
+      poslov              11
+      izpostavljenost  39,9 %
+
+  KATERAKOLI RAZLIKA POMENI, DA JE BILA SPREMENJENA LOGIKA.
+  Ustavi. Poišči razliko. NE popravljaj številke v dokumentu.
+
+  Najverjetnejši vzrok razlike, če do nje pride: pri odstranjevanju
+  above_ma_med iz bull_condition je bil pomotoma odstranjen tudi izračun ma_med,
+  kar spremeni warm-up in s tem okno.
+
+--------------------------------------------------------------------------------
+A.9  UMIK, ČE GRE NAROBE
+--------------------------------------------------------------------------------
+Delaj na veji, ne na main:
+    git checkout -b poenostavitev
+Če sprejemni kriterij pade in vzroka ni mogoče najti v pol ure:
+    git checkout main && git branch -D poenostavitev
+Referenčna serija iz A.0 je na main in ostane.
+
+
+################################################################################
+B — PBO IN DEFLATED SHARPE NA NOVO
+################################################################################
+Trajanje ~1 ura + ~1 ura za register.
+Tu je celotna korist koraka A. Rezultat strategije se ne spremeni; spremeni se
+prostor iskanja.
+
+--------------------------------------------------------------------------------
+B.1  PROBLEM, KI GA DOSLEJ NISMO REŠILI PRAV
+--------------------------------------------------------------------------------
+Doslej smo pisali "137 preizkusov". To število je bilo prešteto ročno in je
+NAPAČEN vhod v deflated Sharpe iz dveh razlogov:
+
+  PRECENJUJE, ker so preizkusi med seboj močno korelirani. 81 članov ansambla
+  ni 81 neodvisnih poskusov — mnogi imajo skoraj enako serijo donosov. Za DSR
+  šteje ŠTEVILO NEODVISNIH POSKUSOV, ne število zagonov.
+
+  PODCENJUJE, ker nimamo evidence. Vsak prelet, vsaka ablacija, vsak event study
+  je poskus. Ročno šteto število je skoraj zagotovo prenizko.
+
+Obe napaki gresta v nasprotni smeri in se ne izničita — vsaka je treba odpraviti
+posebej.
+
+--------------------------------------------------------------------------------
+B.2  EFEKTIVNO ŠTEVILO POSKUSOV PREK GRUČENJA
+--------------------------------------------------------------------------------
+Uveljavljen postopek (Bailey & López de Prado):
+  1. zberi serije donosov vseh preizkušenih konfiguracij
+  2. izračunaj korelacijsko matriko med njimi
+  3. pretvori v razdaljno matriko:  d(i,j) = sqrt(0,5 * (1 − rho(i,j)))
+  4. gručenje (npr. hierarhično z average linkage)
+  5. število gruč = ocena števila NEODVISNIH poskusov
+
+  Nova skripta: testing/scripts/effective_trials.py
+  Vhod : serije donosov iz vseh preletov, ki so že shranjeni v testing/data/
+  Izhod: N_eff, dendrogram, in seznam, katere konfiguracije padejo v isto gručo
+
+  PRIČAKOVANJE: N_eff bo bistveno manjši od 137. Če pade recimo na 20, je
+  deflated Sharpe manj strog, kot smo mislili — kar je dobra novica, a jo je
+  treba znati zagovarjati z metodo, ne z željo.
+
+  PAST: gručenje ima svoj parameter (prag razdalje ali število gruč). Izberi ga
+  VNAPREJ po pravilu, ne po rezultatu. Predlog: prag pri korelaciji 0,95, torej
+  konfiguracije, ki so si podobne nad 95 %, so ista gruča.
+
+--------------------------------------------------------------------------------
+B.3  REGISTER PREIZKUSOV — kar bi morali imeti od začetka
+--------------------------------------------------------------------------------
+  Nova datoteka: testing/data/trial_log.jsonl  (ena vrstica na preizkus)
+  Nov modul   : testing/scripts/trial_log.py
+
+  Vsaka analitična skripta na koncu zapiše:
+      {"ts": "...", "script": "...", "git": "...", "n_configs": N,
+       "window": [...], "what": "kratek opis", "result_key": "..."}
+
+  Vgradi v: event_study.py · ablation_full.py · ensemble.py · dead_rules_robust.py ·
+           wf_refit.py · exit_alternatives.py · asymmetric_buffer.py
+
+  ZAKAJ: brez tega je vsaka trditev o številu poskusov ocena. Z njim je
+  preverljiva, in DSR dobi pošten vhod.
+
+  PRAVILO: število se prebere iz registra PREDEN se pogleda rezultat.
+
+--------------------------------------------------------------------------------
+B.4  KAJ POŽENEMO
+--------------------------------------------------------------------------------
+  1. effective_trials.py            -> N_eff
+  2. PBO na zmanjšanem prostoru     (9 nastavljivih namesto 14)
+  3. deflated Sharpe z N_eff        (ne s 137)
+
+  Primerjaj s trenutnim stanjem: PBO 0,694 · DSR p = 0,075 pri 10 poskusih.
+
+--------------------------------------------------------------------------------
+B.5  KAKO SE TO BERE — vsi trije izidi so vnaprej opisani
+--------------------------------------------------------------------------------
+  PBO PADE      Poenostavitev je delovala. To povemo, z obema številkama.
+  PBO OSTANE    Poenostavitev ni prinesla statistične koristi. Korak A ostane
+                upravičen zaradi jasnosti kode, a TO JE TREBA POVEDATI in ne
+                zamolčati. To je edini izid, ki bi Korak A razvrednotil.
+  PBO ZRASTE    Nekaj je narobe z izračunom — zmanjšanje prostora iskanja ne
+                more povečati verjetnosti prevelike prilagojenosti. Ustavi in
+                preglej vhode.
+
+
+################################################################################
+D.1 — IZSTOPI: below_tl IN TEKMECI  (~1 dan)
+################################################################################
+Najvišja prioriteta. below_tl povzroči 13 od 21 poslov, prednost pa ni dokazana
+(−4,6 o. t. na 60 dni, razpon zajema ničlo). Nosi večino izstopne strani.
+
+Nova skripta: testing/scripts/exit_alternatives.py
+
+--------------------------------------------------------------------------------
+D.1.1  TEKMECI — natančne definicije
+--------------------------------------------------------------------------------
+Vsak zamenja below_tl. Vse ostalo ostane nespremenjeno: isti vstop, isti
+confirm_bars, isti reentry_hold, blow-off ostaja.
+
+  A) ATR TRAILING STOP
+     ATR(14) = povprečje pravega razpona zadnjih 14 barov
+        TR = max(high−low, |high−close[−1]|, |low−close[−1]|)
+     peak = najvišji close od vstopa naprej
+     izstop, ko  close < peak − N × ATR(14)
+     N ∈ {1,5 · 2,0 · 2,5 · 3,0 · 4,0}
+     OPOMBA: to je industrijski standard za trend-following programe, ker se
+     razdalja sama prilagaja nihajnosti. Zato je prvi na seznamu.
+
+  B) PREBITJE SREDNJEGA POVPREČJA
+     izstop, ko close < ma_med × (1 − pas)
+     pas ∈ {0 % · 1 % · 2 %}
+     OPOMBA: above_ma_med smo pravkar odstranili iz VSTOPA. Tu ga preizkušamo
+     kot IZSTOP, kar je drugo vprašanje in ni v nasprotju.
+
+  C) ČASOVNI IZSTOP
+     izstop po N barih od vstopa, ne glede na ceno
+     N ∈ {20 · 40 · 60 · 90}
+     OPOMBA: za to obliko je najmanj objavljenih dokazov. Je pa najbolj strog
+     test za vse ostale — če časovni izstop ni bistveno slabši, potem ostali
+     izstopi ne prispevajo informacije, ampak samo povprečno trajanje pozicije.
+     TA PRIMERJAVA JE NAJBOLJ POVEDNA OD VSEH.
+
+  D) DONCHIAN / CHANDELIER
+     izstop, ko close < najnižji low zadnjih N barov
+     N ∈ {20 · 55 · 75}
+
+  E) below_tl — KONTROLNA SKUPINA
+     prag 3 %, exit_grace_bars 3, torej današnje stanje
+
+--------------------------------------------------------------------------------
+D.1.2  KAJ SE MERI — in tu je glavna sprememba glede na doslej
+--------------------------------------------------------------------------------
+  PRIMARNO   nadaljnji MaxDD na dneh sprožitve, horizonti 5 / 20 / 60 barov
+             Izstop naj varuje pred padcem, ne pred izgubljenim donosom.
+             Stolpec je že izračunan v event_study.py (funkcija forward_maxdd),
+             a ga nobeno poročilo doslej ne prikazuje.
+             PRAVI PREDZNAK JE NEGATIVEN — po sprožitvi naj sledi hujši padec.
+
+  SEKUNDARNO nadaljnji donos, isti horizonti
+
+  KONTROLNO  celoten backtest (Sortino, Sharpe, CAGR, MaxDD, poslov)
+             NE kot merilo izbire. Samo zato, da se vidi, ali se katera
+             različica obnaša divje — na primer 200 poslov namesto 20.
+
+--------------------------------------------------------------------------------
+D.1.3  PRIMERJALNA SKUPINA
+--------------------------------------------------------------------------------
+  SAMO DNEVI, KO SMO V POZICIJI. Ne vsi dnevi v vzorcu.
+  Izstopno pravilo se nikoli ne posvetuje na povprečnem dnevu; primerjava s
+  celotnim vzorcem meri stanje trga in ne pravila.
+  Ta past je bila v tem projektu že enkrat odkrita — pri blow-offu — in je
+  obrnila sodbo. Ne ponovimo je.
+
+--------------------------------------------------------------------------------
+D.1.4  VEČKRATNO TESTIRANJE
+--------------------------------------------------------------------------------
+  5 družin × do 5 nastavitev × 2 merili × 3 horizonti = do 150 testov.
+  Bonferronijev prag bi bil 0,05/150 = 0,0003. To je nedosegljivo.
+
+  ZATO TEST NE ODLOČA O ZNAČILNOSTI. Rangira.
+  Vprašanje ni "je katera razlika značilna", ampak:
+      ali katera družina DOSLEDNO prekaša below_tl na nadaljnjem MaxDD
+      čez VSE TRI horizonte?
+  Doslednost čez horizonte je tu boljši filter kot p-vrednost, ker je
+  horizontov malo in so med seboj odvisni na način, ki ga poznamo.
+
+  Vseh 150 testov gre v register (B.3).
+
+--------------------------------------------------------------------------------
+D.1.5  PREVERBA NA DRUGI URI
+--------------------------------------------------------------------------------
+  Najvišje uvrščeno družino pognati še na 4-urnih barih, z vsemi dolžinami × 6
+  (postopek je v intraday_check.py). Če se uvrstitev premeša, je bila prednost
+  šum — natanko tako, kot je padla dvotretjinska večina.
+
+--------------------------------------------------------------------------------
+D.1.6  SPREJEMNI KRITERIJ ZA ZAMENJAVO below_tl
+--------------------------------------------------------------------------------
+  Vsi trije pogoji hkrati:
+    1. tekmec prekaša below_tl na nadaljnjem MaxDD na VSEH TREH horizontih
+    2. ohrani uvrstitev na 4-urnih barih
+    3. ne poveča števila poslov za več kot polovico (sicer je to druga
+       strategija, ne boljši izstop)
+  Karkoli manj pomeni, da smo našli šum. Takrat below_tl ostane.
+
+--------------------------------------------------------------------------------
+D.1.7  KAJ BI BILO SUMLJIVO NAMESTO DOBRODOŠLO
+--------------------------------------------------------------------------------
+  - če ČASOVNI IZSTOP zmaga, to ni odkritje boljšega izstopa, ampak dokaz, da
+    noben od cenovnih izstopov ne nosi informacije. Povej tako.
+  - če najboljša nastavitev leži na ROBU mreže (N = 4,0 pri ATR ali N = 90 pri
+    času), mrežo razširi. Sicer je "najboljša" vrednost artefakt meje.
+  - če zmaga družina z največ nastavitvami, preveri, ali ni to samo posledica
+    tega, da je imela največ poskusov.
+
+
+################################################################################
+D.2 — ASIMETRIČNI MRTVI PAS  (~pol dneva)
+################################################################################
+Nova skripta: testing/scripts/asymmetric_buffer.py
+
+ZAKAJ JE TO SPLOH ODPRTO: track_period in track_buf_pct bereta OBA pogoja,
+above_tl in below_tl. Vstopnega praga danes NI MOGOČE premakniti brez izstopnega.
+To je bilo v kodi implicitno in v poročilih nevidno, dokler ni bilo izrisano.
+
+OZADJE: min_dist_entry_pct je BIL ravno ta zamisel — zahtevati za vstop več kot
+za izstop — a odposlan z vrednostjo 0, zato se sesede v above_tl. Zamisel je
+dobra, izvedba je bila mrtva. Ta test jo oživi pravilno.
+
+IZVEDBA
+  1. v strategy.py loči buf_entry in buf_exit; danes sta oba track_buf_pct
+     above_tl uporabi buf_entry, below_tl uporabi buf_exit
+  2. prelet buf_entry ∈ {1 · 2 · 3 · 4 · 5 · 6} × buf_exit ∈ {1 · 2 · 3 · 4 · 5}
+     = 30 kombinacij
+  3. za vsako event study na dneh sprožitve VSTOPA: nadaljnji donos primarno,
+     nadaljnji MaxDD sekundarno, horizonti 5/20/60
+  4. Donchian kot alternativa vstopu: use_donchian je že v kodi, privzeto
+     izklopljen. Prelet donchian_period ∈ {20·55·75} × donchian_top_frac ∈
+     {0,65·0,75·0,85}
+
+VARNOST — TO MORA BITI PRVO
+  Dokler je buf_entry = buf_exit = 3 %, mora biti vedenje IDENTIČNO današnjemu.
+  Test tega ujemanja mora obstajati in biti zelen, PREDEN se privzetek spremeni.
+  Uporabi isto referenčno serijo kot v A.0.
+
+KAJ BI BILO SUMLJIVO
+  Hipoteza je, da je pravi buf_entry VIŠJI od buf_exit — vstopi previdno,
+  izstopi hitro. Če prelet pokaže obratno, je to prilagajanje temu vzorcu in ne
+  ugotovitev; povej tako in ne spreminjaj privzetka.
+  Če najboljša kombinacija leži na robu mreže, mrežo razširi.
+
+
+################################################################################
+D.3 — PARETO: DVE MERILI NAMESTO ENEGA  (~pol dneva)
+################################################################################
+Nova skripta: testing/scripts/pareto.py
+
+ZAKAJ: doslej smo izbirali po Sortinu, ki pa NI tisto, kar produkt obljublja. To
+je ponovljiva napaka, ne enkratna — in vsaka prihodnja analiza jo bo ponovila,
+če ne popravimo postopka.
+
+IZVEDBA
+  1. za vse preizkušene nastavitve izriši točke (MaxDD, Sortino)
+  2. označi Pareto mejo: nastavitve, ki jih nobena druga ne prekaša na OBEH
+     merilih hkrati
+  3. poglej, kje na tej meji leži današnja nastavitev
+
+KAJ BO TO POKAZALO
+  Če današnja nastavitev leži NA meji, je izbira med njo in alternativami
+  vprašanje preference in ne kakovosti. Če leži POD mejo, obstajajo nastavitve,
+  ki so boljše na obeh merilih hkrati — in to bi bilo treba vedeti.
+
+NE REŠI premajhnega vzorca. Prepreči pa nastavljanje na številko, ki je ne
+prodajamo.
+
+
+################################################################################
+E — KAR V OBSTOJEČEM NAČRTU MANJKA
+################################################################################
+To so stvari, ki se med delom niso pokazale kot potrebne, dokler ni bilo prepozno
+ali skoraj prepozno.
+
+--------------------------------------------------------------------------------
+E.1  REGISTER PREIZKUSOV                                  prioriteta VISOKA
+--------------------------------------------------------------------------------
+Opisan v B.3. Brez njega je vsaka trditev o številu poskusov ocena, in deflated
+Sharpe dobi napačen vhod. Naredi ga PRED korakom D, ne po njem — sicer bo D.1 s
+svojimi 150 testi spet neevidentiran.
+
+--------------------------------------------------------------------------------
+E.2  ZLATA REFERENCA ZA REGRESIJO                         prioriteta VISOKA
+--------------------------------------------------------------------------------
+Opisana v A.0. Trenutno se pravilnost posega preverja tako, da človek pogleda
+tabelo. To ni test. Zamrznjena pozicijska serija plus SHA256 je test.
+Uporabi jo tudi pri D.2, kjer se spreminja strategy.py.
+
+--------------------------------------------------------------------------------
+E.3  PRED-REGISTRACIJA TESTOV IZ KORAKA D                 prioriteta SREDNJA
+--------------------------------------------------------------------------------
+Za vsakega od treh testov zapiši V GIT, PREDEN ga poženeš:
+  - kaj pričakuješ (smer, ne velikost)
+  - kaj bi te prepričalo, da zamenjaš pravilo
+  - kaj bi bilo sumljivo namesto dobrodošlo
+Vse troje je že napisano zgoraj. Manjka samo to, da se commita s časovnim žigom
+pred zagonom.
+Zakaj: brez tega je vsak izid mogoče razložiti za nazaj. To se je v tem projektu
+že zgodilo — sodba o blow-offu se je obrnila trikrat, in vsakič je bila razlaga
+prepričljiva.
+
+--------------------------------------------------------------------------------
+E.4  KAJ BI OVRGLO VSAKO PREOSTALO TRDITEV                prioriteta SREDNJA
+--------------------------------------------------------------------------------
+Za vsako trditev, ki jo še vedno delamo, zapiši, kaj bi jo ovrglo. Trditev, ki je
+ni mogoče ovreči, ni ugotovitev.
+
+  "track_rising_window zmanjšuje padec"
+      ovrglo bi: izklop na 4-urnih barih ne poglobi padca, ali pa se učinek
+      obrne na drugem podobdobju
+
+  "regime_ok je filter donosa in ne varovalka"
+      ovrglo bi: na daljšem oknu ali na drugi uri izklop poglobi padec
+
+  "strategija zmanjšuje padce" (edina preostala prodajna trditev)
+      ovrglo bi: premešana izpostavljenost na 4-urnih barih ne da več p < 0,05
+
+  "0,98–1,02 je poštena ocena"
+      ovrglo bi: ansambel na drugem podobdobju da bistveno drugačno povprečje
+
+--------------------------------------------------------------------------------
+E.5  MERILO NA 4-URNIH BARIH KOT PRIVZETO                 prioriteta NIZKA
+--------------------------------------------------------------------------------
+Dnevni bari lepšajo največji padec za 2,1 do 4,2 odstotne točke, ker ne vidijo
+padca, ki se zgodi in popravi znotraj dneva. Vse, kar poročamo o padcu, bi moralo
+biti merjeno na 4-urnih barih. Strategija ostane dnevna; meritev postane
+natančnejša.
+Ni nujno takoj, je pa treba nekje zapisati, da je dnevna številka optimistična.
+
+--------------------------------------------------------------------------------
+E.6  ČESA NE DODAJAMO
+--------------------------------------------------------------------------------
+  - nobenega novega pravila v strategijo, dokler PBO ne pade
+  - nobenega novega parametra
+  - nobenega testa na blow-offu
+  - nobenega iskanja po več parametrih hkrati
+  Vsaka od teh stvari poveča prostor iskanja, kar je natanko tisto, kar
+  poskušamo zmanjšati.
+
+
+################################################################################
+F — VRSTNI RED IN ČAS
+################################################################################
+  A.0  zamrzni referenco               15 min    PRVO, brez izjem
+  E.1  register preizkusov              1 ura    pred korakom D
+  A    poenostavitev                    1 ura    + testi
+  B    PBO in DSR z N_eff               2 uri    tu je korist koraka A
+  E.3  pred-registracija testov D       30 min   commit pred zagonom
+  D.1  izstopi in tekmeci               1 dan    največ na kocki
+  D.2  asimetrični pas                pol dneva  zahteva poseg v strategy.py
+  D.3  Pareto                         pol dneva  metodološki popravek za naprej
+  E.4  kaj bi ovrglo trditve           30 min    zapiši ob koncu
+
+  Skupaj ~3 dni. A in B sta neločljiva. D je raziskava in lahko počaka.
