@@ -8,7 +8,6 @@ testing/nacrt_poenostavitve_lean.txt (steps 6 and 8) with their data still in
 testing/data/ and their scripts unchanged.
 
 Data in:  testing/data/parametri_BTC.json   (the 14 sweeps, PBO, trial count)
-          testing/data/ensemble_BTC.json    (peak premium)
           testing/data/merge_BTC.json       (the derived action per parameter)
 """
 from __future__ import annotations
@@ -19,7 +18,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 DD = ROOT / "testing" / "data"
 D = json.loads((DD / "parametri_BTC.json").read_text(encoding="utf-8"))
-EN = json.loads((DD / "ensemble_BTC.json").read_text(encoding="utf-8"))
 MG = json.loads((DD / "merge_BTC.json").read_text(encoding="utf-8"))
 OUT = ROOT / "testing" / "porocilo_parametri_BTC.html"
 
@@ -86,47 +84,8 @@ def sweep_chart(p, w=430, h=168) -> str:
     return "".join(out) + "</svg>"
 
 
-def hist(vals, marks, w=800, h=190) -> str:
-    lo = min(list(vals) + [m[0] for m in marks])
-    hi = max(list(vals) + [m[0] for m in marks])
-    pad = (hi - lo) * .09 or .1
-    lo, hi = lo - pad, hi + pad
-    nb = 24
-    counts = [0] * nb
-    for v in vals:
-        counts[min(nb - 1, max(0, int((v - lo) / (hi - lo) * nb)))] += 1
-    cmax = max(counts) or 1
-    pl, pr, pt, pb = 20, 16, 40, 42
-
-    def X(v): return pl + (v - lo) / (hi - lo) * (w - pl - pr)
-    def Y(c): return h - pb - c / cmax * (h - pt - pb)
-
-    p = [f'<svg viewBox="0 0 {w} {h}" role="img">']
-    p.append(f'<line x1="{pl}" y1="{h-pb}" x2="{w-pr}" y2="{h-pb}" stroke="var(--axis)"/>')
-    bw = (w - pl - pr) / nb
-    for i, c in enumerate(counts):
-        if c:
-            p.append(f'<rect x="{pl+i*bw+1:.1f}" y="{Y(c):.1f}" width="{bw-2:.1f}" '
-                     f'height="{h-pb-Y(c):.1f}" fill="var(--s1)" opacity=".42" rx="2"/>')
-    for f in (0, .25, .5, .75, 1):
-        v = lo + (hi - lo) * f
-        p.append(f'<text x="{X(v):.1f}" y="{h-pb+16:.0f}" text-anchor="middle">{v:.2f}</text>')
-    for i, (val, col, lab) in enumerate(marks):
-        p.append(f'<line x1="{X(val):.1f}" y1="{pt-8}" x2="{X(val):.1f}" y2="{h-pb}" '
-                 f'stroke="{col}" stroke-width="2.2"/>')
-        p.append(f'<text x="{X(val):.1f}" y="{pt-12-i*15}" text-anchor="middle" '
-                 f'style="fill:{col};font-weight:700">{lab}</text>')
-    p.append(f'<text x="{pl}" y="{h-7}">vsak stolpec = koliko od {len(vals)} sosednjih '
-             f'nastavitev doseže ta rezultat (desno = boljše)</text>')
-    return "".join(p) + "</svg>"
-
-
 def main():
     pbo = D["pbo"]
-    pt, en = EN["point"], EN["ensemble"]
-    prem, ci = EN["peak_premium"], EN["ci_peak_premium"]
-    ms = EN["member_sortino"]
-    rank = sum(1 for v in ms["all"] if v < pt["sortino"])
     PLAN = {r["name"]: r for r in MG["parameter_plan"]}
     groups = {k: [p for p in D["params"] if p["kind"] == k] for k in GROUP}
 
@@ -219,65 +178,14 @@ so v <code>testing/nacrt_poenostavitve_lean.txt</code>.</p>""")
               f'ukrep: <b style="color:{acol}">{r["action"]}</b> — {r["why"]}</p></div>')
         A("</div>")
 
-    # ── how firm are the values ────────────────────────────────────────────
-    A("<h2>Kako trdne so današnje vrednosti</h2>")
-    A(f"""<p>Štiri številke so na ozki konici in pri treh od njih je vrh natanko na vrednosti,
-ki jo uporabljamo. To se da izmeriti: strategijo poženemo pri {EN['members']} sosednjih
-kombinacijah teh štirih in pogledamo, kam med njimi pade današnja nastavitev.</p>""")
-    A('<div class="fig">' + hist(
-        ms["all"],
-        [(en["sortino"], "var(--s2)", f"povprečje vseh {EN['members']} · {en['sortino']:.2f}"),
-         (pt["sortino"], "var(--crit)", f"današnje nastavitve · {pt['sortino']:.2f}")])
-      + "</div>")
-    A(f"""<div class="box"><p>Današnje nastavitve so <b>{rank}. najboljše od
-{EN['members']}</b>. Če bi jih nekdo izbral, ne da bi videl te podatke, bi pričakovali nekje
-sredino, torej okoli 41. Razlika znaša {prem:+.2f} in razpon
-[{ci[0]:+.2f}, {ci[1]:+.2f}] ne vključuje ničle.</p>
-<p style="margin-top:9px">V praksi to pomeni, da backtest kaže {pt['sortino']:.2f}, poštena
-ocena za naprej pa je nekje med 0,98 in 1,02. Razlika je del, ki je prišel iz tega, da so bile
-številke izbrane potem, ko smo že videli, kako se je zgodovina odvila.</p></div>""")
-
-    # ── what to do ─────────────────────────────────────────────────────────
-    n_rm = sum(1 for r in MG["parameter_plan"] if r["action"] == "odstraniti")
-    n_lk = sum(1 for r in MG["parameter_plan"] if r["action"] == "zakleniti")
-    tot = len(MG["parameter_plan"])
-    A("<h2>Kaj z njimi narediti</h2>")
-    A(f"""<p>Štirje gumbi odpadejo skupaj s pravili, ki pri naših vrednostih ne naredijo
-ničesar, eden se zaklene. Nastavljivih ostane <b>{tot - n_rm - n_lk}</b>. Strategija se ob tem
-ne spremeni za nobeno decimalko — to je ves namen, saj v izračun tveganja prevelike
-prilagojenosti vstopa prav število gumbov, ne rezultat.</p>""")
-    A('<div class="fig"><table><tr><th>ukrep</th><th>parametri</th><th>zakaj</th></tr>')
-    for act, why in (("odstraniti", "pravilo, ki ga nastavljajo, je pri naših vrednostih "
-                      "dokazano nedejavno"),
-                     ("zakleniti", "gumb ne premakne rezultata, pravilo pa ostane"),
-                     ("pustiti pri miru", "plato, ali pa pravilo, o katerem premalo vemo")):
-        names = [r["name"] for r in MG["parameter_plan"] if r["action"] == act]
-        A(f'<tr><td><span class="tag" style="background:{ACT_COL[act]}">{act}</span></td>'
-          f'<td style="font-size:12.5px">'
-          + " · ".join(f"<code>{n}</code>" for n in names)
-          + f'</td><td style="font-size:12.5px">{why}</td></tr>')
-    A("</table></div>")
-    A(f"""<p class="cap">Štirje od tistih, ki ostanejo, so na ozki konici in bi bili kandidati
-za povprečenje sosednjih vrednosti. Tega ne delamo — razlogi so v načrtu. Namesto tega
-popravimo številko, ki jo navajamo.</p>""")
-
-    A(f"""<h2>Česa ta stran ne pove</h2>
-<p>Vse je merjeno na istem bitcoinu, na katerem so bile te vrednosti izbrane, in vseh
-{D['trials_total']} preizkusov je bilo na istem oknu. Noben izračun na teh podatkih tega ne
-more popraviti. Verjetnost, da je izbira najboljše nastavitve zgolj šum, je
-<b>{pbo['value']:.0%}</b>.</p>
-<p>Kar ta stran zares podpira, je ozko: vemo, katere gumbe je vredno nastavljati in katerih
-ne, in vemo, koliko od uspeha je prišlo iz izbire številk. Ali strategija deluje, iz tega ne
-sledi.</p>""")
-
     A(f"""<footer>
 Vir cen: Binance, zamrznjen posnetek. Okno {D['oos_from']} → {D['oos_to']},
 fee + slippage {D['fee']} % na stran. {D['trials_total']} preizkusov nastavitev ·
-PBO {pbo['value']} ({pbo['paths']} poti, purge/embargo {pbo['purge_embargo']} dni) ·
-premija konice iz {EN['members']} sosednjih nastavitev, razpon iz parnega bločnega
-bootstrapa ({EN['nboot']} vzorcev, blok {EN['block']} dni).<br>
-Ponovljivo z <code>testing/scripts/run_sensitivity.py</code> in
-<code>ensemble.py</code>; stran gradi <code>build_report_parametri.py</code>.
+PBO {pbo['value']} ({pbo['paths']} poti, purge/embargo {pbo['purge_embargo']} dni).<br>
+Analiza posameznih pogojev: <code>porocilo_pogoji_BTC.html</code>.
+Načrt dela, testi naključja in preizkušene alternative:
+<code>testing/nacrt_poenostavitve_lean.txt</code>.<br>
+Stran gradi <code>testing/scripts/build_report_parametri.py</code>.
 </footer></main></body></html>""")
 
     OUT.write_text("".join(P), encoding="utf-8")
