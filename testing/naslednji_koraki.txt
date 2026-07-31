@@ -1,0 +1,454 @@
+================================================================================
+NASLEDNJI KORAKI — KAJ NAREDIMO IN KAJ POVEM SODELAVCEM
+================================================================================
+Datum      : 2026-07-31
+Gradivo    : testing/porocilo_pogoji_BTC.pdf     (13 strani)
+             testing/porocilo_parametri_BTC.pdf  (4 strani)
+             testing/nacrt_poenostavitve_lean.txt (celoten načrt, 593 vrstic)
+Ta list    : kaj povem, po vrsti, in kaj naredim potem
+
+
+################################################################################
+DEL 1 — GOVORNI NAČRT (15 minut)
+################################################################################
+
+--------------------------------------------------------------------------------
+1.1  ODPRTJE (1 minuta) — z ugotovitvijo, ne z metodo
+--------------------------------------------------------------------------------
+
+  "Strategija ima osem pravil. Tri od njih ne naredijo nič. Eno od teh treh je
+   isti pogoj, zapisan dvakrat."
+
+Ne začenjaj z bootstrapom, okni ali p-vrednostmi. To poved vsak razume in je
+resnična.
+
+Potem takoj povej, kaj bo sledilo:
+  "Povedal bom tri stvari: kaj smo našli, kaj predlagam, in česa ne trdimo."
+
+
+--------------------------------------------------------------------------------
+1.2  TRIJE IZSLEDKI (5 minut)
+--------------------------------------------------------------------------------
+
+IZSLEDEK 1 — Tri pravila lahko odstranimo brez posledic
+  POKAŽI: porocilo_pogoji, razdelek "Vse tri odstranitve skupaj"
+
+  "Modra črta se skriva pod rdečo. To ni napaka risanja — razlika je nič, na
+   vseh 1826 dneh, in ni niti enega dne, ko bi držali kaj drugega."
+
+  Če vprašajo katera tri:
+    dist_entry_ok   isti pogoj kot above_tl, samo zapisan drugič
+    above_ma_med    blokira 65 dni, a nobeden ni nikoli postal posel
+    vol_shock       v sedmih letih se ni sprožil niti enkrat
+
+IZSLEDEK 2 — Današnje nastavitve so 77. najboljše od 81
+  POKAŽI: porocilo_parametri, skupina "Ozka konica"
+
+  "Vzeli smo štiri številke, ki so na ozki konici, in strategijo pognali pri 81
+   sosednjih kombinacijah. Današnja nastavitev pade na 77. mesto od 81. Kdor bi
+   jih izbral, ne da bi videl te podatke, bi pristal nekje na 41."
+
+  "Zato backtest kaže 1,22, poštena ocena za naprej pa je 0,98 do 1,02."
+
+  To je najpomembnejša številka na sestanku. Če si zapomniš eno stvar, to.
+
+IZSLEDEK 3 — Od dveh trditev prestane eno
+  "Ali zna izbrati boljši trenutek za zaslužek? Ne — ko iz podatkov odstranimo
+   samo dejstvo, da je bitcoin rasel, od prednosti ne ostane nič.
+   Ali zna izbrati boljši trenutek za izogib padcem? Da. Ista izpostavljenost,
+   isti čas v trgu, samo drugače razporejen — strategija je boljša od 96 %
+   naključnih razporeditev."
+
+  "Prodajamo mirnejšo vožnjo, ne napovedi cene."
+
+
+--------------------------------------------------------------------------------
+1.3  KAJ PREDLAGAM (4 minute)
+--------------------------------------------------------------------------------
+
+  "Dve stvari, prva je pomembnejša in ne zahteva niti vrstice kode."
+
+  PRVA — nehajmo navajati 1,22
+    "V tej številki je prednost, ki so jo nastavitve dobile s tem, da jih je
+     nekdo izbral, ko je zgodovino že videl. Izmerili smo jo, znaša 0,28.
+     Navajajmo 0,98 do 1,02."
+
+  DRUGA — s štirinajstih gumbov na devet
+    "Štirje odpadejo skupaj s pravili, ki ne naredijo nič. Eden se zaklene.
+     Rezultat se ne spremeni za nobeno decimalko — to je ves namen. Manj gumbov
+     pomeni manj načinov, kako se lahko zmotimo, in prav to število vstopa v
+     izračun tveganja prevelike prilagojenosti."
+
+  IN KAR ODSVETUJEM
+    "Nadaljnje nastavljanje na istih podatkih. Preizkusov je bilo 137 in
+     verjetnost, da je izbira najboljše nastavitve zgolj šum, je 69 %. Vsak nov
+     poskus jo dvigne."
+
+
+--------------------------------------------------------------------------------
+1.4  DVE ODLOČITVI, KI STA ŽE SPREJETI (2 minuti)
+--------------------------------------------------------------------------------
+
+Ti dve bosta najverjetneje izpodbijani, zato ju povej sam, preden te kdo vpraša.
+
+  POVPREČENJA SOSEDNJIH NASTAVITEV NE UVAJAMO
+    "Zamisel je bila: namesto ene vrednosti uporabimo tri sosednje in pustimo,
+     da glasujejo. Preizkusili smo. Ne uvedemo, iz dveh razlogov."
+
+    "Prvi je logičen. Če je prednost današnjih nastavitev res samo naknadna
+     modrost, se naprej ne bo ponovila — in njihovo pričakovanje pade natanko
+     tja, kjer je že pričakovanje povprečenja. Naprej imata torej oboje enako
+     pričakovanje. Povprečenje ne prinese boljšega izida, samo manj laskav
+     backtest."
+
+    "Drugi je merjen. Povprečenje poglobi padec s 40 na 43 odstotkov in dvigne
+     promet za polovico. Padec je edino, kar strategija zares obljublja."
+
+  SPROTNEGA NASTAVLJANJA PARAMETROV NE UVAJAMO
+    "Preizkusili smo v štirih shemah. Fiksne nastavitve prekaša v nič od štirih."
+    "Razlog: v vsakem treningu je 8 do 12 poslov. Izbirati med 81 kombinacijami
+     na osmih poslih ni nastavljanje. In se vidi — izbrana nastavitev se zamenja
+     skoraj na vsaki rezini. Če bi trening nosil signal, bi bila izbira stabilna."
+
+
+--------------------------------------------------------------------------------
+1.5  ČESA NE TRDIMO (2 minuti) — povej sam, ne čakaj vprašanja
+--------------------------------------------------------------------------------
+
+  "Ali strategija deluje, ne vemo, in na teh podatkih tega ne moremo izvedeti.
+   Nastavitve izhajajo iz skripte, ki je bila napisana ob gledanju istega
+   bitcoina, in vseh 137 preizkusov je bilo na istem oknu. Holdouta ni."
+
+  "Kar smo naredili, je nekaj drugega: zmanjšali smo število načinov, kako se
+   lahko motimo, in izmerili, koliko od videza uspeha je prišlo iz izbire
+   številk."
+
+  "To je manj, kot bi si želeli. Je pa prvo, kar bo zdržalo vprašanja."
+
+Če to poveš sam, ti bodo bolj verjeli, ne manj.
+
+
+--------------------------------------------------------------------------------
+1.6  KAJ POTREBUJEM OD VAS (1 minuta) — sestanek brez odločitve je izgubljen
+--------------------------------------------------------------------------------
+
+  1. "Sprejmemo, da je to produkt za zmanjšanje padcev in ne za višji donos?"
+  2. "Sprejmemo, da navajamo 0,98 do 1,02 namesto 1,22?"
+  3. "Odobrite dva dni za poenostavitev in tri odprte teste?"
+
+
+################################################################################
+DEL 2 — KORAK A: POENOSTAVITEV (~1 ura)
+################################################################################
+Cilj: 14 nastavljivih številk -> 9. Vedenje se NE spremeni za nobeno decimalko.
+
+--------------------------------------------------------------------------------
+A.1  lean/diversitas/config.py
+--------------------------------------------------------------------------------
+  ODSTRANI polja:
+      min_dist_entry_pct
+      ma_med_len
+      vol_shock_mul
+      vol_lookback
+
+  DODAJ komentar pri rsi_len, po vzoru obstoječega komentarja o odstranitvi ER
+  (mora povedati ZAKAJ, ne le KAJ):
+      rsi_len = 14  — zaklenjen 2026-07-31. Prelet 7..28 premakne Sortino za
+      0,120, kar je pod mejo zaznavnosti pri 11 poslih. Pravilo (blow-off), ki
+      ga napaja, ostaja nedokazano v obe smeri, zato gumba ne nastavljamo.
+
+  DODAJ komentar ob odstranitvi vol_shocka — TO JE OBVEZNO:
+      vol-shock odstranjen 2026-07-31. Povzročil je 0 od 21 izstopov v 2700
+      dneh. To velja PRI KONKRETNIH vrednostih track_period 75, track_buf_pct 3,
+      exit_grace_bars 3 in reentry_hold 15. Pri exit_grace_bars 2 bi se sprožil
+      na 6 dneh. Če se katera od teh štirih spremeni, je treba vprašanje odpreti
+      znova — glej testing/scripts/dead_rules_robust.py.
+
+--------------------------------------------------------------------------------
+A.2  lean/diversitas/strategy.py
+--------------------------------------------------------------------------------
+  compute_features():
+    - odstrani vrstico df["dist_entry_ok"] = ...
+    - odstrani df["above_ma_med"] IZ bull_condition (stolpec sme ostati, če ga
+      dashboard riše; iz pogoja mora ven)
+    - odstrani df["vol_shock"] = ...
+    - PUSTI ma_med, annual_vol in vol_avg50 — dashboard jih prikazuje
+    - PUSTI df["rsi"] in df["blowoff"]
+    bull_condition ima po tem natanko: above_tl & track_rising_window &
+    regime_ok & btc_filter_ok & donchian_ok  (zadnja dva sta konstantna)
+
+  run_state_machine():
+    - odstrani branje vol_shock_arr
+    - odstrani vejo  elif vol_shock_arr[i]:
+    - ostaneta below_tl (z exit_grace_bars) in blowoff
+
+  build_summary():
+    - odstrani ključ "vol_shock"
+
+--------------------------------------------------------------------------------
+A.3  lean/diversitas/dashboard.py
+--------------------------------------------------------------------------------
+  V seznamu "Entry gates" (okoli vrstice 1553) odstrani DVE vrstici:
+      "Above 50 MA (trend)"        — pravilo ni več v pogoju
+      "Distance >= X%"             — dvojnik vrstice nad njo
+  Ostanejo tri: trackline + buffer, trackline rising, regime OK.
+
+  Odstrani prikaz vol-shocka (4 mesta) in min_dist_entry_pct.
+
+  POZOR: dashboard bere summary. Če ostane sklic na izbrisan ključ, ne pade ob
+  uvozu, ampak šele ob nalaganju strani.
+
+--------------------------------------------------------------------------------
+A.4  lean/diversitas/backtest.py
+--------------------------------------------------------------------------------
+  2 sklica na vol_shock — odstrani.
+
+--------------------------------------------------------------------------------
+A.5  shared/warmup.py
+--------------------------------------------------------------------------------
+  NE spreminjaj. Samo PREVERI s testom, da required_history(LeanConfig()) ostane
+  220:  max(ma_long_len 200, track_period 75, donchian_period 55) = 200
+      + max(ma_slope 5, track_slope_bars 10) = 10  + 10 slack  = 220
+  Po odstranitvi ma_med_len in vol_lookback je maksimum še vedno 200.
+  Če se ta številka spremeni, so dashboardi prekratki na podatkih.
+
+--------------------------------------------------------------------------------
+A.6  testing/scripts/ — pomožne raziskovalne skripte
+--------------------------------------------------------------------------------
+  Sklici na odstranjene parametre: features.py, run_feature_matrix.py,
+  run_sensitivity.py, run_improvements.py, improvements.py, run_feature_ab.py,
+  run_external.py.
+  Kjer je sklic del PRELETA, ta prelet odstrani. NE podtikaj privzete vrednosti —
+  parametra ni več in prelet ne pomeni nič.
+
+--------------------------------------------------------------------------------
+A.7  NOVI TESTI — brez njih korak ni dokončan
+--------------------------------------------------------------------------------
+  1. LeanConfig nima več polj min_dist_entry_pct, ma_med_len, vol_shock_mul,
+     vol_lookback
+  2. bull_condition ima natanko tri spremenljive člene
+  3. v state machine sta natanko dve izstopni veji
+  4. required_history(LeanConfig()) == 220
+  5. NAJPOMEMBNEJŠI: pozicijska serija je IDENTIČNA pred in po posegu
+     (zamrzni današnjo serijo v datoteko in primerjaj)
+
+--------------------------------------------------------------------------------
+A.8  SPREJEMNI KRITERIJ — številke zapisane VNAPREJ
+--------------------------------------------------------------------------------
+  Po posegu mora  .venv/Scripts/python.exe testing/scripts/ablation_full.py
+  dati izhodišče:
+
+      okno 2021-07-01 -> 2026-06-30, neto 0,30 %/stran
+      Sortino 1,219 · Sharpe 0,783 · CAGR 21,6 % · MaxDD −39,8 %
+      končni večkratnik 2,67× · 11 poslov · izpostavljenost 39,9 %
+
+  Katerakoli razlika pomeni, da je bila spremenjena logika, ne odstranjena mrtva
+  koda. V tem primeru USTAVI in poišči razliko. Ne popravljaj številke.
+
+
+################################################################################
+DEL 3 — KORAK B: PBO IN DEFLATED SHARPE NA NOVO (~1 ura)
+################################################################################
+
+  CELOTNA KORIST KORAKA A JE V TEJ ŠTEVILKI. Rezultat strategije se ne spremeni;
+  spremeni se prostor iskanja.
+
+  Trenutno stanje: PBO 0,694 pri 137 preizkusih.
+
+  1. Zapiši število preizkusov PREDEN pogledaš rezultat.
+  2. Poženi PBO na zmanjšanem prostoru (9 nastavljivih namesto 14).
+  3. Poženi deflated Sharpe z novim številom poskusov.
+
+  ČE PBO NE PADE, POENOSTAVITEV NI PRINESLA NIČESAR IN TO JE TREBA POVEDATI.
+  To je edini izid, ki bi Korak A razvrednotil, in ravno zato se ga ne sme
+  preskočiti. Korak A bi v tem primeru ostal upravičen zaradi jasnosti kode, a
+  brez statistične koristi — in tako bi ga bilo treba predstaviti.
+
+
+################################################################################
+DEL 4 — KORAK D: TRIJE ODPRTI TESTI (~2 dni)
+################################################################################
+Vsi uporabljajo isto rutino kot event_study.py: krožni bločni bootstrap, blok =
+horizont, 2000 vzorcev, neto 0,30 %/stran.
+
+PRAVILO ZA VSE: število opravljenih testov se ZAPIŠE, preden se pogleda rezultat.
+
+--------------------------------------------------------------------------------
+D.1  below_tl in tekmeci — NAJVIŠJA PRIORITETA (~1 dan)
+--------------------------------------------------------------------------------
+  ZAKAJ: povzroči 13 od 21 poslov, prednost pa ni dokazana. Nosi večino izstopne
+  strani, torej je to najdražja neznanka.
+
+  NOVA SKRIPTA: testing/scripts/exit_alternatives.py
+
+  TEKMECI (vsak kot zamenjava za below_tl, vse ostalo nespremenjeno):
+    A) ATR trailing stop   N × ATR(14) pod najvišjo točko od vstopa
+                           N = 1,5 · 2 · 2,5 · 3 · 4
+    B) prebitje 50 MA      brez pasu, s pasom 1 % in 2 %
+    C) časovni izstop      po N barih od vstopa, N = 20 · 40 · 60 · 90
+    D) Donchian            pod spodnjo mejo N-dnevnega kanala, N = 20 · 55 · 75
+    E) below_tl            kontrolna skupina, prag 3 %
+
+  KAJ SE MERI:
+    PRIMARNO   nadaljnji MaxDD (5/20/60 barov), NE donos.
+               Izstop naj varuje pred padcem, ne pred izgubljenim donosom.
+               Stolpec je že izračunan v event_study.py (funkcija forward_maxdd),
+               a ga nobeno poročilo ne prikazuje. Pravi predznak je NEGATIVEN.
+    SEKUNDARNO nadaljnji donos, isti horizonti
+    KONTROLNO  celoten backtest — a NE kot merilo izbire, samo da se vidi, ali se
+               katera različica obnaša divje
+
+  PRIMERJALNA SKUPINA: samo dnevi, ko SMO V POZICIJI. Ne vsi dnevi v vzorcu.
+  (Ista past je bila že enkrat odkrita pri blow-offu.)
+
+  VEČKRATNO TESTIRANJE: 5 družin × do 5 nastavitev × 2 merili × 3 horizonti =
+  do 150 testov. Bonferronijev prag bi bil 0,0003 — nedosegljivo. TEST ZATO NE
+  ODLOČA O ZNAČILNOSTI, ampak RANGIRA: zanima nas, ali katera družina DOSLEDNO
+  prekaša below_tl na nadaljnjem MaxDD čez VSE tri horizonte.
+
+  PREVERBA NA DRUGI URI: najvišje uvrščeno družino pognati še na 4-urnih barih
+  z dolžinami × 6 (kot v intraday_check.py).
+
+  SPREJEMNI KRITERIJ ZA ZAMENJAVO: tekmec prekaša na nadaljnjem MaxDD na vseh
+  treh horizontih IN ohrani uvrstitev na 4-urnih barih. Karkoli manj pomeni, da
+  smo našli šum.
+
+--------------------------------------------------------------------------------
+D.2  above_tl — asimetrični mrtvi pas (~pol dneva)
+--------------------------------------------------------------------------------
+  ZAKAJ: jedro strategije, a nad povprečnim dnevom doda le +1,6 o. t. na 20 dni
+  in noben razpon ne izloči ničle. Backtest brez njega je celo rahlo boljši
+  (1,259 proti 1,219).
+
+  KAJ TO SPLOH OMOGOČA: track_period in track_buf_pct bereta OBA pogoja, vstopni
+  in izstopni. Vstopnega praga danes NI MOGOČE premakniti brez izstopnega. To je
+  bilo v kodi implicitno in v poročilih nevidno, dokler ni bilo izrisano.
+
+  OZADJE: min_dist_entry_pct je BIL ravno ta zamisel — zahtevati za vstop več kot
+  za izstop — a odposlan z vrednostjo 0, zato se sesede v above_tl. Zamisel je
+  dobra, izvedba je bila mrtva.
+
+  NOVA SKRIPTA: testing/scripts/asymmetric_buffer.py
+
+  IZVEDBA:
+    1. v strategy.py loči buf_entry in buf_exit (danes oba track_buf_pct)
+    2. prelet buf_entry 1..6 % × buf_exit 1..5 % = 30 kombinacij
+    3. za vsako event study na dneh sprožitve vstopa: nadaljnji donos primarno,
+       nadaljnji MaxDD sekundarno, horizonti 5/20/60
+    4. Donchian kot alternativa: use_donchian je že v kodi, privzeto izklopljen.
+       Prelet donchian_period 20/55/75 × donchian_top_frac 0,65/0,75/0,85
+
+  KAJ BI BILO SUMLJIVO: hipoteza je, da je pravi buf_entry VIŠJI od buf_exit —
+  vstopi previdno, izstopi hitro. Če prelet pokaže obratno, je to prilagajanje
+  temu vzorcu in ne ugotovitev. Če najboljša kombinacija leži na ROBU mreže,
+  mrežo razširi; sicer je "najboljša" vrednost artefakt meje.
+
+  VARNOST: dokler je buf_entry = buf_exit, je vedenje identično današnjemu. Test
+  tega ujemanja mora obstajati, PREDEN se privzetek spremeni.
+
+--------------------------------------------------------------------------------
+D.3  Pareto: dve merili namesto enega (~pol dneva)
+--------------------------------------------------------------------------------
+  ZAKAJ: doslej smo izbirali po Sortinu, ki pa NI tisto, kar produkt obljublja.
+  To je ponovljiva napaka, ne enkratna.
+
+  IZVEDBA: namesto maksimizacije ene številke izriši mejo med Sortinom in
+  največjim padcem čez preizkušene nastavitve in izberi točko na njej.
+
+  Ne reši premajhnega vzorca. Prepreči pa nastavljanje na številko, ki je ne
+  prodajamo.
+
+--------------------------------------------------------------------------------
+D.4  blow-off — NE ODPIRATI
+--------------------------------------------------------------------------------
+  8 sprožitev, 6 že opravljenih testov, verjetnost vsaj enega značilnega po
+  naključju 26 %. Vsak nadaljnji test poveča število poskusov, ne da bi lahko
+  prišel do odgovora.
+
+VRSTNI RED: D.1 -> D.2 -> D.3. Prvi nosi največ, drugi zahteva poseg v
+strategy.py, tretji je metodološki popravek za naprej.
+
+
+################################################################################
+DEL 5 — VPRAŠANJA, KI JIH BOŠ DOBIL
+################################################################################
+
+"Zakaj samo 11 poslov?"
+  Ker je strategija v trgu 40 % časa in vsak vstop drži tedne do mesece. To je
+  lastnost trend-following pristopa, ne napaka. Je pa razlog, zakaj nobene od
+  ugotovitev ne moremo imenovati dokaz.
+
+"Ali ni to samo 'pol časa v gotovini'?"
+  Delno da, in to smo izmerili. Od 31 odstotnih točk razlike v padcu jih 14 pride
+  že iz tega, da smo pol časa zunaj trga. Ostalih 17 pride iz tega, KDAJ. Ta drugi
+  del je edini, ki je statistično zdržal.
+
+"PBO 0,694 — ali to ni slabo?"
+  Je. Pomeni, da je izbira najboljše nastavitve pretežno šum. Zato predlagamo, da
+  NEHAMO izbirati. To je razlog za poenostavitev, ne argument proti strategiji.
+
+"Zakaj ne bi parametrov sproti prilagajali trgu?"
+  Preizkusili smo v štirih shemah. Prekaša fiksne nastavitve v nič od štirih. V
+  vsakem treningu je 8 do 12 poslov — izbirati med 81 kombinacijami na osmih
+  poslih ni nastavljanje. In izbrana nastavitev se zamenja skoraj na vsaki
+  rezini, kar pomeni, da izbiramo iz šuma.
+
+"Zakaj ste odstranili pravilo, ki naj bi ščitilo pred nihajnostjo?"
+  Ker se v sedmih letih ni sprožilo niti enkrat. Preverili smo tudi, ali je to
+  splet okoliščin — pri drugih nastavitvah res oživi — a pri vrednostih, ki jih
+  dejansko trgujemo, ne naredi nič. To smo zapisali v kodo, da bo naslednji vedel.
+
+"Kdaj gre lahko v živo?"
+  Ko bo jasno, kaj obljubljamo — padci, ne donos — ko bo gumbov devet namesto
+  štirinajst, in ko bo napoved zapisana vnaprej. Ne prej.
+
+"Zakaj je backtest zdaj slabši kot prej?"
+  Ni. Strategija je ista do zadnje decimalke. Slabša je številka, ki jo NAVAJAMO,
+  ker smo izmerili, koliko od nje ni resnične.
+
+
+################################################################################
+DEL 6 — ŠTEVILKE, KI JIH IMEJ PRI ROKI
+################################################################################
+
+STRATEGIJA, okno 2021-07-01 -> 2026-06-30 (1826 dni), neto 0,30 %/stran
+  Sortino 1,219 · Sharpe 0,783 · CAGR 21,6 % · MaxDD −39,8 % · 2,67× · 11 poslov
+  kupi in drži: 0,669 · 0,459 · 10,8 % · −76,6 % · 1,67×
+
+STRATEGIJA, celotno okno 2019-03-09 -> 2026-07-29 (2700 dni)
+  Sortino 1,505 · Sharpe 0,974 · CAGR 33,6 % · MaxDD −45,2 % · 8,55× · 21 poslov
+  izstopi po vzroku: below_tl 13 · blow-off 8 · vol-shock 0
+
+PRILAGOJENOST
+  premija konice +0,279, razpon [+0,08; +0,55] · rang privzetkov 77. od 81
+  PBO 0,694 pri 137 preizkusih
+  poštena ocena za naprej: 0,98 do 1,02
+
+TESTI NAKLJUČJA
+  premešan trg brez rasti          p = 0,349   NE prestane
+  premešan vrstni red obdobij      p = 0,041   prestane, boljša od 95,9 %
+  razlika v padcu +31 o. t., od tega 14 iz izpostavljenosti, 17 iz razporeditve
+
+MRTVA PRAVILA (preizkus pri 151 nastavitvah)
+  dist_entry_ok    oživi 0/151     mrtvo po konstrukciji
+  above_ma_med     oživi 3/151     učinek droben, padca ne premakne
+  vol_shock        oživi 67/151    a 0 izstopov pri naših vrednostih
+
+IZKLOP POSAMEZNIH PRAVIL (5-letno okno)
+  brez track_rising    Sortino 0,975 · MaxDD −53,3 %   <- edini, ki kupi padec
+  brez regime_ok       Sortino 1,002 · MaxDD −40,8 %   <- slabše na vsem
+  brez above_tl        Sortino 1,259 · MaxDD −39,8 %   <- rahlo boljše (!)
+  brez blow-offa       Sortino 1,099 · MaxDD −39,8 %
+
+ALTERNATIVE, KI SO PADLE
+  glasovanje 81 sosedov   Sortino 1,021 · MaxDD −43,1 % · promet 24,0 (proti 16,0)
+  sprotno nastavljanje    prekaša fiksne v 0 od 4 shem
+  dvotretjinsko glasovanje  na dnevnih 2. mesto, na 4-urnih 4.
+
+BAZNE STOPNJE (da ne precenimo ugotovitev)
+  20-dnevni donos je pozitiven na 55 % VSEH dni, povprečno +3,27 %
+  69,2 % vseh 60-dnevnih oken vsebuje padec vsaj 13 %
+
+4-URNI BARI
+  dnevni bari lepšajo padec: −39,8 % dnevno proti −41,9 % na 4h
+  število poslov se NE poveča — dolžine so skalirane, ekonomski horizont enak
