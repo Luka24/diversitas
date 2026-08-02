@@ -1,0 +1,255 @@
+================================================================================
+NAČRT NOVIH TESTOV — KAJ SE ŠE DA IZMERITI IN KAKO
+================================================================================
+Datum : 2026-08-02
+Vir za odločitev: testing/data/mintrl_BTC.json
+
+--------------------------------------------------------------------------------
+0.  ZAKAJ TA NAČRT SPLOH OBSTAJA
+--------------------------------------------------------------------------------
+Izračun najmanjše potrebne dolžine zgodovine pravi:
+
+    "ali strategija sploh zasluži"          potrebnih 2,8-4,3 leta   IMAMO
+    "ali se splača bolj kot držati BTC"     potrebnih 25-1200 let    NIMAMO
+
+Napačen zaključek iz tega bi bil "nič se ne splača testirati".
+Pravi zaključek je ožji: NE SPLAČA SE VEČ TESTIRATI RAZLIKE MED DVEMA SHARPOMA.
+
+Razlog je matematičen. Sharpe primerja dve številki, ki sta si na celotnem oknu
+skoraj enaki (0,974 proti 0,927), enota opazovanja pa je POSEL — teh je 11 do 21.
+Ampak skoraj vsako drugo vprašanje o tej strategiji ima za enoto opazovanja DAN,
+in dni je 1826 do 2700. To je stokrat več opazovanj.
+
+  ENOTA           koliko jih je      kaj lahko z njimi vprašamo
+  posel                11-21         skoraj nič
+  dan               1826-2700        veliko
+  sprožitev pravila  700-1700        veliko
+  meritev v kodi        vse          ni statistike, je preverba
+
+Ta načrt je sestavljen iz vprašanj druge, tretje in četrte vrste.
+
+
+================================================================================
+SKUPINA 1 — TESTI NA RAVNI DNI  (1826-2700 opazovanj)
+================================================================================
+Vsi merijo isto stvar, ki jo produkt obljublja: ali smo v trgu ob pravih dneh.
+
+--------------------------------------------------------------------------------
+1.1  ZAJEM NAVZGOR PROTI ZAJEMU NAVZDOL          ŽE IZRAČUNANO, glej spodaj
+--------------------------------------------------------------------------------
+  Vprašanje: koliko rasti BTC poberemo in koliko padcev nosimo?
+  Formula  : zajem navzgor = vsota (donos × pozicija) po pozitivnih dneh
+                             / vsota donosov po pozitivnih dneh
+             enako navzdol; razmerje obeh
+  Rezultat (zadnjih 5 let, 1826 dni):
+             zajem navzgor  40,0 %
+             zajem navzdol  35,2 %
+             razmerje        1,13     >1 pomeni, da pobiramo več rasti kot padcev
+  Zakaj šteje: to je edina številka, ki v enem razmerju pove, ali filtriranje
+             sploh deluje — in temelji na 1826 dneh, ne na 11 poslih.
+  KAJ MANJKA: razpon negotovosti (bločni bootstrap) in primerjava z MA pravilom
+             po istem merilu. To je delo za pol ure.
+
+--------------------------------------------------------------------------------
+1.2  IZOGIB NAJSLABŠIM DNEM
+--------------------------------------------------------------------------------
+  Vprašanje: ali smo na najslabših dneh v trgu redkeje kot sicer?
+  Metoda   : binomski test — v trgu smo 39,9 % vseh dni; koliko od najslabših
+             5/10/25 % dni smo v trgu?
+  Rezultat : najslabših  5 % (92 dni)  → v trgu na 32,6 %
+             najslabših 10 % (183 dni) → v trgu na 36,1 %, p = 0,16
+             najslabših 25 % (457 dni) → v trgu na 35,2 %
+  Branje   : smer je prava, a niti pri 183 dneh ne doseže značilnosti.
+  KAJ NAREDITI: razširi na več pragov, dodaj enak izračun za MA pravilo in za
+             naključno razporeditev iste izpostavljenosti. Šele primerjava pove,
+             ali je 36,1 % dobro ali povprečno.
+
+--------------------------------------------------------------------------------
+1.3  UDELEŽBA V PADCU  (novo, najbolj obetavno)
+--------------------------------------------------------------------------------
+  Vprašanje: ko BTC pada, koliko tega padca dejansko nosimo?
+  Metoda   : identificiraj vsa obdobja, ko je BTC v padcu globljem od 20 %
+             (teh je v 7 letih približno 6-8). Za vsako izračunaj, koliko odstotkov
+             tega padca smo utrpeli.
+  Zakaj je to boljše od MaxDD: MaxDD je ENA številka iz ENE poti. Udeležba v
+             padcu da eno številko na padec, torej 6-8 opazovanj namesto ene, in
+             vsaka je sestavljena iz desetin dni.
+  Kaj bi bil rezultat: "v šestih padcih BTC nad 20 % smo v povprečju utrpeli
+             X % padca, mediana Y, najslabši Z". To je stavek, ki ga vlagatelj
+             razume in ki ga lahko preverimo.
+
+--------------------------------------------------------------------------------
+1.4  ČAS POD VODO
+--------------------------------------------------------------------------------
+  Vprašanje: koliko časa smo pod prejšnjim vrhom?
+  Metoda   : za vsak dan izračunaj, koliko dni je minilo od zadnjega vrha.
+             Primerjaj porazdelitev z BTC in z MA pravilom.
+  Zakaj šteje: vlagatelj ne čuti Sharpa. Čuti, koliko časa je v minusu.
+             Enota opazovanja je dan, torej 1826 opazovanj.
+  Meri se   : povprečje, mediana, najdaljše obdobje, delež dni pod vodo.
+
+--------------------------------------------------------------------------------
+1.5  NAJSLABŠE 12-MESEČNO OBDOBJE
+--------------------------------------------------------------------------------
+  Vprašanje: kakšen je najslabši letni donos, če vstopiš na najslabši dan?
+  Metoda   : drseči 365-dnevni donos čez vse dni; poglej porazdelitev, ne le minimum.
+  Zakaj šteje: to je številka, ki jo bo vlagatelj videl, če vstopi ob napačnem času.
+             1462 prekrivajočih se okenc (razponi iz bločnega bootstrapa).
+
+
+================================================================================
+SKUPINA 2 — TESTI NA RAVNI SPROŽITEV  (700-1700 opazovanj)
+================================================================================
+Nadaljevanje event studyja, ki je že narejen. Te tri stvari niso bile merjene.
+
+--------------------------------------------------------------------------------
+2.1  KAKOVOST ČASA VSTOPA
+--------------------------------------------------------------------------------
+  Vprašanje: ko vstopimo, kako daleč smo od lokalnega dna?
+  Metoda   : za vsak vstop izračunaj (cena vstopa − najnižja cena v 20 dneh pred)
+             / najnižja cena. Enako za 60 dni.
+  Primerjava: proti naključnemu vstopu v istem obdobju in proti MA pravilu.
+  Zakaj šteje: pove, koliko rasti zamudimo zaradi potrditvenih dni. Ta strošek
+             doslej ni bil nikoli izmerjen.
+
+--------------------------------------------------------------------------------
+2.2  KAKOVOST ČASA IZSTOPA
+--------------------------------------------------------------------------------
+  Enako, zrcalno: kako daleč od lokalnega vrha izstopimo.
+  Skupaj z 2.1 da polno sliko, kje se izgublja: pri vstopu, pri izstopu, ali oboje.
+
+--------------------------------------------------------------------------------
+2.3  KOLIKO STANEJO ZAMUDE
+--------------------------------------------------------------------------------
+  Vprašanje: confirm_bars = 3 in reentry_hold = 15 sta razlog, da imamo 11 poslov
+             namesto 200. Koliko to stane in koliko prihrani?
+  Metoda   : poženi z zamudami in brez njih, a NE kot menjavo strategije —
+             izmeri, koliko dni pozneje vstopimo in kakšen je donos v teh dneh.
+  Zakaj šteje: če zamude stanejo malo in prihranijo veliko, so upravičene. Če je
+             obratno, imamo prvi konkreten kandidat za spremembo.
+             Enota je vstop, teh je 11-21 — a merjeno v DNEVIH zamude, teh je
+             11-21 × 3 do 15, torej nekaj sto.
+
+
+================================================================================
+SKUPINA 3 — IZVEDBA IN STROŠKI  (ni statistike, samo izračun)
+================================================================================
+Te številke ne potrebujejo nobenega zaupanjskega intervala. So dejstva.
+
+--------------------------------------------------------------------------------
+3.1  PRAG STROŠKA, PRI KATEREM SE VSE OBRNE
+--------------------------------------------------------------------------------
+  Vprašanje: pri kateri višini fee+slippage nehamo prekašati kupi-in-drži?
+             In pri kateri nehamo prekašati MA pravilo?
+  Metoda   : prelet 0,00 % do 1,00 % v korakih po 0,05 %, tri krivulje na eni sliki.
+  Zakaj šteje: pri 0,30 % smo približno izenačeni z MA pravilom. Ker mi trgujemo
+             trikrat manj, se pri višjem strošku slika obrne v našo korist. To je
+             MERLJIVA prednost, ne statistična domneva.
+  Pričakovanje: obstaja prag, nad katerim smo jasno boljši. Ta prag je treba
+             poznati, ker pove, za kakšen tip vlagatelja je strategija primerna.
+
+--------------------------------------------------------------------------------
+3.2  RESNIČEN STROŠEK NA BINANCE
+--------------------------------------------------------------------------------
+  Vprašanje: je 0,30 % na stran sploh pravilna predpostavka?
+  Metoda   : pogledaj dejansko provizijo za našo raven prometa in tipičen razmik
+             na BTCUSDT. Za velikosti, ki jih trgujemo, je vpliv na ceno skoraj nič.
+  Zakaj šteje: če je resničen strošek 0,10 %, smo si vzeli trikrat prevelik odbitek
+             in vse primerjave so pristranske. Če je 0,50 %, so preveč optimistične.
+             To je podatek, ne ocena.
+
+--------------------------------------------------------------------------------
+3.3  KDAJ SE DEJANSKO TRGUJE
+--------------------------------------------------------------------------------
+  Vprašanje: predpostavljamo trgovanje po zaključni ceni. Kaj če trgujemo na
+             odprtju naslednjega dne, ali povprečno čez naslednji dan?
+  Metoda   : trije scenariji izvedbe, ista strategija.
+  Zakaj šteje: signal nastane ob zaključku dneva, izvesti pa ga ni mogoče ob isti
+             ceni. Ta razlika doslej ni bila nikoli izmerjena in je lahko večja
+             od vsega, o čemer smo se prepirali pri parametrih.
+
+--------------------------------------------------------------------------------
+3.4  KAJ SE ZGODI OB IZPADU PODATKOV
+--------------------------------------------------------------------------------
+  Vprašanje: kaj naredi strategija, če en dan ni podatka, ali če je borza v izpadu?
+  Metoda   : namerno izbriši naključne bare in poglej, ali se signal spremeni.
+  Zakaj šteje: to ni vprašanje o donosu, ampak o tem, ali je izvedba varna.
+
+
+================================================================================
+SKUPINA 4 — PREVERBE KODE  (brez statistike, a najbolj nujne)
+================================================================================
+
+--------------------------------------------------------------------------------
+4.1  REVIZIJA POGLEDA V PRIHODNOST
+--------------------------------------------------------------------------------
+  Vsak indikator preveri, ali uporablja samo podatke, ki so bili na voljo ob
+  odločitvi. Posebej: shift(1) na pozicijah, rolling okna, resample.
+  To je edina napaka, ki bi vse dosedanje rezultate naredila nepomembne, in doslej
+  ni bila sistematično preverjena.
+  METODA, KI JE ZANESLJIVA: požení strategijo na podatkih, ki so odrezani na
+  datum T, in primerjaj signal na dan T s signalom iz polnega niza. Če se
+  razlikujeta, obstaja pogled naprej.
+
+--------------------------------------------------------------------------------
+4.2  ZAMRZNJENA REFERENCA
+--------------------------------------------------------------------------------
+  Pozicijska serija + SHA256 pred vsako spremembo kode. Že opisano v
+  nacrt_izvedbe.txt, A.0.
+
+--------------------------------------------------------------------------------
+4.3  REGISTER PREIZKUSOV
+--------------------------------------------------------------------------------
+  Vsaka analitična skripta zapiše, kaj je pognala. Že opisano, B.3.
+
+
+================================================================================
+SKUPINA 5 — EDINI TEST, KI PRINESE RES NOVE PODATKE
+================================================================================
+--------------------------------------------------------------------------------
+5.1  PRED-REGISTRIRANA NAPOVED
+--------------------------------------------------------------------------------
+  Zapiši danes v git, z datumom in commit hashem:
+      pričakovana izpostavljenost              41 %
+      pričakovano število poslov na leto        3
+      pričakovan zajem navzgor / navzdol      40 % / 35 %
+      pričakovan najgloblji padec           −40 do −45 %
+      razpon, znotraj katerega strategije NE spreminjamo
+  Potem pusti teči in ne spreminjaj ničesar.
+
+  Zakaj je to edino, kar prinese nove podatke: vse ostalo v tem načrtu meri isto
+  zgodovino z drugimi očali. To ustvari opazovanja, ki jih danes ni.
+  Ne stane nič in ne zahteva čakanja, da se zapiše.
+
+
+================================================================================
+6.  ČESA NE DELAMO IN ZAKAJ
+================================================================================
+  bootstrap seznama poslov      pri 11-21 poslih da samo širše intervale, ki jih
+                                že poznamo; Monte Carlo ne ustvari informacije,
+                                ki je v vzorcu ni bilo
+  sintetične cene (GARCH, GAN)  modelu podtaknemo lastnosti, ki jih sami izberemo
+  iskanje po več parametrih     poveča število poskusov, PBO je že 0,694
+  nadaljnje testiranje Sharpa   za odgovor bi bilo potrebnih 25 do 1200 let
+  blow-off                      8 sprožitev, 6 opravljenih testov, neodgovorljivo
+
+
+================================================================================
+7.  VRSTNI RED
+================================================================================
+  4.1  revizija pogleda v prihodnost      2 uri   če tu kaj najdemo, vse ostalo pade
+  4.2  zamrznjena referenca              15 min   pred vsako spremembo kode
+  3.1  prag stroška                        1 ura  najbolj verjetno mesto, kjer smo
+                                                  dokazljivo boljši
+  3.3  kdaj se dejansko trguje             2 uri  lahko večji učinek od vseh
+                                                  parametrov skupaj
+  1.1  zajem navzgor/navzdol z razponi   pol dneva  glavna številka za predstavitev
+  1.3  udeležba v padcu                  pol dneva  6-8 opazovanj namesto enega
+  1.4  čas pod vodo                        1 ura  kar vlagatelj dejansko čuti
+  2.3  koliko stanejo zamude             pol dneva  prvi konkreten kandidat za
+                                                  spremembo strategije
+  5.1  pred-registrirana napoved          30 min  edino, kar prinese nove podatke
+  ostalo po potrebi
+
+  Skupaj približno tri dni. Nič od tega ne poskuša odgovoriti na vprašanje,
+  na katero ni mogoče odgovoriti.
