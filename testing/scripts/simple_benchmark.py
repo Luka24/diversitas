@@ -5,6 +5,12 @@ comparison so far has been against buy and hold, which is a low bar for anything
 that spends 40% of its time in cash. The honest bar is a one-line trend rule:
 hold when the close is above a moving average, otherwise hold nothing.
 
+A shallower drawdown means nothing on its own when the two hold the market for
+different fractions of the time, so the simple rule is also run scaled down to
+Lean's average exposure. That control is the whole point: without it, "we fall
+less" reduces to "we hold less", which is the same mistake this project already
+made once against buy and hold.
+
 The comparison is deliberately unfair to Lean in one respect and fair in another.
 Unfair: the simple rules pay the same 0.30% per side and trade two to three times
 more often, so costs bite them harder. Fair: they have four settings between them
@@ -123,6 +129,24 @@ def main():
             "cagr": round(cagr(bh), 1), "maxdd": round(maxdd(bh), 1),
             "final": round(float(np.prod(1.0 + bh)), 2), "expo": 100.0,
             "turnover": 1.0, "trades": 1}
+
+        # Exposure-matched control: scale every simple rule down to Lean's average
+        # exposure, so any remaining drawdown difference is about WHEN each holds
+        # rather than HOW MUCH.
+        k = float(pos["Lean"].mean() / np.mean([pos[f"nad {n} MA"].mean() for n in MA_LENS]))
+        matched = {}
+        for n in MA_LENS:
+            rr = net_returns(pos[f"nad {n} MA"] * k, r, FEE).to_numpy(float)
+            matched[n] = {"sortino": round(sortino(rr), 3), "maxdd": round(maxdd(rr), 1),
+                          "cagr": round(cagr(rr), 1), "final": round(float(np.prod(1 + rr)), 2)}
+        rows["povprečje MA, izenačena izpostavljenost"] = {
+            "sortino": round(float(np.mean([m["sortino"] for m in matched.values()])), 3),
+            "sharpe": None,
+            "cagr": round(float(np.mean([m["cagr"] for m in matched.values()])), 1),
+            "maxdd": round(float(np.mean([m["maxdd"] for m in matched.values()])), 1),
+            "final": round(float(np.mean([m["final"] for m in matched.values()])), 2),
+            "expo": round(float(pos["Lean"].mean() * 100), 1), "turnover": None, "trades": None}
+        out.setdefault("exposure_match_factor", {})[wname] = round(k, 3)
 
         # Lean against the best simple rule, judged on both metrics
         best = max(MA_LENS, key=lambda n: rows[f"nad {n} MA"]["sortino"])
