@@ -21,8 +21,16 @@ env/
 .streamlit/secrets.toml
 
 # Testing harness — frozen data snapshots + generated results (hash logged, reproducible)
-testing/data/
+# Trailing-slash form is deliberately avoided: git never descends into an excluded
+# directory, so a `!` exception inside one has no effect.
+testing/data/*
 testing/results/
+
+# The behavioural reference is the exception. It is a commitment rather than a
+# derived artifact: the simplification is only provably neutral if everyone can
+# compare against the same frozen position series. 25 kB.
+!testing/data/reference_positions.parquet
+!testing/data/reference_positions.json
 
 # Live signal exports
 signals/
