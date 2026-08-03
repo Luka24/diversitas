@@ -1,0 +1,275 @@
+================================================================================
+NAČRT: IZBOLJŠANJE VSTOPOV — TOČNO KAJ TESTIRAM
+================================================================================
+Datum : 2026-08-03
+Podlaga: diagnoza spodaj, izmerjena na 1826 dneh (2021-07-01 → 2026-06-30)
+Nova skripta: testing/scripts/entry_variants.py
+
+
+--------------------------------------------------------------------------------
+0.  DIAGNOZA — zakaj sploh gledam vstope in ne izstopov
+--------------------------------------------------------------------------------
+
+  zajem navzgor    40,0 %   pri izpostavljenosti 39,9 %   ->  +0,1 o. t.
+  zajem navzdol    35,2 %   pri izpostavljenosti 39,9 %   ->  −4,7 o. t.
+
+Vstopi ne prispevajo nič — poberemo natanko toliko rasti, kolikor bi kdorkoli z
+enako izpostavljenostjo in naključnimi vstopi. Izstopi prispevajo vse.
+
+  zamuda vstopa    povprečno 16 dni od izpolnitve pogojev (mediana 3, največ 61)
+  cena zamude      BTC v teh dneh zraste povprečno +12,5 % na vstop
+
+  20 dni PRED vstopom   BTC +15,7 %      20 dni PO vstopu   +7,4 %
+  20 dni PRED izstopom  BTC  +1,9 %      20 dni PO izstopu  −0,1 %
+
+Vstopamo, ko je večina giba mimo. Izstopi so časovno v redu.
+
+ZAKLJUČEK: prostor je pri vstopih, in sicer pri ZAMUDI, ne pri izbiri dni.
+
+
+--------------------------------------------------------------------------------
+1.  KAJ MERIM PRI VSAKI RAZLIČICI
+--------------------------------------------------------------------------------
+PRIMARNO (enota = dan, 1826 opazovanj)
+    zajem navzgor            (r × poz) po pozitivnih dneh / vsota pozitivnih dni
+    zajem navzdol            enako po negativnih dneh
+    razmerje zajema          navzgor / navzdol      >1 je dobro
+    povprečna zamuda vstopa  v dneh
+    donos, zamujen v zamudi  v % na vstop
+    izpostavljenost          delež dni v trgu
+
+SEKUNDARNO (enota = posel, 11-21 opazovanj — samo za nadzor, NE za odločanje)
+    Sortino · Sharpe · CAGR · MaxDD · končni večkratnik · število poslov · promet
+
+RAZPONI: krožni bločni bootstrap, blok = 20 dni, 2000 vzorcev, parni (isti
+prevzorčeni dnevi na obeh serijah, da se skupno tržno gibanje odšteje).
+
+PRIMERJALNA SKUPINA: današnja strategija, ista okna, isti stroški 0,30 %/stran.
+NIKOLI kupi-in-drži — to je prenizka letvica za nekaj, kar je 40 % časa zunaj.
+
+
+--------------------------------------------------------------------------------
+2.  TESTI, PO VRSTNEM REDU
+--------------------------------------------------------------------------------
+
+════════════════════════════════════════════════════════════════════════════════
+TEST 1 — POGOJNI PREMOR PRED PONOVNIM VSTOPOM        parametrov: +0
+════════════════════════════════════════════════════════════════════════════════
+DANES
+    po vsakem izstopu 15 dni premora (reentry_hold), ne glede na izid posla
+
+ZAKAJ OBSTAJA
+    da ne skačemo noter-ven v stranskem trgu
+
+ZAKAJ SUMIM, DA JE PREDRAG
+    največja izmerjena zamuda je 61 dni — pogoji izpolnjeni dva meseca, mi zunaj.
+    Po DOBIČKONOSNEM izstopu ni bilo whipsawa, ki bi ga preprečevali.
+
+SPREMEMBA
+    premor velja samo, če je bil zadnji posel zaključen v izgubi.
+    if last_trade_pnl < 0:  zahtevaj reentry_hold barov
+    else:                   ne zahtevaj premora
+
+RAZLIČICE, KI JIH POŽENEM
+    A  brezpogojnih 15 dni            (današnje stanje, kontrola)
+    B  pogojnih 15 dni                (predlog)
+    C  brez premora                   (zgornja meja učinka)
+    D  pogojnih 10 / 20 / 25 dni      (občutljivost predloga)
+
+SPREJEMNI KRITERIJ — vsi trije hkrati
+    1. povprečna zamuda pade pod 8 dni
+    2. zajem navzdol se ne poslabša za več kot 1,0 o. t.
+    3. izpostavljenost zraste za manj kot 5 o. t.
+
+KAJ BI BILO SUMLJIVO
+    če različica C (brez premora) prekaša B, je premor sam odveč in tega ne
+    smemo razlagati kot uspeh pogojne oblike — pomeni, da parameter ni potreben.
+    če najboljša vrednost pri D leži na robu (10 ali 25), razširi mrežo.
+
+════════════════════════════════════════════════════════════════════════════════
+TEST 2 — PRAG, KI SE PRILAGAJA NIHAJNOSTI            parametrov: +0
+════════════════════════════════════════════════════════════════════════════════
+DANES
+    mrtvi pas 3 % nad in pod tracklinom, fiksno
+
+ZAKAJ SUMIM
+    v mirnem trgu je 3 % velika ovira, v razburkanem je šum. Isti prag opravlja
+    dve različni nalogi glede na režim.
+
+SPREMEMBA
+    pas = k × ATR(14) / cena
+    ATR(14) = povprečje pravega razpona zadnjih 14 barov
+      TR = max(high−low, |high−close[−1]|, |low−close[−1]|)
+
+KLJUČNO ZA POŠTENOST
+    k UMERI TAKO, da je povprečen pas čez celotno zgodovino natanko 3 %:
+        k = 0.03 / povprečje(ATR(14)/cena)
+    Tako ni nove proste številke — le drugačna oblika iste. Če bi k izbral po
+    rezultatu, bi dodal parameter in vse skupaj razvrednotil.
+
+RAZLIČICE
+    A  fiksnih 3 %                    (kontrola)
+    B  ATR pas, umerjen na 3 %        (predlog)
+    C  ATR pas z ATR(7) in ATR(28)    (občutljivost na dolžino ATR)
+
+SPREJEMNI KRITERIJ
+    zajem navzdol ostane enak ali boljši PRI MANJŠI zamudi
+    in razmerje zajema se ne poslabša
+
+KAJ BI BILO SUMLJIVO
+    če B prekaša A samo zato, ker je povprečna izpostavljenost višja — zato se
+    izpostavljenost meri in poroča ob vsaki različici.
+
+════════════════════════════════════════════════════════════════════════════════
+TEST 3 — LOČEN PRAG ZA VSTOP IN IZSTOP               parametrov: +1
+════════════════════════════════════════════════════════════════════════════════
+DANES
+    track_buf_pct bere OBA pogoja — above_tl in below_tl. Vstopnega praga ni
+    mogoče premakniti brez izstopnega. To je bilo v kodi implicitno.
+
+OZADJE
+    min_dist_entry_pct je BIL ravno ta zamisel, a odposlan z vrednostjo 0, zato
+    se sesede v above_tl. Zamisel dobra, izvedba mrtva.
+
+SPREMEMBA
+    loči buf_entry in buf_exit
+    above_tl  uporabi buf_entry
+    below_tl  uporabi buf_exit
+
+HIPOTEZA — in ta je obratna od moje prvotne
+    ker vstopi ne prispevajo nič, pričakujem, da je pravi buf_entry NIŽJI od
+    buf_exit: vstopi prej, izstopi pri isti ali večji rezervi.
+    (Prvotno sem domneval obratno — "vstopi previdno, izstopi hitro". Diagnoza
+    tega ne podpira.)
+
+MREŽA
+    buf_entry ∈ {1 · 1,5 · 2 · 2,5 · 3 · 4 · 5 · 6} %
+    buf_exit  ∈ {2 · 3 · 4 · 5 · 6} %
+    = 40 kombinacij
+
+VARNOST — NAREDI PRVO
+    pri buf_entry = buf_exit = 3 % mora biti vedenje IDENTIČNO današnjemu.
+    Test tega ujemanja mora biti zelen, PREDEN se karkoli spremeni.
+
+SPREJEMNI KRITERIJ
+    najboljša kombinacija mora imeti buf_entry < buf_exit (potrdi hipotezo),
+    zajem navzgor mora zrasti za več kot 3 o. t.,
+    in uvrstitev mora zdržati na 4-urnih barih.
+    Karkoli manj: ostane pri eni številki, +1 parameter se ne upraviči.
+
+KAJ BI BILO SUMLJIVO
+    če najboljša kombinacija leži na robu mreže, razširi mrežo.
+    če je najboljši buf_entry VIŠJI od buf_exit, je to prilagajanje temu vzorcu
+    in ne ugotovitev — povej tako in ne spreminjaj privzetka.
+
+════════════════════════════════════════════════════════════════════════════════
+TEST 4 — VSTOP, KO VELJA VEČINA POGOJEV              parametrov: +1
+════════════════════════════════════════════════════════════════════════════════
+DANES
+    vsi trije vstopni pogoji morajo veljati hkrati (logični IN):
+    above_tl & track_rising_window & regime_ok
+    (po odstranitvi dist_entry_ok in above_ma_med)
+
+ZAKAJ SUMIM
+    če vstopi kot celota ne prispevajo nič, je stroga konjunkcija verjetno le
+    dodatna zamuda brez koristi.
+
+SPREMEMBA
+    vstopi, ko velja vsaj N od 3
+
+RAZLIČICE
+    A  3 od 3     (kontrola, današnje stanje)
+    B  2 od 3     (predlog)
+    C  1 od 3     (zgornja meja)
+    D  za vsak pogoj posebej: kaj se zgodi, če izpade samo ta
+
+SPREJEMNI KRITERIJ
+    B mora zmanjšati zamudo IN ohraniti zajem navzdol znotraj 1,0 o. t.
+
+KAJ BI BILO SUMLJIVO
+    če C (1 od 3) ni bistveno slabši od A, potem vstopni pogoji skupaj ne nosijo
+    informacije in to je pomembnejša ugotovitev od same izbire praga.
+    Rezultat D pove, ali je kateri od treh pogojev odveč — takrat odpade še en
+    parameter namesto da bi enega dodali.
+
+════════════════════════════════════════════════════════════════════════════════
+TEST 5 — ATR TRAILING STOP NAMESTO IZSTOPA NA TRACKLINU    parametrov: ±0
+════════════════════════════════════════════════════════════════════════════════
+DANES
+    izstop, ko je cena več kot 3 % pod tracklinom, tri dni zapored
+
+SPREMEMBA
+    peak = najvišji close od vstopa naprej
+    izstop, ko close < peak − N × ATR(14)
+    N ∈ {1,5 · 2 · 2,5 · 3 · 4}
+
+ZAKAJ NIZKO PO PRIORITETI
+    diagnoza pravi, da so izstopi že v redu (zajem navzdol −4,7 o. t. glede na
+    izpostavljenost, čas izstopa dober). Tu ne pričakujem veliko.
+    Je pa industrijski standard za trend strategije, ker se razdalja sama
+    prilagaja nihajnosti, zato je vredno preveriti.
+
+MERI SE PRIMARNO NADALJNJI PADEC, NE DONOS
+    izstop naj varuje pred padcem, ne pred izgubljenim donosom.
+    Primerjalna skupina: samo dnevi, ko SMO V POZICIJI. Ne vsi dnevi.
+
+SPREJEMNI KRITERIJ
+    zajem navzdol se izboljša za več kot 2 o. t. IN uvrstitev zdrži na 4-urnih barih
+
+════════════════════════════════════════════════════════════════════════════════
+TEST 6 — ČASOVNI IZSTOP KOT KONTROLA                 parametrov: +1
+════════════════════════════════════════════════════════════════════════════════
+SPREMEMBA
+    izstop po N barih od vstopa, ne glede na ceno.  N ∈ {20 · 40 · 60 · 90}
+
+TA TEST NI NAMENJEN IZBOLJŠAVI
+    Je najstrožja kontrola za vse ostalo. Če preprost časovni izstop NI bistveno
+    slabši od cenovnega, potem cenovni izstop ne nosi informacije, ampak določa
+    samo povprečno trajanje pozicije.
+    To je najbolj poveden posamezen test v celem načrtu.
+
+KAKO SE BERE
+    če časovni izstop zmaga, to NI odkritje boljšega izstopa. Je dokaz, da naši
+    izstopi ne delajo tega, kar mislimo. Povej tako.
+
+
+--------------------------------------------------------------------------------
+3.  DISCIPLINA — velja za vseh šest
+--------------------------------------------------------------------------------
+  1. PRED zagonom zapiši v git, z datumom: kaj pričakuješ (smer, ne velikost),
+     kaj bi te prepričalo, in kaj bi bilo sumljivo namesto dobrodošlo.
+     Vse troje je že napisano zgoraj — manjka samo commit pred zagonom.
+     Razlog: sodba o blow-offu se je obrnila trikrat in vsakič je bila razlaga
+     za nazaj prepričljiva.
+
+  2. Odločaj po DNEVNIH merilih (zajem, zamuda), ne po Sortinu. Sortino pri 11
+     poslih ne loči ničesar — najmanjša zaznavna razlika je okoli 0,5.
+
+  3. Vsako spremembo, ki prestane, preveri še na 4-urnih barih z dolžinami × 6.
+     Če se uvrstitev premeša, je bil šum. Tako je padla dvotretjinska večina.
+
+  4. Zabeleži število preizkusov PREDEN pogledaš rezultat. Skupno stanje je
+     trenutno 137; ta načrt jih doda približno 90.
+
+  5. Nobena od teh razlik ne bo statistično značilna. Iščemo SMER in DOSLEDNOST
+     čez merila in čez uri, ne p-vrednosti.
+
+  6. Sprememba se sprejme le, če prestane svoj sprejemni kriterij V CELOTI.
+     Delni uspeh ni uspeh — je najdba šuma.
+
+
+--------------------------------------------------------------------------------
+4.  VRSTNI RED IN ČAS
+--------------------------------------------------------------------------------
+  TEST 1  pogojni premor              3 ure    +0 parametrov · največji vzvod
+  TEST 2  prag po nihajnosti          3 ure    +0 parametrov
+  TEST 4  večina pogojev              2 uri    lahko ODSTRANI pogoj
+  TEST 6  časovni izstop              2 uri    kontrola, ne izboljšava
+  TEST 3  ločen prag                  4 ure    +1 parameter, zahteva poseg v kodo
+  TEST 5  ATR trailing stop           4 ure    +1 parameter, najnižje pričakovanje
+
+  Skupaj približno 2,5 dni.
+
+  Testa 1 in 2 sta prva, ker ne dodata nobene nastavljive številke. Vse ostalo
+  poveča prostor iskanja, kar je natanko tisto, kar poskušamo zmanjšati — zato
+  mora vsak od njih prestati strožji kriterij.
