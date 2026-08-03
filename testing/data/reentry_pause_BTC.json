@@ -1,0 +1,363 @@
+{
+ "symbol": "BTC",
+ "fee_per_side_pct": 0.3,
+ "seed": 20260804,
+ "nboot": 5000,
+ "block": 20,
+ "preregistered": "testing/nacrt_korak4.md @ e4cd595",
+ "control_matches_reference": true,
+ "episodes": {
+  "n_blocked_days": 118,
+  "n_episodes": 10,
+  "list": [
+   {
+    "from": "2019-05-11",
+    "to": "2019-05-24",
+    "days": 14,
+    "foregone_pct": 12.6
+   },
+   {
+    "from": "2019-06-25",
+    "to": "2019-07-08",
+    "days": 14,
+    "foregone_pct": 3.5
+   },
+   {
+    "from": "2019-08-07",
+    "to": "2019-08-09",
+    "days": 3,
+    "foregone_pct": -0.8
+   },
+   {
+    "from": "2020-11-19",
+    "to": "2020-12-02",
+    "days": 14,
+    "foregone_pct": 7.9
+   },
+   {
+    "from": "2020-12-31",
+    "to": "2021-01-13",
+    "days": 14,
+    "foregone_pct": 29.2
+   },
+   {
+    "from": "2021-02-22",
+    "to": "2021-03-07",
+    "days": 14,
+    "foregone_pct": -5.8
+   },
+   {
+    "from": "2023-12-06",
+    "to": "2023-12-19",
+    "days": 14,
+    "foregone_pct": -3.4
+   },
+   {
+    "from": "2024-03-05",
+    "to": "2024-03-18",
+    "days": 14,
+    "foregone_pct": 6.1
+   },
+   {
+    "from": "2024-11-22",
+    "to": "2024-12-05",
+    "days": 14,
+    "foregone_pct": -2.0
+   },
+   {
+    "from": "2025-10-07",
+    "to": "2025-10-09",
+    "days": 3,
+    "foregone_pct": 0.3
+   }
+  ],
+  "mean_foregone": 4.76,
+  "median_foregone": 1.9,
+  "sd_foregone": 10.26,
+  "jackknife": [
+   {
+    "without": "2019-05-11",
+    "mean": 3.89
+   },
+   {
+    "without": "2019-06-25",
+    "mean": 4.9
+   },
+   {
+    "without": "2019-08-07",
+    "mean": 5.38
+   },
+   {
+    "without": "2020-11-19",
+    "mean": 4.41
+   },
+   {
+    "without": "2020-12-31",
+    "mean": 2.04
+   },
+   {
+    "without": "2021-02-22",
+    "mean": 5.93
+   },
+   {
+    "without": "2023-12-06",
+    "mean": 5.67
+   },
+   {
+    "without": "2024-03-05",
+    "mean": 4.61
+   },
+   {
+    "without": "2024-11-22",
+    "mean": 5.51
+   },
+   {
+    "without": "2025-10-07",
+    "mean": 5.26
+   }
+  ]
+ },
+ "variants": {
+  "A": {
+   "sortino": 1.505,
+   "sharpe": 0.974,
+   "cagr": 33.6,
+   "maxdd": -45.2,
+   "final": 8.546,
+   "exposure": 41.9,
+   "upside_capture": 41.5,
+   "downside_capture": 37.8,
+   "trades": 21,
+   "turnover": 42.0,
+   "sha256": "4f43eae715a760c4120776160f17dc7f5d2f6a999523c544861c5e6df5efda90",
+   "label": "brezpogojnih 15 dni (danes)",
+   "n_blocked_days": 118,
+   "entry_lag_mean": 5.5,
+   "entry_lag_max": 14,
+   "entries_delayed": 9
+  },
+  "B": {
+   "sortino": 1.764,
+   "sharpe": 1.121,
+   "cagr": 44.2,
+   "maxdd": -44.9,
+   "final": 14.98,
+   "exposure": 45.6,
+   "upside_capture": 47.5,
+   "downside_capture": 42.2,
+   "trades": 32,
+   "turnover": 64.0,
+   "sha256": "2815b645c83e3514fa2b585f11ca299abdb6212dbccdebff13e8aa15f8761b65",
+   "label": "15 dni samo po izgubljenem poslu",
+   "n_blocked_days": 17,
+   "entry_lag_mean": 0.5,
+   "entry_lag_max": 14,
+   "entries_delayed": 2
+  },
+  "C": {
+   "sortino": 1.565,
+   "sharpe": 1.01,
+   "cagr": 38.5,
+   "maxdd": -47.9,
+   "final": 11.102,
+   "exposure": 46.1,
+   "upside_capture": 47.9,
+   "downside_capture": 43.6,
+   "trades": 32,
+   "turnover": 64.0,
+   "sha256": "d1ddc6e40bb8d41ee8dc678cb5e321de8d4340de7ca5c98b6ce391047085576c",
+   "label": "0 dni v uptrendu, sicer 15",
+   "n_blocked_days": 2,
+   "entry_lag_mean": 0.1,
+   "entry_lag_max": 2,
+   "entries_delayed": 1
+  },
+  "D": {
+   "sortino": 1.603,
+   "sharpe": 1.031,
+   "cagr": 39.9,
+   "maxdd": -47.9,
+   "final": 11.96,
+   "exposure": 46.2,
+   "upside_capture": 48.3,
+   "downside_capture": 43.8,
+   "trades": 32,
+   "turnover": 64.0,
+   "sha256": "766b55c6cd2bf909072a3a5c4f6f5cfb08d431cd18c68ec5b69e3caa07531e03",
+   "label": "brez premora",
+   "n_blocked_days": 0,
+   "entry_lag_mean": 0.0,
+   "entry_lag_max": 0,
+   "entries_delayed": 0
+  }
+ },
+ "identical_pairs": [],
+ "divergence": {
+  "A-B": {
+   "n_days": 119,
+   "first": "2019-05-12",
+   "last": "2025-10-18"
+  },
+  "A-C": {
+   "n_days": 114,
+   "first": "2019-05-14",
+   "last": "2025-10-18"
+  },
+  "A-D": {
+   "n_days": 116,
+   "first": "2019-05-12",
+   "last": "2025-10-18"
+  },
+  "B-D": {
+   "n_days": 17,
+   "first": "2019-08-08",
+   "last": "2021-01-24"
+  },
+  "C-D": {
+   "n_days": 6,
+   "first": "2019-05-12",
+   "last": "2019-05-17"
+  }
+ },
+ "bootstrap_vs_A": {
+  "B": {
+   "delta": 0.26,
+   "ci_lo": -0.237,
+   "ci_hi": 0.756,
+   "excludes_zero": false
+  },
+  "C": {
+   "delta": 0.06,
+   "ci_lo": -0.364,
+   "ci_hi": 0.422,
+   "excludes_zero": false
+  },
+  "D": {
+   "delta": 0.098,
+   "ci_lo": -0.326,
+   "ci_hi": 0.471,
+   "excludes_zero": false
+  }
+ },
+ "subperiods": {
+  "windows": {
+   "I": {
+    "from": "2019-03-09",
+    "to": "2021-01-31",
+    "sortino": {
+     "A": 1.505,
+     "B": 2.837,
+     "C": 2.175,
+     "D": 2.29
+    },
+    "winner": "B"
+   },
+   "II": {
+    "from": "2021-02-01",
+    "to": "2022-11-30",
+    "sortino": {
+     "A": 1.239,
+     "B": 1.139,
+     "C": 1.139,
+     "D": 1.139
+    },
+    "winner": "A"
+   },
+   "III": {
+    "from": "2022-12-01",
+    "to": "2024-09-30",
+    "sortino": {
+     "A": 1.99,
+     "B": 1.773,
+     "C": 1.773,
+     "D": 1.773
+    },
+    "winner": "A"
+   },
+   "IV": {
+    "from": "2024-10-01",
+    "to": "2026-07-29",
+    "sortino": {
+     "A": 1.603,
+     "B": 1.022,
+     "C": 1.022,
+     "D": 1.022
+    },
+    "winner": "A"
+   }
+  },
+  "wins": {
+   "A": 3,
+   "B": 1,
+   "C": 0,
+   "D": 0
+  }
+ },
+ "exposure_matched": {
+  "A": {
+   "scale": 1.0,
+   "sortino": 1.505,
+   "maxdd": -45.2,
+   "downside_capture": 37.8,
+   "exposure": 41.9
+  },
+  "B": {
+   "scale": 0.919,
+   "sortino": 1.764,
+   "maxdd": -41.9,
+   "downside_capture": 38.7,
+   "exposure": 41.9
+  },
+  "C": {
+   "scale": 0.909,
+   "sortino": 1.565,
+   "maxdd": -44.5,
+   "downside_capture": 39.7,
+   "exposure": 41.9
+  },
+  "D": {
+   "scale": 0.907,
+   "sortino": 1.603,
+   "maxdd": -44.4,
+   "downside_capture": 39.7,
+   "exposure": 41.9
+  }
+ },
+ "placebo": {
+  "n": 1000,
+  "n_pauses": 10,
+  "pause_len": 12,
+  "mean": 1.555,
+  "p05": 1.324,
+  "p95": 1.759,
+  "A_sortino": 1.505,
+  "A_percentile": 33.8
+ },
+ "sensitivity_B": {
+  "10": {
+   "sortino": 1.648,
+   "exposure": 45.9,
+   "trades": 32
+  },
+  "15": {
+   "sortino": 1.764,
+   "exposure": 45.6,
+   "trades": 32
+  },
+  "20": {
+   "sortino": 1.772,
+   "exposure": 45.0,
+   "trades": 31
+  },
+  "25": {
+   "sortino": 1.694,
+   "exposure": 44.7,
+   "trades": 31
+  }
+ },
+ "lookahead_B": {
+  "n_dates": 60,
+  "n_differing": 0,
+  "dates": []
+ }
+}
