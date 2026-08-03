@@ -51,8 +51,8 @@ FEATURE_COLS = [
     "trackline", "track_rising", "track_rising_window", "above_tl", "below_tl",
     "dist_pct", "ma_med", "ma_long", "above_ma_med", "above_ma_long",
     "ma_long_rising", "ma_long_falling", "bear_regime", "regime_ok",
-    "rsi", "annual_vol", "vol_avg50", "dist_entry_ok", "donchian_ok",
-    "bull_condition", "trend_break", "blowoff", "vol_shock",
+    "rsi", "annual_vol", "vol_avg50", "donchian_ok",
+    "bull_condition", "trend_break", "blowoff",
 ]
 STATE_COLS = [
     "signal_state", "display_state", "target_alloc",
@@ -140,6 +140,17 @@ def main() -> int:
     usable = raw.index[need + 30: len(raw) - 2]
     dates = pd.DatetimeIndex(sorted(rng.choice(usable, size=min(N_DATES, len(usable)),
                                                replace=False)))
+    # `compare_row` skips columns it cannot find, which is what makes the audit
+    # tolerant of variant differences — and also what would let a rename or a
+    # removal quietly shrink the audit to nothing. So the lists are checked
+    # against the real frame first.
+    have = set(build(raw, cfg).columns)
+    missing = [c for c in FEATURE_COLS + STATE_COLS if c not in have]
+    if missing:
+        print(f"NAPAKA: teh stolpcev ni več v strategiji: {missing}")
+        print("Popravi seznam, sicer revizija tiho preverja manj, kot misliš.")
+        return 1
+
     print(f"{SYMBOL} · {len(raw)} barov · potrebna zgodovina {need}")
     print(f"preverjam {len(dates)} datumov med {dates[0].date()} in {dates[-1].date()}\n")
 

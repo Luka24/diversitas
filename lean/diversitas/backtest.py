@@ -41,15 +41,13 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  Trackline        : ${s['trackline']:,.2f}  "
           f"({'RISING' if s['track_rising_window'] else 'FLAT/FALLING'})")
     print(f"  Price vs TL      : {s['dist_pct']:+.2f}%")
-    print(f"  Trend MA (50)    : {'ABOVE' if s['above_ma_med'] else 'BELOW'}")
+    print(f"  50 MA (info)     : {'ABOVE' if s['above_ma_med'] else 'BELOW'}")
     print(f"  Regime MA (200)  : {s['ma_long_status']}")
     print(f"  Annual vol       : {s['annual_vol']:.1f}%")
     print(f"  RSI              : {s['rsi']:.1f}")
     print(f"  Target alloc     : {s['target_alloc']:.0f}%")
     if s["blowoff"]:
         print(f"  WARNING          : BLOW-OFF detected")
-    if s["vol_shock"]:
-        print(f"  WARNING          : VOL SHOCK detected")
 
     # --- Signal distribution ---
     print(f"\nSignal distribution (analyzed bars: {len(df)}):")
@@ -67,8 +65,6 @@ def main(argv: list[str] | None = None) -> int:
         if label == "BEAR":
             if row["blowoff"]:
                 reason = "  [blow-off]"
-            elif row["vol_shock"]:
-                reason = "  [vol-shock]"
             else:
                 reason = "  [trend-break]"
         print(f"  {ts.date()}  -> {label:4}  "
