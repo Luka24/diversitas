@@ -1,296 +1,342 @@
 ================================================================================
-IZVEDBENI NAČRT — KAKO VSE TO PREIZKUSITI, NE DA BI ZAPRAVILI EDINO ČISTO KARTO
+KORAK ZA KORAKOM — KAKO SE LOTIM PREDLAGANIH TESTOV
 ================================================================================
-Datum : 2026-08-03
-Zamenja: nacrt_izvedbe.txt (koraki A-D) in dopolnjuje nacrt_vstopi.txt (testi 1-6)
+Datum   : 2026-08-03
+Sredstva: BTC za razvoj · ETH za validacijo · XRP/BNB/ADA se NE uporabljajo
+Definicije različic: nacrt_vstopi.txt
 
 
 --------------------------------------------------------------------------------
-0.  PROBLEM, KI GA MORA TA NAČRT REŠITI
+IZHODIŠČE — zakaj sploh gledam vstope
 --------------------------------------------------------------------------------
-Na mizi imamo:
-    6 različic vstopov za preizkus
-    1 poenostavitev, o kateri je odločeno
-    4 sredstva, ki jih nismo nikoli uporabili (ETH deloma, XRP/BNB/ADA sploh ne)
-    1 podobdobje po uvedbi ETF-ov
+  zajem navzgor   40,0 %   pri izpostavljenosti 39,9 %   ->  +0,1 o. t.
+  zajem navzdol   35,2 %   pri izpostavljenosti 39,9 %   ->  −4,7 o. t.
 
-Naivni pristop bi bil: preizkusi vseh 6 različic na vseh sredstvih in izberi
-najboljšo. To bi bila najhujša možna napaka.
+Vstopi ne prispevajo nič, izstopi prispevajo vse. Vstopi pa stanejo čas:
+  zamuda od izpolnitve pogojev do nakupa   povprečno 16 dni (mediana 3, največ 61)
+  kar BTC v tem času zraste                povprečno +12,5 % na vstop
 
-Razlog je v literaturi zapisan brez ovinkov:
-    "Če preizkusiš več idej in izbereš tisto, ki je najboljša na testnem nizu,
-     vpelješ pristranskost izbire — v resnici prilagodiš testni niz."
-    "Holdout se uporabi ENKRAT, po zaključenem nastavljanju. Če strategija na
-     njem pade, se zavrže; popravljanje na podlagi holdouta ga spremeni v
-     in-sample podatke."
-
-XRP, BNB in ADA so edini podatki v tem projektu, ki jih nihče ni videl. Če jih
-uporabimo za IZBIRO med šestimi različicami, jih porabimo in ne dobimo nazaj.
+Cilj programa je torej ena sama stvar: ZMANJŠATI ZAMUDO, NE DA BI POSLABŠALI
+ZAJEM NAVZDOL. Vse ostalo je nadzor.
 
 
 --------------------------------------------------------------------------------
-1.  TRIJE LOČENI VLOGI PODATKOV — nič se ne sme mešati
+DVE PRAVILI, KI VELJATA ČEZ CEL PROGRAM
 --------------------------------------------------------------------------------
+  Merim na DNEVIH, ne na poslih. Poslov je 11, dni 1826. Sortino pri enajstih
+  poslih ne loči ničesar — najmanjša zaznavna razlika je okoli 0,5. Zato se
+  nobena odločitev ne sprejme na njem; navajam ga samo kot nadzor.
 
-  RAZVOJ        BTC, celotno okno 2019-03-09 → 2026-07-29
-                Tu se preizkuša vseh 6 različic. Poskusov porabimo, kolikor jih
-                je treba. Ta niz je že tako ali tako "umazan" — 137 poskusov.
-
-  PREVERBA      BTC na 4-urnih barih  +  BTC podobdobje po ETF (2024-01 →)
-                Tu se SEJE, kaj od razvoja preživi. Ni nov trg, je isti trg z
-                drugo uro in drug režim. Nekaj poskusov si tu smemo privoščiti.
-
-  TEST          ETH  +  XRP · BNB · ADA
-                Dotaknemo se ENKRAT, na koncu, z največ DVEMA vnaprej zapisanima
-                hipotezama. Nikoli za izbiro med različicami.
-
-Post-ETF obdobje NI holdout. Je podobdobje BTC-ja, ki smo ga že videli, zato
-sodi v PREVERBO in ne v TEST.
-
-ETH je vmesni primer: nastavitve na njem niso bile nikoli nastavljane, gledali
-pa smo ga v zgodnji fazi (analiza ER, preverbe na petih sredstvih). Zato ga
-uvrščam v TEST, a ločeno poročam od XRP/BNB/ADA, ki so res nedotaknjeni.
+  Privzeti izid je "nič ne spremenimo". Sprememba se sprejme le, če prestane
+  svoj kriterij v CELOTI. Ob neodločenem izidu zmaga različica z manj parametri.
 
 
---------------------------------------------------------------------------------
-2.  ODLOČITVENA PRAVILA, ZAPISANA VNAPREJ
---------------------------------------------------------------------------------
-Ta pravila veljajo ne glede na to, kaj bomo videli. Zapisana so zdaj, ker je
-pozneje vsak izid mogoče razložiti za nazaj — kar se je v tem projektu zgodilo
-trikrat pri blow-offu.
+################################################################################
+KORAK 1 — PREVERI, DA NI POGLEDA V PRIHODNOST          2 uri
+################################################################################
+Gre pred vsem. Če je tu napaka, so vse dosedanje številke brez pomena in
+nobenega od spodnjih testov ni smiselno delati.
 
-  P1  PRIVZETI IZID JE "NIČ NE SPREMENIMO".
-      Sprememba se sprejme samo, če prestane svoj sprejemni kriterij V CELOTI.
-      Delni uspeh ni uspeh.
-
-  P2  OB NEODLOČENEM IZIDU ZMAGA ENOSTAVNEJŠA RAZLIČICA.
-      Če sta dve različici neločljivi, obdržimo tisto z manj parametri. To je
-      izrecno priporočilo stroke in edino pravilo, ki nas obvaruje pred tem, da
-      izberemo, kar je slučajno višje.
-
-  P3  IZ RAZVOJA GRE NAPREJ NAJVEČ ENA SPREMEMBA.
-      Če dve prestaneta, gre naprej tista z manj parametri (glej P2). Test na
-      novih sredstvih preverja ODLOČITEV, ne iskanja.
-
-  P4  NA TESTNIH SREDSTVIH NE POPRAVLJAMO NIČESAR.
-      Če pade, se sprememba zavrže. Ne prilagajamo je, da bi šla skozi.
-
-  P5  ŠTEVILO POSKUSOV SE ZAPIŠE PRED POGLEDOM NA REZULTAT.
+  KAKO: za 200 naključnih datumov T poženi strategijo na podatkih, odrezanih na
+        T, in primerjaj signal na dan T s signalom iz polnega niza.
+        Če se kje razlikujeta, obstaja pogled naprej.
+        Ta metoda pokrije vse naenkrat — rolling okna, shift, resample, ffill —
+        in ne zahteva branja kode.
+  KJE : nova skripta testing/scripts/lookahead_audit.py
+  IZID: če kaj najdemo, USTAVI vse in popravi. Vse dosedanje številke gredo znova.
 
 
---------------------------------------------------------------------------------
-3.  MERILA — ista povsod, da so faze primerljive
---------------------------------------------------------------------------------
-PRIMARNA (enota = dan; 950 do 2700 opazovanj)
-    zajem navzgor           (r × poz) po pozitivnih dneh / vsota pozitivnih dni
-    zajem navzdol           enako po negativnih dneh
-    razmerje zajema         navzgor / navzdol
-    udeležba v padcu        pri vsakem padcu BTC nad 20 %: koliko ga utrpimo
-    zamuda vstopa           dni od izpolnitve pogojev do pozicije
-    donos v zamudi          % na vstop
-    izpostavljenost
-
-SEKUNDARNA (enota = posel; 4 do 21 opazovanj — SAMO ZA NADZOR, ne za odločanje)
-    Sortino · Sharpe · CAGR · MaxDD · končni večkratnik · poslov · promet
-
-Sortino pri 11 poslih ne loči ničesar; najmanjša zaznavna razlika je okoli 0,5.
-Zato se nobena odločitev ne sprejme na njem.
-
-RAZPONI: krožni bločni bootstrap, blok = 20 dni, 2000 vzorcev, parni.
-STROŠKI: 0,30 % na stran, povsod, brez izjem.
+################################################################################
+KORAK 2 — ZAMRZNI DANAŠNJE STANJE                      15 minut
+################################################################################
+  KAKO: zapiši današnjo serijo pozicij + SHA256 + git hash v
+        testing/data/reference_positions.parquet
+  ZAKAJ: ujemanje končnih številk NE zadostuje. Enake metrike lahko pridejo iz
+        različnih poti, enake pozicije ne morejo. Brez tega ni načina, da bi
+        dokazali, da poenostavitev ni ničesar spremenila.
 
 
-================================================================================
-FAZA 0 — PREVERBA PRAVILNOSTI            ~2,5 ure     PRED VSEM OSTALIM
-================================================================================
-Če je tu napaka, so vsi dosedanji rezultati brez pomena. Zato gre pred vse.
+################################################################################
+KORAK 3 — POENOSTAVI ENGINE                            1 ura
+################################################################################
+Dogovorjeno, ni testa.
 
-0.1  REVIZIJA POGLEDA V PRIHODNOST                              2 uri
-     Metoda, ki je zanesljiva in ne zahteva branja kode:
-       za 200 naključnih datumov T poženi strategijo na podatkih, ODREZANIH na T,
-       in primerjaj signal na dan T s signalom iz polnega niza.
-       Če se kje razlikujeta, obstaja pogled naprej.
-     Pokrije vse naenkrat: rolling okna, shift(1), resample, ffill.
-     Nova skripta: testing/scripts/lookahead_audit.py
-     ČE KAJ NAJDEMO: ustavi vse in popravi. Vse dosedanje številke gredo znova.
+  ODSTRANI  dist_entry_ok · above_ma_med · vol_shock
+  ZAKLENI   rsi_len = 14
+  PUSTI     blow-off · track_rising_window · regime_ok
+  ODPADE    min_dist_entry_pct · ma_med_len · vol_shock_mul · vol_lookback
+            14 nastavljivih -> 10
 
-0.2  ZAMRZNJENA REFERENCA                                      15 min
-     Zapiši današnjo serijo pozicij + SHA256 + git hash.
-     testing/data/reference_positions.parquet
-     Ujemanje končnih številk NE zadostuje — enake metrike lahko pridejo iz
-     različnih poti, enake pozicije ne morejo.
+  V KODO OBVEZNO: vol_shock je nedejaven PRI KONKRETNIH vrednostih
+        track_period 75 · track_buf_pct 3 % · exit_grace_bars 3 · reentry_hold 15
+        Pri exit_grace_bars = 2 se sproži na 6 dneh. Če kdo te vrednosti
+        spremeni, mora vprašanje odpreti znova.
 
-0.3  REGISTER POSKUSOV                                          1 ura
-     testing/data/trial_log.jsonl — vsaka analitična skripta zapiše, kaj je
-     pognala. Brez tega je vsaka trditev o številu poskusov ocena.
-     Trenutno stanje: 137. Ta načrt jih doda približno 120.
+  SPREJEMNI KRITERIJ: serija pozicij IDENTIČNA referenci iz Koraka 2, dan za dnem.
+        Backtest mora dati Sortino 1,219 · Sharpe 0,783 · MaxDD −39,8 % ·
+        2,67× · 11 poslov.
+        Kakršnakoli razlika = spremenjena logika. USTAVI in poišči vzrok.
+        NE popravljaj številke v dokumentu.
 
 
-================================================================================
-FAZA 1 — POENOSTAVITEV                   ~1 ura       ODLOČENO, ni testa
-================================================================================
-Odstrani: dist_entry_ok · above_ma_med · vol_shock
-Zakleni : rsi_len = 14
-Pusti   : blow-off, track_rising_window, regime_ok
-Odpade  : min_dist_entry_pct · ma_med_len · vol_shock_mul · vol_lookback  (14 → 10)
+################################################################################
+KORAK 4 — PREMOR PRED PONOVNIM VSTOPOM                 4 ure     0 parametrov
+################################################################################
+To je največji vzvod, ker meri natanko tisto, kar smo diagnosticirali.
 
-V kodo OBVEZNO zapiši, pri katerih štirih vrednostih velja, da je vol_shock
-nedejaven: track_period 75 · track_buf_pct 3 % · exit_grace_bars 3 ·
-reentry_hold 15. Pri exit_grace_bars = 2 se sproži na 6 dneh.
+  ŠTIRI RAZLIČICE, VSE NAENKRAT NA BTC:
+    A  brezpogojnih 15 dni                       kontrola, današnje stanje
+    B  premor samo po IZGUBLJENEM poslu          predlog s sestanka
+    C  premor krajši v močnem trendu             predlog sodelavca
+    D  brez premora, blokado opravi regime_ok    0 parametrov, odstrani enega
 
-SPREJEMNI KRITERIJ: serija pozicij IDENTIČNA referenci iz 0.2, dan za dnem.
-Backtest mora dati Sortino 1,219 · Sharpe 0,783 · MaxDD −39,8 % · 2,67× · 11 poslov.
-Kakršnakoli razlika = spremenjena logika. USTAVI, poišči vzrok, ne popravljaj številke.
+  OPOMBA K RAZLIČICI C IN D: regime_ok je ŽE vstopni pogoj, zato ponovni vstop
+  v medvedjem režimu že zdaj ni mogoč. Blokada v šibkem režimu torej ne bi dodala
+  ničesar — nova je samo SKRAJŠAVA v uptrendu. Različica D to izpelje do konca:
+  premor odpade, blokado prevzame pravilo, ki že obstaja.
 
-Ta faza ne porabi nobenega poskusa — krivulja je bitno identična.
+  OBČUTLJIVOST: različico B poženi še pri 10 · 20 · 25 dneh.
 
+  KAJ SE MERI:
+    povprečna zamuda vstopa (dni)          <- glavno
+    donos, zamujen v zamudi (%)            <- glavno
+    zajem navzgor / navzdol                <- da ne pokvarimo, kar deluje
+    izpostavljenost                        <- da razlika ni le iz več časa v trgu
+    Sortino, MaxDD, poslov                 <- samo nadzor
 
-================================================================================
-FAZA 2 — RAZVOJ: 6 RAZLIČIC VSTOPA       ~2,5 dni     samo BTC, celotno okno
-================================================================================
-Definicije so v nacrt_vstopi.txt. Tu je samo zaporedje in poraba poskusov.
+  SPREJEMNI KRITERIJ — vsi trije hkrati:
+    1. povprečna zamuda pade pod 8 dni
+    2. zajem navzdol se poslabša za manj kot 1,0 o. t.
+    3. izpostavljenost zraste za manj kot 5 o. t.
 
-STOPENJSKO, NE VSE NAENKRAT. Različice, ki NE dodajo parametra, gredo prve.
-Če te rešijo problem zamude, dražjih sploh ne poganjamo — to prihrani poskuse
-in s tem PBO.
+  KAJ BI BILO SUMLJIVO:
+    če D (brez premora) prekaša B, premor sam ni potreben — to je ugotovitev o
+    parametru, ne uspeh pogojne oblike.
+    če najboljša vrednost pri občutljivosti leži na robu (10 ali 25), razširi mrežo.
 
-  STOPNJA 2A — brez novih parametrov              ~6 ur    ~20 poskusov
-    TEST 1  premor pred ponovnim vstopom, štiri različice:
-              A brezpogojnih 15 dni      (kontrola)
-              B samo po izgubi
-              C krajši v močnem trendu
-              D brez premora, blokado opravi regime_ok      ← 0 parametrov
-            Opomba: C in D sta predloga sodelavca; D je najmočnejši, ker
-            ODSTRANI parameter. regime_ok je že vstopni pogoj, zato je blokada
-            v medvedjem režimu že vgrajena — nova je le skrajšava v uptrendu.
-    TEST 2  prag, umerjen na ATR, tako da povprečje ostane 3 %
-
-    IZHOD: če se povprečna zamuda spusti pod 8 dni brez poslabšanja zajema
-           navzdol, gre ta ena sprememba v FAZO 3 in stopnji 2B in 2C ODPADETA.
-
-  STOPNJA 2B — lahko ODSTRANI pravilo               ~4 ure   ~15 poskusov
-    TEST 4  vstop, ko velja večina pogojev (3/3 · 2/3 · 1/3 · vsak posebej ven)
-    TEST 6  časovni izstop kot KONTROLA (20 · 40 · 60 · 90 barov)
-            Ta ni namenjen izboljšavi. Če preprost časovni izstop ni bistveno
-            slabši od cenovnega, cenovni izstop ne nosi informacije, ampak
-            določa samo trajanje pozicije. To bi bila najbolj poučna ugotovitev
-            v celem programu.
-
-  STOPNJA 2C — dodata parameter, zato zadnja        ~8 ur    ~50 poskusov
-    TEST 3  ločen buf_entry / buf_exit  (mreža 8 × 5 = 40)
-            NAJPREJ varnostni test: pri obeh 3 % mora biti vedenje identično.
-    TEST 5  ATR trailing stop namesto izstopa na tracklinu (5 vrednosti)
-
-  Za vsako stopnjo velja: najprej zapiši pričakovanje v git, potem poženi.
-
-FILTER PRED FAZO 3 (to je vloga PREVERBE, ne razvoja):
-    vsaka različica, ki prestane na dnevnem BTC, se požene še na
-      (a) 4-urnih barih z dolžinami × 6
-      (b) podobdobju po ETF (2024-01 → 2026-06), z DNEVNIMI merili
-    Če se uvrstitev na (a) premeša, je bil šum — tako je padla dvotretjinska
-    večina. Če na (b) izgine, je bila lastnost starega režima.
-    Post-ETF obdobje ima 4 do 8 poslov, zato SE NA NJEM NE MERI Sortino.
-
-IZ FAZE 2 GRE NAPREJ NAJVEČ ENA SPREMEMBA (pravilo P3).
-Najverjetnejši izid je NOBENA — in to je popolnoma sprejemljiv izid.
+  ODLOČITVENA TOČKA: če katerakoli različica prestane vse tri pogoje, gre naprej
+  in KORAK 7 ODPADE (prihrani ~50 poskusov). Sicer nadaljuj na Korak 5.
 
 
-================================================================================
-FAZA 3 — TEST NA NOVIH SREDSTVIH         ~1 dan      ENKRAT, brez popravkov
-================================================================================
-To je edini del programa, ki proizvede podatek, ki ga danes nimamo.
+################################################################################
+KORAK 5 — PRAG, KI SE PRILAGAJA NIHAJNOSTI             3 ure     0 parametrov
+################################################################################
+  SPREMEMBA: pas = k × ATR(14) / cena  namesto fiksnih 3 %
+             ATR(14) = povprečje pravega razpona zadnjih 14 barov
+             TR = max(high−low, |high−close[−1]|, |low−close[−1]|)
 
-3.1  KAJ SE ZAPIŠE V GIT, PREDEN SE KARKOLI POŽENE
-     Natanko dve hipotezi, ne več:
+  KLJUČNO ZA POŠTENOST: k umeri tako, da je povprečen pas čez celotno zgodovino
+             natanko 3 %:   k = 0,03 / povprečje(ATR(14)/cena)
+             Če bi k izbral po rezultatu, bi dodal nov prost parameter in
+             razvrednotil ves smisel te različice.
 
-       H1  POENOSTAVLJENI ENGINE NI BTC-SPECIFIČEN
-           Na ETH, XRP, BNB in ADA, z NESPREMENJENIMI parametri, doseže
-           razmerje zajema > 1,00 in udeležbo v padcu pod izpostavljenostjo.
-           Prag za "prestano": velja na vsaj 3 od 4 sredstev.
+  RAZLIČICE: A fiksnih 3 % (kontrola) · B ATR umerjen · C ATR(7) in ATR(28)
 
-       H2  (samo če je iz Faze 2 prišla sprememba)
-           Ta sprememba na istih štirih sredstvih zamudo zmanjša v isto smer
-           kot na BTC, in zajema navzdol ne poslabša.
-           Prag: velja na vsaj 3 od 4.
+  SPREJEMNI KRITERIJ: zajem navzdol enak ali boljši PRI MANJŠI zamudi,
+             razmerje zajema se ne poslabša.
 
-     Zapiše se tudi: pričakovana izpostavljenost, pričakovano število poslov na
-     sredstvo, in KAJ BI BILO SUMLJIVO namesto dobrodošlo.
-
-3.2  KAKO SE POŽENE
-     - podatki se zamrznejo pred prvim pogledom, z manifestom (vir, čas, hash)
-     - iste rutine kot za BTC, ISTI stroški, ISTA merila
-     - ETH se poroča LOČENO od XRP/BNB/ADA, ker ni enako čist
-     - poženi vse naenkrat, poglej vse naenkrat, poročaj vse
-
-3.3  KAKO SE BERE
-     H1 prestane   engine ni BTC-specifičen. To je najmočnejši dokaz, ki ga ta
-                   projekt lahko proizvede, in edini pravi odgovor na skrb glede
-                   prilagojenosti.
-     H1 pade       engine JE BTC-specifičen. To je slaba novica in jo objavimo.
-                   Ne prilagajamo parametrov, da bi šel skozi (pravilo P4).
-     H1 mešano     (2 od 4) — poročamo kot nedoločeno in ne izbiramo, katera
-                   sredstva šteti.
-
-3.4  KAJ SE NE SME
-     - preizkušati več kot dveh hipotez
-     - preizkušati različic vstopa, ki niso prestale Faze 2
-     - poganjati znova po ogledu rezultata
-     - izbirati, katera sredstva "štejejo"
+  SUMLJIVO:  če B prekaša A samo zato, ker je izpostavljenost višja. Zato se
+             izpostavljenost poroča ob vsaki različici.
 
 
-================================================================================
-FAZA 4 — IZVEDBA IN PREDSTAVITEV         ~4 ure
-================================================================================
-4.1  KDAJ SE DEJANSKO TRGUJE                                   2 uri
-     Danes predpostavljamo izvedbo po zaključni ceni. Signal nastane ob zaključku,
-     izvesti ga po isti ceni ni mogoče. Trije scenariji: zaključek (kot zdaj),
-     odprtje naslednjega dne, povprečje naslednjega dne.
-     Ni statistika, je izračun. Lahko večji učinek od vseh parametrov skupaj.
+################################################################################
+KORAK 6 — VSTOP, KO VELJA VEČINA POGOJEV               3 ure     lahko ODSTRANI
+################################################################################
+Po Koraku 3 so vstopni pogoji trije: above_tl · track_rising_window · regime_ok
 
-4.2  UDELEŽBA V PADCU KOT GLAVNA ŠTEVILKA ZA VLAGATELJA         2 uri
-     Za vsak padec BTC nad 20 % (teh je v 7 letih 6-8) izračunaj, koliko smo ga
-     utrpeli. Da 6-8 opazovanj namesto ene same številke MaxDD.
-     To je stavek, ki ga vlagatelj razume: "v šestih padcih BTC nad 20 % smo v
-     povprečju utrpeli X %."
-     OBVEZEN DODATEK: ista številka za portfelj, ki drži 40 % BTC in 60 %
-     gotovine. Če se ne razlikujeta, prednost ni v signalu ampak v izpostavljenosti,
-     in to moramo vedeti PREDEN gremo pred vlagatelja.
+  RAZLIČICE: A 3 od 3 (kontrola) · B 2 od 3 · C 1 od 3
+             D za vsak pogoj posebej: kaj se zgodi, če izpade samo ta
 
+  ZAKAJ TUDI D: če izpad enega od treh ničesar ne spremeni, ta pogoj ni potreben
+             in odpade še en parameter — namesto da bi enega dodali.
 
-================================================================================
-5.  RAČUN POSKUSOV IN CENA PROGRAMA
-================================================================================
-     trenutno stanje                     137
-     Faza 2A                             ~20
-     Faza 2B                             ~15
-     Faza 2C                             ~50   (odpade, če 2A uspe)
-     preverba na 4h in post-ETF          ~20
-     Faza 3                                2   (dve hipotezi, en pogled)
-     ────────────────────────────────────────
-     skupaj                          ~245 (ali ~195, če 2C odpade)
+  SPREJEMNI KRITERIJ: B mora zmanjšati zamudo IN ohraniti zajem navzdol znotraj
+             1,0 o. t.
 
-To skoraj podvoji število poskusov in bo PBO poslabšalo. Zato:
-  - stopnja 2C se poganja SAMO, če 2A ne reši zamude
-  - PBO in deflated Sharpe se preračunata NA KONCU, z efektivnim številom
-    poskusov (gručenje koreliranih različic, prag korelacije 0,95 določen vnaprej)
-  - če PBO po vsem tem zraste, to zapišemo. Program je bil vseeno pravilen, a
-    cena mora biti vidna.
+  SUMLJIVO:  če C (1 od 3) ni bistveno slabši od A, vstopni pogoji skupaj ne
+             nosijo informacije. To bi bila pomembnejša ugotovitev od same
+             izbire praga in jo je treba povedati kot tako.
 
 
-================================================================================
-6.  VRSTNI RED IN ČAS
-================================================================================
-  FAZA 0   pravilnost, referenca, register        2,5 ure    pred vsem
-  FAZA 1   poenostavitev                            1 ura    odločeno
-  FAZA 2A  premor + ATR prag                        6 ur     0 novih parametrov
-  FAZA 2B  večina pogojev + časovni izstop          4 ure    lahko odstrani pravilo
-  FAZA 2C  ločen prag + ATR stop                    8 ur     samo če 2A ne uspe
-  PREVERBA 4h in post-ETF                           4 ure    filter pred Fazo 3
-  FAZA 3   ETH + XRP/BNB/ADA                        1 dan    ENKRAT
-  FAZA 4   izvedba + udeležba v padcu               4 ure    za predstavitev
-  ────────────────────────────────────────────────────────
-  skupaj približno 4 dni (5, če se poganja 2C)
+################################################################################
+KORAK 7 — LOČEN PRAG ZA VSTOP IN IZSTOP     4 ure   +1 parameter   POGOJNO
+################################################################################
+Poženi SAMO, če Koraka 4 in 5 nista rešila zamude. Doda parameter, zato zadnji.
 
-  Faza 3 gre NAZADNJE. Ne zato, ker je najmanj pomembna — je najbolj — ampak
-  ker jo je mogoče uporabiti samo enkrat, in dokler ni jasno, KAJ na njej
-  preverjamo, je vsak pogled zapravljen.
+  OZADJE: track_buf_pct danes bere OBA pogoja. Vstopnega praga ni mogoče
+          premakniti brez izstopnega. min_dist_entry_pct je BIL ta zamisel, a
+          odposlan z vrednostjo 0, zato se sesede v above_tl.
+
+  NAJPREJ VARNOSTNI TEST: pri buf_entry = buf_exit = 3 % mora biti vedenje
+          IDENTIČNO referenci iz Koraka 2. Ta test mora biti zelen, preden se
+          karkoli spremeni.
+
+  MREŽA:  buf_entry ∈ {1 · 1,5 · 2 · 2,5 · 3 · 4 · 5 · 6} %
+          buf_exit  ∈ {2 · 3 · 4 · 5 · 6} %          = 40 kombinacij
+
+  HIPOTEZA (obratna od prvotne): ker vstopi ne prispevajo nič, pričakujem
+          buf_entry NIŽJI od buf_exit — vstopi prej, izstopi pri isti rezervi.
+
+  SPREJEMNI KRITERIJ: najboljša kombinacija ima buf_entry < buf_exit,
+          zajem navzgor zraste za več kot 3 o. t.,
+          in uvrstitev zdrži na 4-urnih barih.
+
+  SUMLJIVO: če je najboljši buf_entry VIŠJI od buf_exit, je to prilagajanje temu
+          vzorcu in ne ugotovitev. Povej tako in ne spreminjaj privzetka.
+          Če najboljša kombinacija leži na robu mreže, razširi mrežo.
+
+
+################################################################################
+KORAK 8 — ATR TRAILING STOP                 4 ure   ±0 parametrov  NAJNIŽJE
+################################################################################
+  SPREMEMBA: peak = najvišji close od vstopa
+             izstop, ko close < peak − N × ATR(14),  N ∈ {1,5 · 2 · 2,5 · 3 · 4}
+
+  ZAKAJ NIZKO: diagnoza pravi, da so izstopi ŽE v redu — zajem navzdol je
+             −4,7 o. t. pod izpostavljenostjo, čas izstopa dober (trg po izstopu
+             obstane). Tu ne pričakujem veliko. Je pa industrijski standard za
+             trend strategije, zato je vredno preveriti.
+
+  MERI SE PRIMARNO NADALJNJI PADEC, NE DONOS. Izstop naj varuje pred padcem.
+  PRIMERJALNA SKUPINA: samo dnevi, ko SMO V POZICIJI. Ne vsi dnevi v vzorcu.
+
+  SPREJEMNI KRITERIJ: zajem navzdol se izboljša za več kot 2 o. t. IN uvrstitev
+             zdrži na 4-urnih barih.
+
+
+################################################################################
+KORAK 9 — ČASOVNI IZSTOP KOT KONTROLA       2 uri   NI izboljšava
+################################################################################
+  SPREMEMBA: izstop po N barih od vstopa, ne glede na ceno. N ∈ {20·40·60·90}
+
+  TA TEST NI NAMENJEN IZBOLJŠAVI. Je najstrožja kontrola za vse ostalo:
+  če preprost časovni izstop NI bistveno slabši od cenovnega, potem cenovni
+  izstop ne nosi informacije, ampak določa samo povprečno trajanje pozicije.
+
+  KAKO SE BERE: če časovni izstop zmaga, to NI odkritje boljšega izstopa. Je
+  dokaz, da naši izstopi ne delajo tega, kar mislimo. Povej tako.
+
+  To je najbolj poveden posamezen test v celem programu.
+
+
+################################################################################
+KORAK 10 — SITO: 4-URNI BARI IN OBDOBJE PO ETF         4 ure
+################################################################################
+Vsaka različica, ki je prestala korake 4-9, gre skozi to sito. Nobena še ne gre
+na ETH.
+
+  10.1  4-URNI BARI
+        ista sprememba, vse dolžine × 6, anualizacija 2190 obdobij.
+        Če se uvrstitev premeša, je bil šum. Tako je padla dvotretjinska večina.
+
+  10.2  OBDOBJE PO UVEDBI ETF   2024-01-01 → 2026-06-30
+        Tržna struktura se je januarja 2024 spremenila — institucionalni tok,
+        drugačna nihajnost. To je resničen režimski test.
+        POZOR: to obdobje ima 4 do 8 POSLOV. Sortino se tu NE meri.
+        Merijo se DNEVNA merila — ~950 dni je za zajem in zamudo dovolj.
+        Post-ETF NI holdout. Je podobdobje BTC-ja, ki smo ga že videli.
+
+  IZ TEGA SITA GRE NAPREJ NAJVEČ ENA SPREMEMBA.
+  Če jih prestane več, gre naprej tista z manj parametri.
+  Najverjetnejši izid je NOBENA, in to je sprejemljivo.
+
+
+################################################################################
+KORAK 11 — VALIDACIJA NA ETH                1 dan    ENKRAT, brez popravkov
+################################################################################
+Edini korak, ki proizvede podatek, ki ga danes nimamo.
+
+  KAJ SE ZAPIŠE V GIT, PREDEN SE KARKOLI POŽENE — največ dve hipotezi:
+
+    H1  POENOSTAVLJENI ENGINE NI BTC-SPECIFIČEN
+        Na ETH, z NESPREMENJENIMI parametri, doseže:
+          razmerje zajema > 1,00
+          udeležbo v padcu pod izpostavljenostjo
+        Zapiši tudi pričakovano izpostavljenost in število poslov.
+
+    H2  (samo če je iz Koraka 10 prišla sprememba)
+        Ta sprememba na ETH zmanjša zamudo v isto smer kot na BTC in ne poslabša
+        zajema navzdol.
+
+  KAKO SE BERE — in tu je omejitev, ki jo je treba povedati vnaprej:
+    ETH je z BTC koreliran 0,82 na celotnem oknu in 0,84 na zadnjih petih letih.
+    To pomeni, da ETH ujame GROBO BTC-specifičnost, ne pa subtilne
+    prilagojenosti — trga se večino časa gibljeta skupaj.
+    Če H1 PADE, je to močan signal, da je engine BTC-specifičen.
+    Če H1 PRESTANE, je to spodbudno, a NE dokaz splošnosti. Ne prodajaj ga tako.
+    ETH je bil poleg tega v zgodnji fazi projekta že gledan (analiza ER,
+    preverbe na petih sredstvih), zato ni popolnoma čist holdout.
+
+  KAR SE NE SME:
+    preizkušati več kot dveh hipotez
+    preizkušati različic, ki niso prestale Koraka 10
+    poganjati znova po ogledu rezultata
+    popravljati parametrov, da bi šlo skozi
+
+
+################################################################################
+KORAK 12 — ZA PREDSTAVITEV                             4 ure
+################################################################################
+  12.1  UDELEŽBA V PADCU                                          2 uri
+        Za vsak padec BTC nad 20 % (v 7 letih jih je 6-8) izračunaj, koliko smo
+        ga utrpeli. To da 6-8 opazovanj namesto ene same številke MaxDD, in je
+        stavek, ki ga vlagatelj razume.
+
+        OBVEZEN DODATEK: ista številka za portfelj, ki drži 40 % BTC in 60 %
+        gotovine. Če se ne razlikujeta, prednost NI v signalu ampak v
+        izpostavljenosti — in to moramo vedeti, preden rečemo "zmanjšujemo padce".
+
+  12.2  KDAJ SE DEJANSKO TRGUJE                                   2 uri
+        Danes predpostavljamo izvedbo po zaključni ceni. Signal nastane ob
+        zaključku, izvesti ga po isti ceni ni mogoče. Trije scenariji: zaključek,
+        odprtje naslednjega dne, povprečje naslednjega dne.
+        Ni statistika, je izračun — in je lahko večji od vsega, o čemer smo se
+        prepirali pri parametrih.
+
+
+################################################################################
+O WALK-FORWARDU — zakaj ga ni na seznamu
+################################################################################
+Ločiti je treba tri stvari, ki se jim vsem reče walk-forward:
+
+  ponovno NASTAVLJANJE parametrov na vsakem oknu
+      že narejeno. Prekaša fiksne nastavitve v 0 od 4 shem. V vsakem treningu je
+      8-12 poslov; izbrana nastavitev se zamenja skoraj na vsaki rezini.
+
+  VALIDACIJA fiksne strategije čez drseča okna
+      že narejeno pod drugim imenom — analiza po posameznih letih. Privzetki
+      dosežejo povprečno 65. percentil med sosedi, razpon 19-95.
+
+  walk-forward POENOSTAVLJENE strategije
+      ni česa validirati — krivulja je bitno identična današnji.
+
+Če je sodelavec mislil kaj četrtega, naj pove in to naredimo. Sicer predlagam,
+da čas porabimo za Korak 11.
+
+
+################################################################################
+ČAS IN VRSTNI RED
+################################################################################
+   1  pogled v prihodnost              2 uri    pred vsem
+   2  zamrzni referenco               15 min
+   3  poenostavi                       1 ura    dogovorjeno
+   4  premor (4 različice)             4 ure    0 parametrov, največji vzvod
+   5  ATR prag                         3 ure    0 parametrov
+   6  večina pogojev                   3 ure    lahko odstrani pravilo
+   9  časovni izstop                   2 uri    kontrola
+   7  ločen prag                       4 ure    +1 param, samo če 4 in 5 ne uspeta
+   8  ATR trailing stop                4 ure    najnižje pričakovanje
+  10  sito: 4h + post-ETF              4 ure    filter
+  11  ETH                              1 dan    ENKRAT, nazadnje
+  12  za predstavitev                  4 ure
+  ─────────────────────────────────────────────
+  skupaj približno 4 dni (5, če se poganja korak 7)
+
+Korak 11 gre nazadnje ne zato, ker je najmanj pomemben — je najbolj — ampak ker
+ga je mogoče uporabiti samo enkrat, in dokler ni jasno, KAJ na njem preverjamo,
+je vsak pogled zapravljen.
+
+POSKUSI: trenutno 137. Ta program jih doda približno 90 (ali 140 s korakom 7).
+Na koncu se PBO in deflated Sharpe preračunata z EFEKTIVNIM številom poskusov —
+gručenje koreliranih različic, prag korelacije 0,95 določen VNAPREJ.
+Če PBO kljub poenostavitvi zraste, to zapišemo.
