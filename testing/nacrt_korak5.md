@@ -292,8 +292,8 @@ so potrditev.
 
 1. Dnevna študija **bo** imela dovolj moči, da pove nekaj določnega — za razliko
    od 4. koraka. **Verjetno.**
-2. E bo imela nižjo izpostavljenost od A (širši pas v divjih obdobjih prevlada).
-   **Verjetno.**
+2. ~~E bo imela nižjo izpostavljenost od A (širši pas v divjih obdobjih
+   prevlada).~~ **POPRAVLJENO 2026-08-04, pred izvedbo — glej §9.**
 3. Placebo z nihajnostjo bo ujel **velik del** razlike med E in A. **Verjetno** —
    prav to je ugotovitev Kim/Tse/Wald.
 4. F (samo vstop) bo bližje A kot E, ker se največ dogaja pri izstopu.
@@ -302,6 +302,55 @@ so potrditev.
    poslov pojedo stroški in ga večinoma pojasni skaliranje z nihajnostjo** — in
    pravi zaključek bo, da naj se nihajnost uporabi odkrito pri sizingu, ne skrito
    v vstopnem pogoju.
+
+---
+
+## 9. Dopolnilo, 2026-08-04 — pred izvedbo, po pregledu obstoječega sweepa
+
+Mrtvi pas je bil **že prevrten** in podatek leži v `parametri_BTC.json`. Preden
+poženem karkoli, ga zapišem sem, ker ovrže eno mojo napoved in spremeni težišče
+koraka.
+
+| pas % | 1,0 | 1,5 | 2,0 | 2,5 | 3,0 | 3,5 | 4,0 | 4,5 | 5,0 | 5,5 | 6,0 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Sortino | 0,663 | 0,665 | 1,048 | **1,229** | 1,219 | 1,038 | 0,918 | 1,033 | 1,059 | 1,020 | 1,003 |
+| izpost. % | 42,3 | 42,3 | 41,8 | 42,9 | 43,5 | 47,4 | 48,0 | 48,9 | 49,0 | 49,9 | 50,0 |
+
+Oblika: **plato**, razpon 0,566, lokalna premija 0,181, najboljša vrednost 2,5 %,
+ni na robu. 2,5 % in 3,0 % sta praktično izenačena (razlika 0,010).
+
+### Kaj to ovrže
+
+Napovedal sem (§8.2), da bo E imela **nižjo** izpostavljenost od A. Sweep kaže
+nasprotno: izpostavljenost **monotono raste** s širino pasu, s 42,3 % na 50,0 %.
+
+Razlog je mehanizem, ki sem ga spregledal: pas gradi **oba** praga. Širši pas
+otežuje vstop, a hkrati **zamika izstop** — cena mora pasti globlje, preden
+prodamo. Drugi učinek prevlada.
+
+### Zakaj to spremeni težišče koraka
+
+* **E** ima v divjih obdobjih širši pas → **poznejše izstope** → **več**
+  izpostavljenosti prav takrat, ko je nihajnost visoka. To je skaliranje z
+  nihajnostjo **v napačno smer**.
+* **F** (prilagodljivo samo za vstop) ima v divjih obdobjih širši pas → **težji
+  vstop** → **manj** izpostavljenosti pri visoki nihajnosti. To je skaliranje v
+  pravo smer.
+
+E in F imata torej **nasprotna profila izpostavljenosti glede na nihajnost**, in
+placebo iz §5.7 bo za vsako pomenil nekaj drugega. F je zato zanimivejša od E, kar
+sem pred tem pregledom mislil obratno.
+
+### Popravljena napoved §8.2
+
+E bo imela **višjo** izpostavljenost od A, F **nižjo**. Zapisano 2026-08-04, pred
+prvim zagonom harnessa.
+
+### Kar ostaja nespremenjeno
+
+Sidra 3 % **ne bom premaknil na 2,5 %**, čeprav je tam vrh. Razlika 0,010 Sortina
+je šum, 2,5 % je bil izbran kot najboljši izmed enajstih poskusov, in pri PBO
+0,694 je premik na argmaks natanko tisto, česar ta projekt ne počne.
 
 ---
 
