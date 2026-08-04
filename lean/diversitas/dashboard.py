@@ -1595,16 +1595,22 @@ def _render_gates_and_status(df: pd.DataFrame, s: dict, cfg: LeanConfig,
             f'Exit gates · any FAIL triggers exit</div>',
             unsafe_allow_html=True,
         )
+        # These are the ONLY two exits the state machine has. `regime_ok` used to be
+        # listed here as a third, described as forcing an exit in a bear market — it
+        # does not. It sits in bull_condition, so it blocks ENTRY only, and the
+        # strategy holds through it: 4412 bars across the parameter grid are BULL
+        # while regime_ok is false. It is listed under the entry gates, where it
+        # belongs.
         exit_gates = [
-            ("Above trackline",
-             bool(last["above_tl"]),
-             "Primary exit trigger: if price closes below the trackline the strategy exits."),
-            ("Regime OK (no bear block)",
-             bool(last["regime_ok"]),
-             "A confirmed bear market forces an exit even if price is still above the trackline."),
+            (f"Not below trackline for {cfg.exit_grace_bars} days",
+             not (bool(last["below_tl"]) and int(last["below_count"]) >= cfg.exit_grace_bars),
+             f"Trend break: the close must sit below the trackline minus the buffer "
+             f"for {cfg.exit_grace_bars} consecutive days before the strategy exits. "
+             f"A single day below is not enough."),
             ("No blow-off top",
              not bool(last["blowoff"]),
-             "A parabolic blow-off top triggers an exit."),
+             "A parabolic blow-off top triggers an immediate exit — and also blocks "
+             "entry, so the strategy never buys on a bar it would sell on."),
         ]
         exit_html = "".join(
             f'<div title="{tip}">{_gate_row(lbl, ok)}</div>'
