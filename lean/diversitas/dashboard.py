@@ -1556,6 +1556,10 @@ def _render_gates_and_status(df: pd.DataFrame, s: dict, cfg: LeanConfig,
             ("Regime OK (not bear block)",
              bool(last["regime_ok"]),
              "The 200-day MA regime must not be in a confirmed bear market."),
+            ("No blow-off top",
+             not bool(last["blowoff"]),
+             "Blow-off is an exit rule, so it also blocks entry — the strategy "
+             "never buys on a bar it would sell on."),
         ]
         if cfg.use_btc_filter:
             gates.append((

@@ -108,18 +108,34 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
     else:
         df["donchian_ok"] = True
 
-    # Four factors. `above_ma_med` and `dist_entry_ok` used to sit in here; both
-    # were implied by the terms that remain, so dropping them changed nothing.
+    df["trend_break"] = df["below_tl"]
+    df["blowoff"] = (df["dist_pct"] > cfg.blowoff_dist_pct) & (df["rsi"] > 80)
+
+    # `above_ma_med` and `dist_entry_ok` used to sit in here; both were implied by
+    # the terms that remain, so dropping them changed nothing.
+    #
+    # `~blowoff` is the opposite case and is here on purpose. Blow-off is an EXIT
+    # rule, and the state machine only consults exits while already long — so
+    # without this term the same bar can be a valid buy and a screaming sell at
+    # once. That is not a corner case: blow-off needs dist_pct > 25 % while entry
+    # needs only > 3 %, so EVERY blow-off bar clears the entry hurdle. 30 of the 31
+    # blow-off bars in the history satisfy every other entry condition too.
+    #
+    # It changes nothing today: reentry_hold blocks re-entry for 15 bars after the
+    # blow-off exit, and blow-off runs are shorter than that, so the frozen
+    # reference is reproduced bit for bit. It is not inert by construction, only by
+    # coincidence of a parameter that later steps are about to touch — with the
+    # pause removed, 12 of 32 entries land on a blow-off bar. Guarded by
+    # `test_no_entry_while_an_exit_rule_is_firing`, which removes the pause so the
+    # test can actually fail.
     df["bull_condition"] = (
         df["above_tl"]
         & df["track_rising_window"]
         & df["regime_ok"]
         & df["btc_filter_ok"]
         & df["donchian_ok"]
+        & ~df["blowoff"]
     ).fillna(False)
-
-    df["trend_break"] = df["below_tl"]
-    df["blowoff"] = (df["dist_pct"] > cfg.blowoff_dist_pct) & (df["rsi"] > 80)
 
     # --- Convenience for dashboard ---
     df["green_dot"] = df["bull_condition"]

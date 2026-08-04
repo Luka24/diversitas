@@ -77,6 +77,46 @@ def test_warmup_is_unchanged():
 
 
 @pytest.mark.skipif(not fr.SRC.exists(), reason="zamrznjen posnetek cen ni na voljo")
+def test_no_entry_while_an_exit_rule_is_firing():
+    """The strategy must never buy on a bar its own blow-off rule is selling on.
+
+    Run with the pause REMOVED (reentry_hold=0). With it in place the situation is
+    unreachable — the pause blocks re-entry for 15 bars after a blow-off exit — so
+    a test at the default settings would pass without the guard and prove nothing.
+
+    The second half is the negative control: strip `~blowoff` back out of
+    bull_condition and the same run must produce entries on blow-off bars. Without
+    that, a green first half could just mean blow-off never coincides with an
+    entry opportunity.
+    """
+    raw = pd.read_parquet(fr.SRC)
+    smod = engine.strategy_module("lean")
+    cfg = engine.make_config("lean", reentry_hold=0)
+    feat = smod.compute_features(raw, None, cfg)
+    bo = feat["blowoff"].fillna(False)
+
+    def entries_on_blowoff(frame) -> int:
+        st = smod.run_state_machine(frame, cfg)
+        opened = st["signal_changed"] & (st["signal_state"] == smod.S_BULL)
+        return int((opened & bo).sum())
+
+    assert entries_on_blowoff(feat) == 0, (
+        "vstop je padel na dan, ko se je sprožil izstop zaradi pregretja"
+    )
+
+    unguarded = feat.copy()
+    bull = pd.Series(True, index=feat.index)
+    for t in ("above_tl", "track_rising_window", "regime_ok",
+              "btc_filter_ok", "donchian_ok"):
+        bull &= feat[t]
+    unguarded["bull_condition"] = bull.fillna(False)
+    assert entries_on_blowoff(unguarded) > 0, (
+        "brez varovalke bi moral test pasti; ker ne pade, nima moči in "
+        "test_no_entry_while_an_exit_rule_is_firing ničesar ne dokazuje"
+    )
+
+
+@pytest.mark.skipif(not fr.SRC.exists(), reason="zamrznjen posnetek cen ni na voljo")
 def test_no_exit_was_ever_attributed_to_vol_shock():
     """The reason the removal is safe, stated as a test rather than a claim.
 
