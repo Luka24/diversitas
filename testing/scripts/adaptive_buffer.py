@@ -59,9 +59,32 @@ OUT = ROOT / "testing" / "data" / f"adaptive_buffer_{SYMBOL}.json"
 
 SUBPERIODS = [("I", "2019-03-09", "2021-01-31"), ("II", "2021-02-01", "2022-11-30"),
               ("III", "2022-12-01", "2024-09-30"), ("IV", "2024-10-01", "2026-07-29")]
-VARIANTS = ("A", "E", "F")
-LABEL = {"A": "fiksnih 3 % (danes)", "E": "prilagodljiv, obe strani",
-         "F": "prilagodljiv, samo vstop"}
+VARIANTS = ("A", "E", "F", "G", "H")
+LABEL = {"A": "fiksnih 3 % (danes)",
+         "E": "razmerje do 50-dn. povprečja, obe strani",
+         "F": "razmerje do 50-dn. povprečja, samo vstop",
+         "G": "sorazmerno z nihajnostjo (Keltner), obe strani",
+         "H": "sorazmerno z nihajnostjo (Keltner), samo vstop"}
+ADAPTIVE = ("E", "F", "G", "H")
+BOTH_SIDES = ("E", "G")
+
+# The two forms are the same family with a different normalisation window, which
+# is the honest way to see them: band = anchor x vol_t / mean_w(vol).
+#
+#   E, F  w = 50 days. Asks "is volatility unusual RIGHT NOW", so the slow
+#         multi-month component cancels and the band is damped.
+#   G, H  w = everything so far. That is the professional form — Keltner is
+#         EMA +- 2 x ATR(20), Chandelier is 3 x ATR(22), Turtle sizes on N = ATR
+#         — where a doubling of volatility doubles the band, full stop.
+#
+# Only the two ENDS of the spectrum are tested. Anything in between would be
+# choosing a normalisation window by looking at the answer, which is exactly the
+# hidden-parameter trap the adaptive-threshold literature warns about.
+#
+# The expanding mean is used rather than a constant fitted on the whole sample.
+# That matters: the constant implied by the full history is 0.0545 and the one
+# implied by the first two years is 0.0445, 18 % apart, so a single fitted
+# multiplier would be quietly using the future.
 BULL_TERMS = ("above_tl", "track_rising_window", "regime_ok",
               "btc_filter_ok", "donchian_ok")
 
@@ -81,18 +104,20 @@ def build(raw: pd.DataFrame, cfg, variant: str) -> pd.DataFrame:
                           df["bull_condition"].fillna(False).to_numpy()), \
         "sestavljanje bull_condition se ne ujema s strategy.py"
 
-    if variant != "A":
-        # NaN until vol_avg50 exists (~70 bars, all inside the warm-up that gets
-        # trimmed). Filled with 1.0 so the band falls back to the fixed 3 % rather
-        # than turning every comparison against NaN into a silent False — the trap
-        # documented in engine.py.
-        rel = (df["annual_vol"] / df["vol_avg50"]).replace([np.inf, -np.inf],
-                                                           np.nan).fillna(1.0)
+    if variant in ADAPTIVE:
+        ref = (df["vol_avg50"] if variant in ("E", "F")
+               else df["annual_vol"].expanding(min_periods=1).mean())
+        # NaN until the reference exists (~70 bars, all inside the warm-up that
+        # gets trimmed). Filled with 1.0 so the band falls back to the fixed 3 %
+        # rather than turning every comparison against NaN into a silent False —
+        # the trap documented in engine.py.
+        rel = (df["annual_vol"] / ref).replace([np.inf, -np.inf],
+                                               np.nan).fillna(1.0)
         band = cfg.track_buf_pct * rel / 100.0
         tl = df["trackline"]
         df["band_pct"] = band * 100.0
         df["above_tl"] = df["close"] > tl * (1.0 + band)
-        if variant == "E":
+        if variant in BOTH_SIDES:
             df["below_tl"] = df["close"] < tl * (1.0 - band)
         bull = pd.Series(True, index=df.index)
         for t in BULL_TERMS:
@@ -226,18 +251,22 @@ def main() -> int:
     out["control_matches_reference"] = True
 
     # ── realised band ─────────────────────────────────────────────────────
-    bandE = pos["E"][1]["band_pct"]
-    q = {f"p{p}": round(float(np.percentile(bandE, p)), 2)
-         for p in (0, 1, 5, 25, 50, 75, 95, 99, 100)}
-    by_year = bandE.groupby(bandE.index.year).mean().round(2).to_dict()
-    out["band"] = {"pct": q, "mean": round(float(bandE.mean()), 2),
-                   "by_year": {str(k): v for k, v in by_year.items()},
-                   "days_below_1pct": int((bandE < 1).sum()),
-                   "days_above_10pct": int((bandE > 10).sum())}
-    print(f"\nPAS — povprečje {bandE.mean():.2f} %  (sidro 3 %)")
-    print("  po letih: " + "  ".join(f"{y}:{v:.1f}" for y, v in by_year.items()))
-    print(f"  dni pod 1 %: {out['band']['days_below_1pct']}   "
-          f"nad 10 %: {out['band']['days_above_10pct']}")
+    print("\nPAS — realiziran (sidro 3 %)")
+    bands = {}
+    for v in ADAPTIVE:
+        b = pos[v][1]["band_pct"]
+        by_year = b.groupby(b.index.year).mean().round(2).to_dict()
+        bands[v] = {"mean": round(float(b.mean()), 2),
+                    "pct": {f"p{q}": round(float(np.percentile(b, q)), 2)
+                            for q in (1, 5, 25, 50, 75, 95, 99)},
+                    "by_year": {str(k): val for k, val in by_year.items()},
+                    "days_below_1pct": int((b < 1).sum()),
+                    "days_above_10pct": int((b > 10).sum())}
+        print(f"  {v}  povpr. {b.mean():.2f} %   1.-99. pct "
+              f"{np.percentile(b, 1):.2f}-{np.percentile(b, 99):.2f} %   "
+              f"pod 1 %: {bands[v]['days_below_1pct']}   "
+              f"nad 10 %: {bands[v]['days_above_10pct']}")
+    out["band"] = bands
 
     # ── primary: per-day event study ──────────────────────────────────────
     print("\nDNEVNA ŠTUDIJA — donos BTC v naslednjih 20 dneh")
@@ -249,7 +278,7 @@ def main() -> int:
     base = fwd[ok].mean()
     print(f"  izhodišče, vsi dnevi ({int(ok.sum())}): {base:+.2f} %")
     ev = {"baseline_all_days": round(float(base), 2), "n_all": int(ok.sum())}
-    for v in ("E", "F"):
+    for v in ADAPTIVE:
         aA = dfA["above_tl"].fillna(False).to_numpy()
         aV = pos[v][1]["above_tl"].fillna(False).to_numpy()
         for tag, m in ((f"{v}: vstop odprt, A zaprt", aV & ~aA),
@@ -285,7 +314,7 @@ def main() -> int:
     # ── where do they differ at all ───────────────────────────────────────
     print("\nKJE SE POZICIJE RAZLIKUJEJO")
     div = {}
-    for v in ("E", "F"):
+    for v in ADAPTIVE:
         m = np.abs(posA.to_numpy() - pos[v][0].to_numpy()) > 1e-12
         k = int(m.sum())
         if k:
@@ -305,7 +334,7 @@ def main() -> int:
     print("\nSPARJENI BOOTSTRAP — ΔSortino proti A")
     rA = net_returns(posA, ret, FEE).to_numpy(float)
     boot = {}
-    for v in ("E", "F"):
+    for v in ADAPTIVE:
         rV = net_returns(pos[v][0], ret, FEE).to_numpy(float)
         boot[v] = paired_ci(rV, rA, rng)
         c = boot[v]
@@ -316,7 +345,7 @@ def main() -> int:
 
     # ── sub-periods ───────────────────────────────────────────────────────
     print("\nPODOBDOBJA — Sortino, okna določena vnaprej")
-    print(f"  {'okno':4}{'A':>9}{'E':>9}{'F':>9}   zmagovalec")
+    print("  okno " + "".join(f"{v:>9}" for v in VARIANTS) + "   zmagovalec")
     subs, wins = {}, {v: 0 for v in VARIANTS}
     for name, a, b in SUBPERIODS:
         row = {}
@@ -368,7 +397,7 @@ def main() -> int:
     # ── lookahead ─────────────────────────────────────────────────────────
     print("\nREVIZIJA POGLEDA V PRIHODNOST")
     la = {}
-    for v in ("E", "F"):
+    for v in ADAPTIVE:
         full = pos[v][0]
         cand = full.index[(full.index >= "2019-09-01") & (full.index <= "2026-06-30")]
         dates = pd.DatetimeIndex(sorted(rng.choice(cand, size=40, replace=False)))

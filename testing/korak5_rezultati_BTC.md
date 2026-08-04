@@ -128,7 +128,109 @@ Obe padeta na tretjem pogoju. **Ostane A.**
 Tri od petih napovedi so padle. Najbolj pomembna je tretja: **pomislek iz
 literature se na naših podatkih ni uresničil.**
 
-## 9. Kaj to pomeni za naprej
+## 9. Dopolnitev — profesionalna oblika pasu (G, H)
+
+Vprašanje po prvem zagonu: **ali je moja formula preveč dušena?** Deli namreč z
+lastnim 50-dnevnim povprečjem, ki nihajnosti sledi z zamikom, zato razmerje večino
+časa visi okoli 1.
+
+Kako to delajo profesionalci:
+
+| | formula |
+|---|---|
+| Keltnerjev kanal | `EMA ± 2 × ATR(20)` |
+| Chandelier izstop | `najvišji vrh − 3 × ATR(22)` |
+| Turtle (N) | stop pri `2 × ATR`, velikost pozicije `tveganje / ATR` |
+
+Vsi uporabljajo nihajnost **neposredno**. Ko se ATR podvoji, se pas podvoji.
+
+Obe obliki sta pravzaprav ista družina z drugačnim oknom normalizacije:
+`pas = sidro × vol_t / povprečje_w(vol)`. Pri E in F je w = 50 dni, pri
+Keltnerju je w = ves čas. Testirana sta zato **le konca spektra**; karkoli
+vmes bi pomenilo izbirati okno ob pogledu na odgovor.
+
+Za G in H je uporabljeno **razširjajoče se povprečje** (samo pretekli podatki),
+ne konstanta, umerjena na celem vzorcu — ta bi bila tiho uporaba prihodnosti:
+množitelj iz cele zgodovine je 0,0545, iz prvih dveh let 0,0445, **18 % narazen**.
+
+### Odzivnost je res večja
+
+| | povpr. pas | 1.–99. pct | dni pod 1 % | dni nad 10 % | dni razlike v vstopnem pragu |
+|---|---|---|---|---|---|
+| E, F (50-dnevno) | 3,05 % | 1,42–6,66 % | 2 | 5 | 40 |
+| G, H (Keltner) | 2,65 % | 0,97–6,18 % | 33 | 20 | 52 |
+
+Dnevna študija to potrdi: G spusti noter **45 dni** (proti 26 pri E), z donosom
++8,07 % proti izhodišču +3,27 %.
+
+> **Pridržek:** G ima povprečen pas 2,65 %, ne 3 % — sidro se pri razširjajočem
+> se povprečju ne ohrani, ker je nihajnost v vzorcu upadala. G torej ni čist test
+> odzivnosti, ampak odzivnosti **in** nekoliko ožjega pasu. Sweep iz
+> `parametri_BTC.json` kaže, da sta 2,5 % (1,229) in 3,0 % (1,219) praktično
+> izenačena, zato razlika v ravni verjetno ni gonilo — a to je sklep iz drugega
+> testa, ne iz tega.
+
+### Izid je isti
+
+| | Sortino | MaxDD | izpost. | poslov | dni razlike proti A |
+|---|---|---|---|---|---|
+| A | 1,505 | −45,2 | 41,9 | 21 | — |
+| E | 1,537 | −45,2 | 43,0 | 21 | 76 |
+| F | 1,576 | −45,2 | 42,3 | 21 | 10 |
+| **G** Keltner, obe strani | 1,538 | **−41,4** | 41,1 | 21 | 66 |
+| **H** Keltner, samo vstop | 1,576 | −45,2 | 42,3 | 21 | **10** |
+
+Podobdobja:
+
+| okno | A | E | F | G | H |
+|---|---|---|---|---|---|
+| I | 1,505 | **1,903** | 1,729 | 1,880 | 1,729 |
+| II | **1,239** | 1,239 | 1,239 | 1,239 | 1,239 |
+| III | **1,990** | 1,839 | 1,990 | 1,990 | 1,990 |
+| IV | **1,603** | 1,173 | 1,603 | **1,004** | 1,603 |
+
+Zmag: **A = 3**, E = 1, F = 0, G = 0, H = 0. Revizija pogleda v prihodnost: 0 razlik
+pri vseh štirih.
+
+### Dve stvari, ki jih je vredno zabeležiti
+
+**H je natanko enaka F.** Isti Sortino, isti MaxDD, istih 10 dni razlike (oktober
+2020). Vstopna stran torej da **isti odgovor ne glede na to, katero normalizacijo
+nihajnosti izbereš** — kar je bolj robustno, kot bi bilo, če bi se odgovora
+razlikovala.
+
+**G ima najboljši padec** (−41,4 % proti −45,2 %, tudi pri izenačeni
+izpostavljenosti), a se v zadnjem obdobju sesuje na 1,004 proti 1,603. Prednost
+pri padcu je plačana z zadnjimi dvema letoma.
+
+### Odgovor na vprašanje
+
+**Dušenost ni bila razlog.** Popolnoma odzivna, profesionalno standardna oblika
+poveča število prizadetih dni (40 → 52 pri pragu, 26 → 45 v dnevni študiji), a
+**ne spremeni izida**. Ozko grlo je drugje — glej §10.
+
+## 10. Zakaj noben pas ne premakne veliko
+
+Porazdelitev oddaljenosti cene od razpona čez vseh 2700 dni:
+
+| kje leži cena | dni | delež |
+|---|---|---|
+| nad +7 % | 1112 | **41,2 %** |
+| med +1 in +7 % ← **cona, kjer pas odloča** | 355 | **13,1 %** |
+| med −1 in +1 % | 117 | 4,3 % |
+| med −7 in −1 % | 341 | 12,6 % |
+| pod −7 % | 775 | **28,7 %** |
+
+Pas se giblje med ~1 in ~7 %. **Na 70 % dni je cena tako daleč od razpona, da je
+vseeno, kje je prag.** Le 13 % dni sploh leži v coni, kjer lahko odloča — in še
+tam mora prag pasti natanko med ceno in razpon.
+
+To pojasni vse troje hkrati: zakaj je sweep pasu plato med 2 in 3 %, zakaj se
+prilagodljiv pas premakne na 10 dneh, in zakaj bolj odzivna oblika tega ne reši.
+**Oddaljenost od razpona je dvovrhna** — cena je v trendnem sredstvu redko blizu
+sredine. To ni napaka nastavitve, ampak lastnost podatkov.
+
+## 11. Kaj to pomeni za naprej
 
 **Prilagodljivost na izstopni strani škoduje.** F (fiksni izstop) je boljša od E
 (prilagodljivi izstop) — 1,576 proti 1,537 — in razlika med njima je natanko
