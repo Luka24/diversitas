@@ -1,0 +1,229 @@
+{
+ "symbol": "BTC",
+ "fee_per_side_pct": 0.3,
+ "seed": 20260805,
+ "preregistered": "testing/nacrt_korak5.md",
+ "control_matches_reference": true,
+ "band": {
+  "pct": {
+   "p0": 0.81,
+   "p1": 1.42,
+   "p5": 1.67,
+   "p25": 2.31,
+   "p50": 2.84,
+   "p75": 3.68,
+   "p95": 4.77,
+   "p99": 6.66,
+   "p100": 11.93
+  },
+  "mean": 3.05,
+  "by_year": {
+   "2019": 3.05,
+   "2020": 3.18,
+   "2021": 3.04,
+   "2022": 2.96,
+   "2023": 3.09,
+   "2024": 3.06,
+   "2025": 2.98,
+   "2026": 3.04
+  },
+  "days_below_1pct": 2,
+  "days_above_10pct": 5
+ },
+ "event_study": {
+  "baseline_all_days": 3.27,
+  "n_all": 2680,
+  "E: vstop odprt, A zaprt": {
+   "n": 26,
+   "episodes": 17,
+   "mean_fwd20": 9.17,
+   "ci": null,
+   "vs_baseline": 5.9
+  },
+  "E: A odprt, E zaprt": {
+   "n": 14,
+   "episodes": 12,
+   "mean_fwd20": -4.84,
+   "ci": null,
+   "vs_baseline": -8.11
+  },
+  "F: vstop odprt, A zaprt": {
+   "n": 26,
+   "episodes": 17,
+   "mean_fwd20": 9.17,
+   "ci": null,
+   "vs_baseline": 5.9
+  },
+  "F: A odprt, F zaprt": {
+   "n": 14,
+   "episodes": 12,
+   "mean_fwd20": -4.84,
+   "ci": null,
+   "vs_baseline": -8.11
+  }
+ },
+ "variants": {
+  "A": {
+   "sortino": 1.505,
+   "sharpe": 0.974,
+   "cagr": 33.6,
+   "maxdd": -45.2,
+   "final": 8.546,
+   "exposure": 41.9,
+   "upside_capture": 41.5,
+   "downside_capture": 37.8,
+   "trades": 21,
+   "turnover": 42.0,
+   "sha256": "4f43eae715a760c4120776160f17dc7f5d2f6a999523c544861c5e6df5efda90",
+   "label": "fiksnih 3 % (danes)"
+  },
+  "E": {
+   "sortino": 1.537,
+   "sharpe": 0.996,
+   "cagr": 35.0,
+   "maxdd": -45.2,
+   "final": 9.2,
+   "exposure": 43.0,
+   "upside_capture": 42.4,
+   "downside_capture": 38.5,
+   "trades": 21,
+   "turnover": 42.0,
+   "sha256": "1882457971157cb2c1d1edcb9fe2746ed31dfe9eff55a965e5e103e0cf8a06de",
+   "label": "prilagodljiv, obe strani"
+  },
+  "F": {
+   "sortino": 1.576,
+   "sharpe": 1.017,
+   "cagr": 35.9,
+   "maxdd": -45.2,
+   "final": 9.67,
+   "exposure": 42.3,
+   "upside_capture": 42.0,
+   "downside_capture": 37.9,
+   "trades": 21,
+   "turnover": 42.0,
+   "sha256": "01bdd0794b1308c4601ecd1ee0dbe16d2fac4be42aac6f54c0ea9cd3f0cadfa4",
+   "label": "prilagodljiv, samo vstop"
+  }
+ },
+ "divergence": {
+  "E": {
+   "n_days": 76,
+   "first": "2020-09-11",
+   "last": "2025-10-18",
+   "by_year": {
+    "2020": 43,
+    "2024": 11,
+    "2025": 22
+   }
+  },
+  "F": {
+   "n_days": 10,
+   "first": "2020-10-14",
+   "last": "2020-10-23",
+   "by_year": {
+    "2020": 10
+   }
+  }
+ },
+ "bootstrap_vs_A": {
+  "E": {
+   "delta": 0.032,
+   "ci_lo": -0.227,
+   "ci_hi": 0.305,
+   "excludes_zero": false
+  },
+  "F": {
+   "delta": 0.072,
+   "ci_lo": -0.005,
+   "ci_hi": 0.243,
+   "excludes_zero": false
+  }
+ },
+ "subperiods": {
+  "windows": {
+   "I": {
+    "from": "2019-03-09",
+    "to": "2021-01-31",
+    "sortino": {
+     "A": 1.505,
+     "E": 1.903,
+     "F": 1.729
+    },
+    "winner": "E"
+   },
+   "II": {
+    "from": "2021-02-01",
+    "to": "2022-11-30",
+    "sortino": {
+     "A": 1.239,
+     "E": 1.239,
+     "F": 1.239
+    },
+    "winner": "A"
+   },
+   "III": {
+    "from": "2022-12-01",
+    "to": "2024-09-30",
+    "sortino": {
+     "A": 1.99,
+     "E": 1.839,
+     "F": 1.99
+    },
+    "winner": "A"
+   },
+   "IV": {
+    "from": "2024-10-01",
+    "to": "2026-07-29",
+    "sortino": {
+     "A": 1.603,
+     "E": 1.173,
+     "F": 1.603
+    },
+    "winner": "A"
+   }
+  },
+  "wins": {
+   "A": 3,
+   "E": 1,
+   "F": 0
+  }
+ },
+ "exposure_matched": {
+  "A": {
+   "sortino": 1.505,
+   "maxdd": -45.2,
+   "downside_capture": 37.8,
+   "exposure": 41.9
+  },
+  "E": {
+   "sortino": 1.537,
+   "maxdd": -44.3,
+   "downside_capture": 37.5,
+   "exposure": 41.9
+  },
+  "F": {
+   "sortino": 1.576,
+   "maxdd": -44.9,
+   "downside_capture": 37.5,
+   "exposure": 41.9
+  },
+  "placebo": {
+   "sortino": 1.439,
+   "maxdd": -44.2,
+   "downside_capture": 36.7,
+   "exposure": 41.9,
+   "turnover": 60.0
+  }
+ },
+ "lookahead": {
+  "E": {
+   "n_dates": 40,
+   "n_differing": 0
+  },
+  "F": {
+   "n_dates": 40,
+   "n_differing": 0
+  }
+ }
+}
