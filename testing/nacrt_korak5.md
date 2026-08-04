@@ -251,9 +251,14 @@ so potrditev.
 
 ### Sprejmi E ali F, če velja VSE:
 
+> **POPRAVLJENO 2026-08-04, pred izvedbo — glej §10.** Pogoj 1 je zahteval, da
+> dnevni interval zaupanja izključi ničlo. Izmeril sem, da bo vzorec 40 dni, ne
+> stotine, zato je to prag, ki ga test ne more doseči. Zamenjan je s smerjo;
+> interval se poroča, a ne zahteva.
+
 | | pogoj |
 |---|---|
-| 1 | **dnevno**: na dneh, kjer različica vstopi in A ne, je donos +20 dni pozitiven in **IZ izključuje ničlo** |
+| 1 | ~~**dnevno**: na dneh, kjer različica vstopi in A ne, je donos +20 dni pozitiven in **IZ izključuje ničlo**~~ → **dnevno: pravilna smer; IZ se poroča** |
 | 2 | Sortino boljši od A na celotnem oknu |
 | 3 | boljši v **≥ 3 od 4** podobdobij |
 | 4 | prednost preživi **izenačeno izpostavljenost** |
@@ -351,6 +356,45 @@ prvim zagonom harnessa.
 Sidra 3 % **ne bom premaknil na 2,5 %**, čeprav je tam vrh. Razlika 0,010 Sortina
 je šum, 2,5 % je bil izbran kot najboljši izmed enajstih poskusov, in pri PBO
 0,694 je premik na argmaks natanko tisto, česar ta projekt ne počne.
+
+---
+
+## 10. Dopolnilo II, 2026-08-04 — moč primarnega testa
+
+Pred pisanjem harnessa sem preštel, na koliko dneh se odločitev o pasu sploh
+razlikuje. To je zgornja meja vzorca primarnega testa.
+
+```
+vstopni prag se razlikuje na    40 dni od 2700   (1,5 %)
+   ožji pas -> vstopimo, A ne:  26
+   širši pas -> A vstopi, mi ne: 14
+izstopni prag se razlikuje na   57 dni           (2,1 %)
+po letih (vstop): 2019:4 · 2020:14 · 2021:2 · 2022:2 · 2023:3 · 2024:12 · 2025:2 · 2026:1
+```
+
+**V §0 sem trdil, da bo vzorec »v stotinah«. Ni.** Pas se presoja vsak dan, a je
+odločilen redko: večino dni je cena krepko nad ali krepko pod pragom, zato premik
+praga z 1,4 % na 6,7 % ničesar ne spremeni. Odloča le, kadar cena leži **med**
+obema pragovoma. Poleg tega je 26 od 40 dni v dveh letih (2020 in 2024).
+
+### Posledica za sprejemni prag
+
+Pri 40 dneh, ki se ob 20-dnevnem horizontu strnejo v ~10 neodvisnih blokov,
+interval zaupanja skoraj gotovo ne bo izključil ničle. Zahtevati to bi pomenilo
+postaviti prag, ki ga test ne more doseči — **natanko napaka v zasnovi 4. koraka**,
+kjer nič ni prestalo, ker nič ni moglo.
+
+Pogoj 1 zato zahteva le **pravilno smer**; interval se poroča brez zahteve.
+Vlogo, ki jo je imel, prevzame **doslednost po štirih podobdobjih** (pogoj 3).
+
+Popravek je narejen **na podlagi velikosti vzorca, ne rezultatov** — harness ob
+tem zapisu še ne obstaja in nobena metrika ni bila izračunana.
+
+### Kar se s tem ne spremeni
+
+Placebo z nihajnostjo (§5.7) in izenačena izpostavljenost (§5.4) ostaneta
+**obvezni vrati**. Nižja moč pomeni manjšo zahtevo po značilnosti, ne manjšo
+zahtevo po tem, da rezultat ni artefakt.
 
 ---
 
