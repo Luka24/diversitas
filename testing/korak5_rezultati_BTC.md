@@ -213,24 +213,72 @@ poveča število prizadetih dni (40 → 52 pri pragu, 26 → 45 v dnevni študij
 
 Porazdelitev oddaljenosti cene od razpona čez vseh 2700 dni:
 
-| kje leži cena | dni | delež |
-|---|---|---|
-| nad +7 % | 1112 | **41,2 %** |
-| med +1 in +7 % ← **cona, kjer pas odloča** | 355 | **13,1 %** |
-| med −1 in +1 % | 117 | 4,3 % |
-| med −7 in −1 % | 341 | 12,6 % |
-| pod −7 % | 775 | **28,7 %** |
+| kje leži cena | dni | delež | |
+|---|---|---|---|
+| nad +7 % | 1112 | 41,2 % | nedosegljivo |
+| med +1 in +7 % | 355 | 13,1 % | ← **cona, vstopna stran** |
+| med −1 in +1 % | 117 | 4,3 % | |
+| med −7 in −1 % | 341 | 12,6 % | ← **cona, izstopna stran** |
+| pod −7 % | 775 | 28,7 % | nedosegljivo |
 
-Pas se giblje med ~1 in ~7 %. **Na 70 % dni je cena tako daleč od razpona, da je
-vseeno, kje je prag.** Le 13 % dni sploh leži v coni, kjer lahko odloča — in še
-tam mora prag pasti natanko med ceno in razpon.
+> **Popravek prve različice tega razdelka.** Najprej sem navedel le 13,1 % in s
+> tem preštel samo vstopno stran. Pas gradi **oba** praga, zato je cona
+> `+1…+7 %` **in** `−7…−1 %`, skupaj **696 dni = 25,8 %**.
+
+Pas se giblje med ~1 in ~7 %. **Na 69,9 % dni je cena več kot 7 % od razpona, kjer
+je popolnoma vseeno, kje je prag.** Četrtina dni leži v coni, kjer pas lahko
+odloča — in še tam mora prag pasti natanko med ceno in razpon, da se odločitev
+dejansko prevrne. Od 696 dni v coni se prag prevrne na 40 (E) oziroma 52 (G).
 
 To pojasni vse troje hkrati: zakaj je sweep pasu plato med 2 in 3 %, zakaj se
 prilagodljiv pas premakne na 10 dneh, in zakaj bolj odzivna oblika tega ne reši.
 **Oddaljenost od razpona je dvovrhna** — cena je v trendnem sredstvu redko blizu
 sredine. To ni napaka nastavitve, ampak lastnost podatkov.
 
-## 11. Kaj to pomeni za naprej
+## 11. Vse metrike na enem mestu
+
+Neto 0,30 % na stran, 2019-03-09 → 2026-07-29, 2700 dni:
+
+| | Sortino | Sharpe | CAGR | MaxDD | končni mnogokratnik | izpost. | poslov |
+|---|---|---|---|---|---|---|---|
+| **A** danes | 1,505 | 0,974 | 33,6 % | −45,2 % | **8,55×** | 41,9 % | 21 |
+| E | 1,537 | 0,996 | 35,0 % | −45,2 % | 9,20× | 43,0 % | 21 |
+| F | 1,576 | 1,017 | 35,9 % | −45,2 % | **9,67×** | 42,3 % | 21 |
+| G | 1,538 | 0,991 | 34,5 % | **−41,4 %** | 8,98× | 41,1 % | 21 |
+| H | 1,576 | 1,017 | 35,9 % | −45,2 % | **9,67×** | 42,3 % | 21 |
+
+Razlika proti današnji strategiji:
+
+| | ΔSortino | ΔCAGR | ΔMaxDD | Δkončni |
+|---|---|---|---|---|
+| E | +0,032 | +1,4 o. t. | 0,0 | +0,65× |
+| **F, H** | **+0,071** | **+2,3 o. t.** | 0,0 | **+1,12×** |
+| G | +0,033 | +0,9 o. t. | **+3,8 o. t. (boljše)** | +0,44× |
+
+### To je videti vredno — in prav zato je treba biti natančen
+
+F oziroma H prinese **CAGR z 33,6 % na 35,9 %** in končni mnogokratnik z 8,55× na
+9,67×. To je **13 % več končnega premoženja** v sedmih letih. Nihče ne bi rekel,
+da je to malo, in na sestanku bo nekdo upravičeno vprašal, zakaj tega ne vzamemo.
+
+Razlog ni, da je številka majhna. Razlog je, **od kod prihaja**:
+
+* F in H se od današnje strategije razlikujeta na **desetih dneh**, vseh v
+  oktobru 2020
+* v obdobjih II, III in IV sta **dobesedno identični** A — ista serija pozicij,
+  isti Sortino do tretje decimalke
+* celotnih +1,12× torej izvira iz enega meseca izpred petih let in pol
+
+Pravilo, katerega celoten učinek je en dogodek, ni pravilo — je opažanje o
+oktobru 2020. Če bi ga sprejeli, bi v strategijo vgradili prepričanje, da se bo
+tisti mesec ponovil.
+
+G je drugačen primer: **izboljša najhujši padec za 3,8 o. t.** (−45,2 % → −41,4 %),
+kar ostane tudi po izenačeni izpostavljenosti. To je edini rezultat v tem koraku,
+ki se ne skrči na eno epizodo — a G se v zadnjem obdobju sesuje na Sortino 1,004
+proti 1,603 pri A, kar je predraga cena za boljši padec.
+
+## 12. Kaj to pomeni za naprej
 
 **Prilagodljivost na izstopni strani škoduje.** F (fiksni izstop) je boljša od E
 (prilagodljivi izstop) — 1,576 proti 1,537 — in razlika med njima je natanko
