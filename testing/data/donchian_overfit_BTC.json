@@ -1,0 +1,105 @@
+{
+ "fee_per_side_pct": 0.3,
+ "period": 20,
+ "S_blocks": 12,
+ "pbo_BTC": {
+  "paths": 924,
+  "pbo": 0.672,
+  "median_logit": -0.511,
+  "picked_in_sample": {
+   "off": 0,
+   "10": 84,
+   "12": 418,
+   "15": 61,
+   "20": 0,
+   "25": 5,
+   "30": 1,
+   "40": 355,
+   "55": 0
+  },
+  "cpcv_winrate_pct": 97.5,
+  "cpcv_median_delta": 0.332
+ },
+ "pbo_ETH": {
+  "paths": 924,
+  "pbo": 0.433,
+  "median_logit": 1.946,
+  "picked_in_sample": {
+   "off": 48,
+   "10": 2,
+   "12": 6,
+   "15": 151,
+   "20": 597,
+   "25": 0,
+   "30": 0,
+   "40": 120,
+   "55": 0
+  },
+  "cpcv_winrate_pct": 92.4,
+  "cpcv_median_delta": 0.73
+ },
+ "independence": {
+  "price_returns": 0.821,
+  "strategy_returns": 0.477,
+  "position_overlap_pct": 76.5,
+  "n_overlap_days": 2400
+ },
+ "circular_shift": {
+  "BTC": {
+   "n": 1000,
+   "real": 1.821,
+   "off": 1.505,
+   "shift_mean": 1.172,
+   "shift_p05": 0.518,
+   "shift_p95": 1.75,
+   "real_percentile": 96.3
+  },
+  "ETH": {
+   "n": 1000,
+   "real": 1.87,
+   "off": 1.078,
+   "shift_mean": 1.208,
+   "shift_p05": 0.549,
+   "shift_p95": 1.997,
+   "real_percentile": 91.4
+  }
+ },
+ "extra_assets": {
+  "XRP": {
+   "n_bars": 2400,
+   "from": "2020-01-02",
+   "sortino_off": 0.063,
+   "sortino_on": 0.78,
+   "maxdd_off": -84.9,
+   "maxdd_on": -64.7,
+   "final_off": 0.41,
+   "final_on": 1.78,
+   "expo_off": 24.0,
+   "expo_on": 14.1
+  },
+  "BNB": {
+   "n_bars": 2400,
+   "from": "2020-01-02",
+   "sortino_off": 0.971,
+   "sortino_on": 1.065,
+   "maxdd_off": -68.1,
+   "maxdd_on": -60.1,
+   "final_off": 3.79,
+   "final_on": 4.3,
+   "expo_off": 41.7,
+   "expo_on": 34.5
+  },
+  "ADA": {
+   "n_bars": 2400,
+   "from": "2020-01-02",
+   "sortino_off": 1.559,
+   "sortino_on": 1.244,
+   "maxdd_off": -61.8,
+   "maxdd_on": -67.3,
+   "final_off": 9.85,
+   "final_on": 4.83,
+   "expo_off": 24.8,
+   "expo_on": 21.6
+  }
+ }
+}
