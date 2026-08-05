@@ -1,0 +1,100 @@
+{
+ "symbol": "ETH",
+ "fee_per_side_pct": 0.3,
+ "period": 20,
+ "window": [
+  "2020-01-01",
+  "2026-07-27"
+ ],
+ "n_bars": 2400,
+ "preregistered": "testing/nacrt_eth_donchian.md",
+ "off": {
+  "sortino": 1.078,
+  "sharpe": 0.756,
+  "cagr": 28.5,
+  "maxdd": -60.7,
+  "final": 5.21,
+  "exposure": 37.1,
+  "upside_capture": 39.2,
+  "downside_capture": 36.8,
+  "trades": 17,
+  "turnover": 34.0,
+  "fees_pct_of_capital": 10.2
+ },
+ "on": {
+  "sortino": 1.87,
+  "sharpe": 1.171,
+  "cagr": 52.6,
+  "maxdd": -42.3,
+  "final": 16.07,
+  "exposure": 32.9,
+  "upside_capture": 35.7,
+  "downside_capture": 30.3,
+  "trades": 13,
+  "turnover": 26.0,
+  "fees_pct_of_capital": 7.8
+ },
+ "subperiods": {
+  "windows": {
+   "I": {
+    "days": 397,
+    "off": 0.957,
+    "on": 2.437,
+    "better": true
+   },
+   "II": {
+    "days": 668,
+    "off": 1.207,
+    "on": 1.904,
+    "better": true
+   },
+   "III": {
+    "days": 670,
+    "off": 1.589,
+    "on": 2.51,
+    "better": true
+   },
+   "IV": {
+    "days": 665,
+    "off": 0.979,
+    "on": 0.979,
+    "better": false
+   }
+  },
+  "wins": 3,
+  "n": 4
+ },
+ "exposure_matched": {
+  "scale": 0.887,
+  "off_scaled_sortino": 1.078,
+  "off_scaled_maxdd": -55.3,
+  "off_scaled_downside_capture": 32.6,
+  "off_scaled_exposure": 32.9,
+  "donchian_maxdd": -42.3,
+  "donchian_downside_capture": 30.3,
+  "dd_total": 18.4,
+  "dd_from_exposure": 5.4,
+  "dd_from_selection": 13.0
+ },
+ "position_effect": {
+  "baseline": 4.11,
+  "drži nas ZUNAJ": {
+   "n": 100,
+   "mean_fwd20": -6.24
+  },
+  "drži nas NOTRI": {
+   "n": 0,
+   "mean_fwd20": null
+  }
+ },
+ "lookahead": {
+  "n_dates": 40,
+  "n_differing": 0
+ },
+ "verdict": {
+  "c1_sortino": true,
+  "c2_subperiods": true,
+  "c3_drawdown": true,
+  "passes": true
+ }
+}
