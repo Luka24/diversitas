@@ -1,0 +1,261 @@
+{
+ "symbol": "BTC",
+ "fee_per_side_pct": 0.3,
+ "note": "diagnostika oblike krivulje; argmaks se namenoma ne izbira",
+ "sweep_k": {
+  "0.0": {
+   "sortino": 1.505,
+   "cagr": 33.6,
+   "maxdd": -45.2,
+   "final": 8.55,
+   "exposure": 41.9,
+   "trades": 21,
+   "turnover": 42.0,
+   "band_mean": 3.0,
+   "band_p1": 3.0,
+   "band_p99": 3.0,
+   "days_vs_base": 0,
+   "sub": {
+    "I": 1.505,
+    "II": 1.239,
+    "III": 1.99,
+    "IV": 1.603
+   }
+  },
+  "0.25": {
+   "sortino": 1.505,
+   "cagr": 33.6,
+   "maxdd": -45.2,
+   "final": 8.55,
+   "exposure": 41.9,
+   "trades": 21,
+   "turnover": 42.0,
+   "band_mean": 2.98,
+   "band_p1": 2.49,
+   "band_p99": 3.66,
+   "days_vs_base": 0,
+   "sub": {
+    "I": 1.505,
+    "II": 1.239,
+    "III": 1.99,
+    "IV": 1.603
+   }
+  },
+  "0.5": {
+   "sortino": 1.577,
+   "cagr": 35.9,
+   "maxdd": -45.2,
+   "final": 9.67,
+   "exposure": 42.3,
+   "trades": 21,
+   "turnover": 42.0,
+   "band_mean": 2.98,
+   "band_p1": 2.06,
+   "band_p99": 4.47,
+   "days_vs_base": 9,
+   "sub": {
+    "I": 1.729,
+    "II": 1.239,
+    "III": 1.99,
+    "IV": 1.603
+   }
+  },
+  "0.75": {
+   "sortino": 1.577,
+   "cagr": 35.9,
+   "maxdd": -45.2,
+   "final": 9.67,
+   "exposure": 42.3,
+   "trades": 21,
+   "turnover": 42.0,
+   "band_mean": 3.0,
+   "band_p1": 1.71,
+   "band_p99": 5.46,
+   "days_vs_base": 9,
+   "sub": {
+    "I": 1.729,
+    "II": 1.239,
+    "III": 1.99,
+    "IV": 1.603
+   }
+  },
+  "1.0": {
+   "sortino": 1.576,
+   "cagr": 35.9,
+   "maxdd": -45.2,
+   "final": 9.67,
+   "exposure": 42.3,
+   "trades": 21,
+   "turnover": 42.0,
+   "band_mean": 3.05,
+   "band_p1": 1.42,
+   "band_p99": 6.66,
+   "days_vs_base": 10,
+   "sub": {
+    "I": 1.729,
+    "II": 1.239,
+    "III": 1.99,
+    "IV": 1.603
+   }
+  },
+  "1.5": {
+   "sortino": 1.576,
+   "cagr": 35.9,
+   "maxdd": -45.2,
+   "final": 9.67,
+   "exposure": 42.3,
+   "trades": 21,
+   "turnover": 42.0,
+   "band_mean": 3.21,
+   "band_p1": 0.97,
+   "band_p99": 9.93,
+   "days_vs_base": 10,
+   "sub": {
+    "I": 1.729,
+    "II": 1.239,
+    "III": 1.99,
+    "IV": 1.603
+   }
+  },
+  "2.0": {
+   "sortino": 1.576,
+   "cagr": 35.9,
+   "maxdd": -45.2,
+   "final": 9.67,
+   "exposure": 42.3,
+   "trades": 21,
+   "turnover": 42.0,
+   "band_mean": 3.5,
+   "band_p1": 0.67,
+   "band_p99": 14.81,
+   "days_vs_base": 10,
+   "sub": {
+    "I": 1.729,
+    "II": 1.239,
+    "III": 1.99,
+    "IV": 1.603
+   }
+  },
+  "3.0": {
+   "sortino": 1.494,
+   "cagr": 33.1,
+   "maxdd": -45.2,
+   "final": 8.27,
+   "exposure": 41.4,
+   "trades": 21,
+   "turnover": 42.0,
+   "band_mean": 4.62,
+   "band_p1": 0.31,
+   "band_p99": 32.89,
+   "days_vs_base": 35,
+   "sub": {
+    "I": 1.729,
+    "II": 1.239,
+    "III": 1.631,
+    "IV": 1.603
+   }
+  }
+ },
+ "sweep_w": {
+  "20": {
+   "sortino": 1.577,
+   "cagr": 35.9,
+   "maxdd": -45.2,
+   "final": 9.67,
+   "exposure": 42.3,
+   "trades": 21,
+   "turnover": 42.0,
+   "band_mean": 3.04,
+   "band_p1": 1.49,
+   "band_p99": 5.35,
+   "days_vs_base": 9,
+   "sub": {
+    "I": 1.729,
+    "II": 1.239,
+    "III": 1.99,
+    "IV": 1.603
+   }
+  },
+  "50": {
+   "sortino": 1.576,
+   "cagr": 35.9,
+   "maxdd": -45.2,
+   "final": 9.67,
+   "exposure": 42.3,
+   "trades": 21,
+   "turnover": 42.0,
+   "band_mean": 3.05,
+   "band_p1": 1.42,
+   "band_p99": 6.66,
+   "days_vs_base": 10,
+   "sub": {
+    "I": 1.729,
+    "II": 1.239,
+    "III": 1.99,
+    "IV": 1.603
+   }
+  },
+  "100": {
+   "sortino": 1.718,
+   "cagr": 40.3,
+   "maxdd": -45.2,
+   "final": 12.24,
+   "exposure": 43.1,
+   "trades": 21,
+   "turnover": 42.0,
+   "band_mean": 3.02,
+   "band_p1": 1.14,
+   "band_p99": 6.66,
+   "days_vs_base": 33,
+   "sub": {
+    "I": 2.17,
+    "II": 1.239,
+    "III": 1.99,
+    "IV": 1.603
+   }
+  },
+  "250": {
+   "sortino": 1.576,
+   "cagr": 35.9,
+   "maxdd": -45.2,
+   "final": 9.67,
+   "exposure": 42.3,
+   "trades": 21,
+   "turnover": 42.0,
+   "band_mean": 2.98,
+   "band_p1": 1.01,
+   "band_p99": 7.8,
+   "days_vs_base": 10,
+   "sub": {
+    "I": 1.729,
+    "II": 1.239,
+    "III": 1.99,
+    "IV": 1.603
+   }
+  },
+  "expanding": {
+   "sortino": 1.576,
+   "cagr": 35.9,
+   "maxdd": -45.2,
+   "final": 9.67,
+   "exposure": 42.3,
+   "trades": 21,
+   "turnover": 42.0,
+   "band_mean": 2.65,
+   "band_p1": 0.97,
+   "band_p99": 6.18,
+   "days_vs_base": 10,
+   "sub": {
+    "I": 1.729,
+    "II": 1.239,
+    "III": 1.99,
+    "IV": 1.603
+   }
+  }
+ },
+ "shape": {
+  "k_range": 0.083,
+  "w_range": 0.142,
+  "baseline_sortino": 1.505
+ }
+}
