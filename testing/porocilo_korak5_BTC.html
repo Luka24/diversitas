@@ -1,0 +1,320 @@
+<title>Korak 5 — prilagodljivi mrtvi pas</title>
+
+<style>
+  :root{
+    --ground:#F6F8F6; --panel:#FFFFFF; --panel-2:#F0F4F1;
+    --ink:#17211F; --muted:#65736E; --rule:#DCE3DF;
+    --accent:#0E6455; --accent-soft:#DCEDE8; --fail:#A34329;
+    --serif:Georgia,"Iowan Old Style","Palatino Linotype",Palatino,serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:ui-monospace,"Cascadia Mono","SF Mono",Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--ground:#0E1413;--panel:#151D1B;--panel-2:#1A2422;--ink:#E2E9E5;
+          --muted:#8C9A95;--rule:#26312E;--accent:#4FBCA4;--accent-soft:#173029;
+          --fail:#D9805E;}
+  }
+  :root[data-theme="dark"]{--ground:#0E1413;--panel:#151D1B;--panel-2:#1A2422;
+    --ink:#E2E9E5;--muted:#8C9A95;--rule:#26312E;--accent:#4FBCA4;
+    --accent-soft:#173029;--fail:#D9805E;}
+  :root[data-theme="light"]{--ground:#F6F8F6;--panel:#FFFFFF;--panel-2:#F0F4F1;
+    --ink:#17211F;--muted:#65736E;--rule:#DCE3DF;--accent:#0E6455;
+    --accent-soft:#DCEDE8;--fail:#A34329;}
+
+  body{background:var(--ground);color:var(--ink);font-family:var(--sans);
+       line-height:1.58;font-size:16.5px;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:820px;margin:0 auto;padding:48px 24px 72px;
+        display:flex;flex-direction:column;gap:30px;}
+  .prose{max-width:62ch;}
+  p{margin:0 0 11px;} p:last-child{margin-bottom:0;}
+  h1,h2{font-family:var(--serif);font-weight:600;text-wrap:balance;margin:0;}
+  h1{font-size:2.2rem;line-height:1.15;letter-spacing:-.015em;}
+  h2{font-size:1.3rem;margin-bottom:3px;}
+  .eyebrow{font-family:var(--mono);font-size:.7rem;letter-spacing:.16em;
+           text-transform:uppercase;color:var(--accent);margin-bottom:10px;}
+  .lede{font-size:1.06rem;color:var(--muted);max-width:56ch;margin-top:11px;}
+  .meta{font-family:var(--mono);font-size:.75rem;color:var(--muted);
+        border-top:1px solid var(--rule);padding-top:11px;margin-top:18px;
+        display:flex;flex-wrap:wrap;gap:6px 20px;}
+  section{display:flex;flex-direction:column;gap:13px;}
+  hr{border:0;border-top:1px solid var(--rule);margin:0;}
+
+  .verdict{background:var(--panel);border:1px solid var(--rule);
+           border-left:4px solid var(--accent);border-radius:3px;padding:20px 24px;}
+  .verdict .big{font-family:var(--serif);font-size:1.45rem;line-height:1.3;
+                margin-bottom:8px;}
+
+  .formula{background:var(--panel-2);border:1px solid var(--rule);border-radius:3px;
+           padding:15px 18px;font-family:var(--mono);font-size:.86rem;
+           overflow-x:auto;line-height:1.85;}
+  .formula em{color:var(--accent);font-style:normal;font-weight:700;}
+
+  .defs{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  @media (max-width:640px){.defs{grid-template-columns:1fr;}}
+  .def{background:var(--panel);border:1px solid var(--rule);border-radius:3px;
+       padding:15px 18px;font-size:.88rem;}
+  .def b{font-family:var(--serif);font-size:1.02rem;font-weight:600;
+         display:block;margin-bottom:5px;}
+
+  .scroll{overflow-x:auto;}
+  table{border-collapse:collapse;width:100%;font-size:.86rem;}
+  th,td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--rule);
+        white-space:nowrap;}
+  th:first-child,td:first-child{text-align:left;}
+  thead th{font-family:var(--mono);font-size:.67rem;letter-spacing:.08em;
+           text-transform:uppercase;color:var(--muted);font-weight:500;
+           border-bottom:1px solid var(--ink);}
+  tbody td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+  tr.hi td{background:var(--accent-soft);}
+  tr.warn td{background:color-mix(in srgb,var(--fail) 12%,transparent);}
+  caption{caption-side:bottom;text-align:left;font-size:.79rem;color:var(--muted);
+          padding-top:8px;}
+
+  .sw{font-family:var(--mono);font-size:.76rem;font-variant-numeric:tabular-nums;
+      border-collapse:collapse;width:100%;}
+  .sw td,.sw th{padding:5px 4px;text-align:center;border:0;white-space:nowrap;}
+  .sw th:first-child,.sw td:first-child{text-align:left;color:var(--muted);
+      padding-right:10px;letter-spacing:.05em;text-transform:uppercase;
+      font-size:.66rem;}
+  .sw tr.val td{border-top:1px solid var(--rule);}
+  .sw td.same{color:var(--muted);}
+  .sw td.up{background:color-mix(in srgb,var(--fail) 16%,transparent);
+            font-weight:700;border-radius:2px;}
+  .sw td.dn{color:var(--fail);}
+
+  .zone{display:flex;flex-direction:column;gap:4px;font-size:.83rem;}
+  .zrow{display:grid;grid-template-columns:120px 1fr 54px;align-items:center;gap:10px;}
+  .zbar{height:16px;border-radius:1px;}
+  .zbar.dead{background:var(--muted);opacity:.4;}
+  .zbar.live{background:var(--accent);}
+  .zrow .zl{font-family:var(--mono);color:var(--muted);font-size:.77rem;}
+  .zrow .zv{font-family:var(--mono);font-variant-numeric:tabular-nums;
+            text-align:right;color:var(--muted);font-size:.79rem;}
+
+  ul{margin:0;padding-left:1.1em;}
+  li{margin-bottom:6px;} li:last-child{margin-bottom:0;}
+  strong{font-weight:650;}
+  @media (max-width:620px){
+    h1{font-size:1.8rem;} body{font-size:15.5px;}
+    .wrap{padding:34px 18px 56px;gap:26px;}
+    .zrow{grid-template-columns:96px 1fr 46px;}
+  }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Diversitas Lean · korak 5 · BTC</div>
+    <h1>Prilagodljivi mrtvi pas ostane neuporabljen</h1>
+    <p class="lede">Preizkušenih 23 nastavitev. Nekatere so dale boljše številke.
+      Nobene nismo vzeli.</p>
+    <div class="meta">
+      <span>BTC · Binance</span><span>2019-03-09 → 2026-07-29</span>
+      <span>2700 dni</span><span>0,30 % na stran</span>
+    </div>
+  </header>
+
+  <div class="verdict">
+    <p class="big">Ostane fiksnih 3 %.</p>
+    <p class="prose">Najboljša najdena nastavitev je dala <strong>43 % več
+      končnega premoženja</strong>. Nismo je vzeli, ker se od današnje strategije
+      razlikuje na 33 dneh — in vseh 33 je pred letom 2021.</p>
+  </div>
+
+  <section>
+    <h2>Kaj je mrtvi pas</h2>
+    <div class="prose">
+      <p>Strategija ne kupi, ko cena prečka razpon, ampak šele ko je <strong>3 %
+        nad njim</strong>; in ne proda, dokler ni 3 % pod njim. Vmes se ne zgodi
+        nič — zato »mrtvi« pas. Namen je, da ne skače noter-ven ob vsakem nihaju.</p>
+      <p>Preizkušali smo, ali naj se ta pas <strong>širi in oži z nihajnostjo</strong>
+        — ozek v mirnem trgu, širok v divjem.</p>
+    </div>
+    <div class="formula">
+      danes &nbsp; pas = <em>3 %</em><br>
+      test &nbsp;&nbsp; pas = <em>3 %</em> × ( nihajnost<sub>20 dni</sub> ÷
+      povprečje<sub><em>w</em></sub>(nihajnost) ) <sup><em>k</em></sup>
+    </div>
+
+    <div class="defs">
+      <div class="def">
+        <b>»Pas diha«</b>
+        Pas se sam širi in oži. Ko nihajnost naraste, se razširi; ko se trg
+        umiri, se zoži. Koliko močno se odzove, določa <b style="display:inline">k</b>:
+        pri k = 0 se ne premakne (današnje stanje), pri k = 2 podvojitev
+        nihajnosti pas <em>početveri</em>.
+      </div>
+      <div class="def">
+        <b>»Keltner«</b>
+        Poklicni standard iz tehnične analize — Keltnerjev kanal je
+        <code>povprečje ± 2 × ATR</code>. Nihajnost primerja z <b style="display:inline">vso
+        zgodovino</b>, ne z zadnjimi tedni. Pri nas je to <b style="display:inline">w</b>:
+        pri w = 50 vprašamo »je nihajnost nenavadna <em>zdaj</em>«, pri
+        w = vsa zgodovina pa »je visoka <em>sploh</em>«.
+      </div>
+    </div>
+
+    <div class="prose">
+      <p>Sidro ostane 3 %, obe nihajnosti pa strategija <strong>že računa</strong>
+        — nobene nove nastavitve nismo uvedli.</p>
+    </div>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Vse preizkušene nastavitve</h2>
+    <div class="prose">
+      <p>Nič ni izpuščeno — spodaj so vsi rezultati. Sivo pomeni <em>enako kot
+        danes ali enako kot sosedje</em>.</p>
+    </div>
+
+    <div class="scroll">
+      <table class="sw">
+        <tr><th>k — moč odziva</th><th>0</th><th>0,25</th><th>0,5</th><th>0,75</th>
+          <th>1</th><th>1,5</th><th>2</th><th>3</th></tr>
+        <tr class="val"><td>Sortino</td><td class="same">1,505</td>
+          <td class="same">1,505</td><td>1,577</td><td>1,577</td><td>1,576</td>
+          <td>1,576</td><td>1,576</td><td class="dn">1,494</td></tr>
+      </table>
+    </div>
+    <div class="prose" style="font-size:.87rem;color:var(--muted)">
+      Od k = 0,5 do k = 2 je rezultat <strong>popolnoma isti</strong>, čeprav se
+      pas pri k = 0,5 giblje med 2,1 in 4,5 %, pri k = 2 pa med 0,7 in 14,8 %.
+      Štirikrat bolj odziven pas ne doseže nobene nove odločitve. Pri k = 3
+      začne kvariti.
+    </div>
+
+    <div class="scroll" style="margin-top:6px">
+      <table class="sw">
+        <tr><th>w — okno primerjave</th><th>20</th><th>50</th><th>60</th><th>70</th>
+          <th>80</th><th>90</th><th>95</th><th>100</th><th>105</th><th>110</th>
+          <th>125</th><th>150</th><th>200</th><th>250</th><th>vse</th></tr>
+        <tr class="val"><td>Sortino</td><td class="same">1,577</td>
+          <td class="same">1,576</td><td class="same">1,576</td>
+          <td class="same">1,576</td><td class="same">1,576</td>
+          <td class="up">1,718</td><td class="up">1,718</td><td class="up">1,718</td>
+          <td class="up">1,718</td><td class="up">1,718</td><td class="up">1,718</td>
+          <td class="up">1,718</td><td class="same">1,576</td>
+          <td class="same">1,576</td><td class="same">1,576</td></tr>
+      </table>
+    </div>
+    <div class="prose" style="font-size:.87rem;color:var(--muted)">
+      Rdeče polje je edina nastavitev, ki kaj premakne. Preizkusili smo tudi
+      obe strani pasu posebej (samo nakup / nakup in prodaja), skupaj
+      <strong>23 nastavitev</strong>. <strong>k = 0</strong> je vgrajena
+      kontrola: mora dati bit-identičen rezultat kot današnja strategija. Ujelo
+      se je.
+    </div>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Rezultati</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Različica</th><th>Sortino</th><th>CAGR</th>
+          <th>Končni</th><th>Najv. padec</th><th>Dni razlike</th>
+          <th>Boljša v obdobjih</th></tr></thead>
+        <tbody>
+          <tr class="hi"><td><strong>Danes</strong> — fiksnih 3 %</td>
+            <td class="n">1,505</td><td class="n">33,6 %</td><td class="n">8,55×</td>
+            <td class="n">−45,2 %</td><td class="n">—</td><td class="n">—</td></tr>
+          <tr><td>Diha (50 dni), nakup + prodaja</td>
+            <td class="n">1,537</td><td class="n">35,0 %</td><td class="n">9,20×</td>
+            <td class="n">−45,2 %</td><td class="n">76</td><td class="n">1 od 4</td></tr>
+          <tr><td>Diha (50 dni), samo nakup</td>
+            <td class="n">1,576</td><td class="n">35,9 %</td><td class="n">9,67×</td>
+            <td class="n">−45,2 %</td><td class="n">10</td><td class="n">1 od 4</td></tr>
+          <tr><td>Keltner, nakup + prodaja</td>
+            <td class="n">1,538</td><td class="n">34,5 %</td><td class="n">8,98×</td>
+            <td class="n"><strong>−41,4 %</strong></td><td class="n">66</td>
+            <td class="n">0 od 4</td></tr>
+          <tr><td>Keltner, samo nakup</td>
+            <td class="n">1,576</td><td class="n">35,9 %</td><td class="n">9,67×</td>
+            <td class="n">−45,2 %</td><td class="n">10</td><td class="n">1 od 4</td></tr>
+          <tr class="warn"><td><strong>Najboljša</strong> (w = 90–150)</td>
+            <td class="n"><strong>1,718</strong></td><td class="n"><strong>40,3 %</strong></td>
+            <td class="n"><strong>12,24×</strong></td><td class="n">−45,2 %</td>
+            <td class="n">33</td><td class="n">1 od 4</td></tr>
+        </tbody>
+        <caption>Vse imajo <strong>21 poslov in enak obrat</strong> — pas ne
+          spremeni, kaj strategija počne, le kdaj natanko. Stroškovne kazni ni.</caption>
+      </table>
+    </div>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Zakaj nismo vzeli boljših številk</h2>
+    <div class="prose">
+      <p><strong>Razlog ni, da je razlika majhna, ampak od kod prihaja.</strong>
+        Pri vsaki različici smo pogledali, na katerih dneh se sploh razlikuje od
+        današnje strategije:</p>
+      <ul>
+        <li><strong>Najboljša:</strong> 33 dni v dveh epizodah — marec 2019 in
+          oktober 2020. V <strong>zadnjih petih letih in pol niti enega dne
+          razlike.</strong></li>
+        <li><strong>Diha, samo nakup:</strong> 10 dni, vseh deset oktobra 2020.</li>
+      </ul>
+      <p>Tistih deset oziroma 33 dni je celoten dokaz, ki ga imamo. Če bi šli
+        drugače, bi iste številke izgledale kot dokaz proti spremembi.</p>
+    </div>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Pravi razlog: cena je redko blizu razpona</h2>
+    <div class="prose">
+      <p>Pas se giblje med približno 1 in 7 %. Kje sploh leži cena glede na
+        razpon — vseh 2700 dni:</p>
+    </div>
+
+    <div class="zone">
+      <div class="zrow"><span class="zl">nad +7 %</span>
+        <span class="zbar dead" style="width:41.2%"></span><span class="zv">41,2 %</span></div>
+      <div class="zrow"><span class="zl">+1 do +7 %</span>
+        <span class="zbar live" style="width:13.1%"></span><span class="zv">13,1 %</span></div>
+      <div class="zrow"><span class="zl">−1 do +1 %</span>
+        <span class="zbar dead" style="width:4.3%"></span><span class="zv">4,3 %</span></div>
+      <div class="zrow"><span class="zl">−7 do −1 %</span>
+        <span class="zbar live" style="width:12.6%"></span><span class="zv">12,6 %</span></div>
+      <div class="zrow"><span class="zl">pod −7 %</span>
+        <span class="zbar dead" style="width:28.7%"></span><span class="zv">28,7 %</span></div>
+    </div>
+
+    <div class="prose">
+      <p>Zeleni vrstici sta edini coni, kjer širina pasu lahko karkoli odloči —
+        skupaj <strong>25,8 %</strong> dni. Na preostalih <strong>70 %</strong>
+        je cena tako daleč od razpona, da je vseeno, ali je prag 1 % ali 7 %.
+        In tudi v tisti četrtini se prag dejansko prevrne le na
+        <strong>40 do 52 dneh od 2700</strong>.</p>
+      <p>To ni napaka nastavitve, ampak lastnost podatkov: v sredstvu, ki
+        trendira, je cena redko blizu sredine.</p>
+    </div>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Kaj ostane uporabnega</h2>
+    <div class="prose">
+      <ul>
+        <li><strong>Prilagajanje pri prodaji škoduje.</strong> Fiksna prodaja je
+          boljša od prilagodljive, in vseh 66 dni razlike med njima je na
+          prodajni strani.</li>
+        <li><strong>Vstopna stran je robustna.</strong> Dve povsem različni
+          formuli dasta <em>isto</em> serijo pozicij.</li>
+        <li><strong>Mrtvi pas je izčrpan.</strong> Nadaljnje vrtanje ne bo
+          prineslo ničesar.</li>
+        <li><strong>Naslednje vprašanje je drugo:</strong> ne <em>kje</em> je
+          prag, ampak <em>koliko pogojev</em> mora biti hkrati izpolnjenih za
+          vstop.</li>
+      </ul>
+    </div>
+  </section>
+
+</div>
