@@ -1,0 +1,218 @@
+{
+ "cells": {
+  "1 danes": {
+   "sortino": 1.505,
+   "cagr": 33.6,
+   "maxdd": -45.2,
+   "final": 8.55,
+   "exposure": 41.9,
+   "turnover": 42.0,
+   "fees_pct": 12.6,
+   "sub": {
+    "I": 1.5,
+    "II": 1.24,
+    "III": 1.99,
+    "IV": 1.6
+   },
+   "wins_vs_control": 4
+  },
+  "2 k/3": {
+   "sortino": 1.949,
+   "cagr": 42.7,
+   "maxdd": -36.2,
+   "final": 13.86,
+   "exposure": 41.8,
+   "turnover": 99.3,
+   "fees_pct": 29.8,
+   "sub": {
+    "I": 2.41,
+    "II": 1.63,
+    "III": 2.01,
+    "IV": 1.77
+   },
+   "wins_vs_control": 4
+  },
+  "3 +Donchian": {
+   "sortino": 1.821,
+   "cagr": 36.1,
+   "maxdd": -33.1,
+   "final": 9.78,
+   "exposure": 32.9,
+   "turnover": 34.0,
+   "fees_pct": 10.2,
+   "sub": {
+    "I": 2.39,
+    "II": 1.09,
+    "III": 2.8,
+    "IV": 1.45
+   },
+   "wins_vs_control": 2
+  },
+  "4 k/4 +Donch": {
+   "sortino": 1.987,
+   "cagr": 37.8,
+   "maxdd": -32.7,
+   "final": 10.71,
+   "exposure": 36.6,
+   "turnover": 136.0,
+   "fees_pct": 40.8,
+   "sub": {
+    "I": 2.98,
+    "II": 1.43,
+    "III": 1.75,
+    "IV": 1.6
+   },
+   "wins_vs_control": 2
+  },
+  "5 k/3 +ATR3": {
+   "sortino": 1.679,
+   "cagr": 34.4,
+   "maxdd": -48.3,
+   "final": 8.92,
+   "exposure": 40.5,
+   "turnover": 97.3,
+   "fees_pct": 29.2,
+   "sub": {
+    "I": 2.47,
+    "II": 1.08,
+    "III": 1.42,
+    "IV": 1.73
+   },
+   "wins_vs_control": 2
+  }
+ },
+ "bootstrap": {
+  "2 k/3": {
+   "delta": 0.444,
+   "ci": [
+    -0.03,
+    1.002
+   ],
+   "excl0": false
+  },
+  "3 +Donchian": {
+   "delta": 0.317,
+   "ci": [
+    -0.315,
+    1.074
+   ],
+   "excl0": false
+  },
+  "4 k/4 +Donch": {
+   "delta": 0.483,
+   "ci": [
+    -0.116,
+    1.155
+   ],
+   "excl0": false
+  },
+  "5 k/3 +ATR3": {
+   "delta": 0.175,
+   "ci": [
+    -0.557,
+    0.925
+   ],
+   "excl0": false
+  }
+ },
+ "mcs": {
+  "povprecen donos": {
+   "kept": [
+    "1 danes",
+    "2 k/3",
+    "3 +Donchian",
+    "4 k/4 +Donch",
+    "5 k/3 +ATR3"
+   ],
+   "eliminated": []
+  },
+  "s kaznijo za padce": {
+   "kept": [
+    "1 danes",
+    "2 k/3",
+    "3 +Donchian",
+    "4 k/4 +Donch",
+    "5 k/3 +ATR3"
+   ],
+   "eliminated": []
+  }
+ },
+ "walk_forward": {
+  "3y/1y": {
+   "picks": [
+    "4",
+    "2",
+    "2",
+    "3"
+   ],
+   "refit": 1.591,
+   "control": 1.43
+  },
+  "2y/1y": {
+   "picks": [
+    "4",
+    "4",
+    "2",
+    "2",
+    "3"
+   ],
+   "refit": 1.096,
+   "control": 1.051
+  }
+ },
+ "pbo_purged": 0.434,
+ "pbo_raw": 0.505,
+ "shift": {
+  "2 k/3": {
+   "real": 1.949,
+   "mean": 1.032,
+   "percentile": 98.2
+  },
+  "4 k/4 +Donch": {
+   "real": 1.987,
+   "mean": 0.934,
+   "percentile": 99.4
+  }
+ },
+ "fees": {
+  "1 danes": {
+   "0.3": 1.505,
+   "0.4": 1.48,
+   "0.5": 1.455,
+   "0.75": 1.392,
+   "1.0": 1.33
+  },
+  "2 k/3": {
+   "0.3": 1.949,
+   "0.4": 1.882,
+   "0.5": 1.816,
+   "0.75": 1.65,
+   "1.0": 1.485,
+   "breakeven": null
+  },
+  "3 +Donchian": {
+   "0.3": 1.821,
+   "0.4": 1.797,
+   "0.5": 1.772,
+   "0.75": 1.71,
+   "1.0": 1.648,
+   "breakeven": null
+  },
+  "4 k/4 +Donch": {
+   "0.3": 1.987,
+   "0.4": 1.882,
+   "0.5": 1.776,
+   "0.75": 1.516,
+   "1.0": 1.258,
+   "breakeven": 1.0
+  },
+  "5 k/3 +ATR3": {
+   "0.3": 1.679,
+   "0.4": 1.613,
+   "0.5": 1.548,
+   "0.75": 1.383,
+   "1.0": 1.219,
+   "breakeven": 0.75
+  }
+ }
+}
