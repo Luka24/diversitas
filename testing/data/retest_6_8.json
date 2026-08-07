@@ -1,0 +1,176 @@
+{
+ "cells": {
+  "danes": {
+   "sortino": 1.505,
+   "cagr": 33.6,
+   "maxdd": -45.2,
+   "final": 8.55,
+   "exposure": 41.9,
+   "trades": 21,
+   "turnover": 42.0,
+   "up_capture": 41.5,
+   "down_capture": 37.8,
+   "entry_lag": 3.5,
+   "blocked_days": 77,
+   "sub": {
+    "I": 1.5,
+    "II": 1.24,
+    "III": 1.99,
+    "IV": 1.6
+   }
+  },
+  "2/3": {
+   "sortino": 1.563,
+   "cagr": 36.9,
+   "maxdd": -53.3,
+   "final": 10.21,
+   "exposure": 49.9,
+   "trades": 28,
+   "turnover": 57.0,
+   "up_capture": 47.4,
+   "down_capture": 43.5,
+   "entry_lag": 5.7,
+   "blocked_days": 189,
+   "sub": {
+    "I": 2.55,
+    "II": 1.4,
+    "III": 0.76,
+    "IV": 1.39
+   }
+  },
+  "ATR3": {
+   "sortino": 1.483,
+   "cagr": 29.4,
+   "maxdd": -46.2,
+   "final": 6.71,
+   "exposure": 31.6,
+   "trades": 27,
+   "turnover": 54.0,
+   "up_capture": 33.1,
+   "down_capture": 29.2,
+   "entry_lag": 3.4,
+   "blocked_days": 113,
+   "sub": {
+    "I": 1.46,
+    "II": 1.39,
+    "III": 2.33,
+    "IV": 0.86
+   }
+  },
+  "2/3+ATR3": {
+   "sortino": 1.453,
+   "cagr": 32.2,
+   "maxdd": -57.6,
+   "final": 7.9,
+   "exposure": 45.4,
+   "trades": 37,
+   "turnover": 75.0,
+   "up_capture": 42.6,
+   "down_capture": 39.0,
+   "entry_lag": 6.3,
+   "blocked_days": 287,
+   "sub": {
+    "I": 2.46,
+    "II": 0.6,
+    "III": 0.88,
+    "IV": 2.04
+   }
+  }
+ },
+ "exposure_matched": {
+  "2/3": {
+   "cell_dn": 43.5,
+   "base_dn": 37.8,
+   "cell_dd": -53.3,
+   "base_dd": -45.2,
+   "better": false
+  },
+  "ATR3": {
+   "cell_dn": 29.2,
+   "base_dn": 28.5,
+   "cell_dd": -46.2,
+   "base_dd": -35.8,
+   "better": false
+  },
+  "2/3+ATR3": {
+   "cell_dn": 39.0,
+   "base_dn": 37.8,
+   "cell_dd": -57.6,
+   "base_dd": -45.2,
+   "better": false
+  }
+ },
+ "bootstrap": {
+  "2/3": {
+   "delta": 0.058,
+   "ci": [
+    -0.538,
+    0.637
+   ]
+  },
+  "ATR3": {
+   "delta": -0.022,
+   "ci": [
+    -0.523,
+    0.555
+   ]
+  },
+  "2/3+ATR3": {
+   "delta": -0.052,
+   "ci": [
+    -0.851,
+    0.79
+   ]
+  }
+ },
+ "mcs": {
+  "povprecen donos": {
+   "kept": [
+    "danes",
+    "2/3",
+    "ATR3",
+    "2/3+ATR3"
+   ],
+   "eliminated": []
+  },
+  "s kaznijo za padce": {
+   "kept": [
+    "danes",
+    "2/3",
+    "ATR3",
+    "2/3+ATR3"
+   ],
+   "eliminated": []
+  }
+ },
+ "walk_forward": {
+  "3y/1y": {
+   "picks": [
+    "2/3",
+    "2/3",
+    "2/3",
+    "ATR3"
+   ],
+   "refit": 0.614,
+   "danes": 1.43
+  },
+  "2y/1y": {
+   "picks": [
+    "2/3",
+    "2/3",
+    "2/3",
+    "ATR3",
+    "ATR3"
+   ],
+   "refit": 1.032,
+   "danes": 1.051
+  }
+ },
+ "pbo": 0.974,
+ "pbo_picked": {
+  "danes": 209,
+  "2/3": 336,
+  "ATR3": 208,
+  "2/3+ATR3": 171
+ }
+}
