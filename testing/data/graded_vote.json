@@ -1,0 +1,57 @@
+{
+ "cells": {
+  "danes": {
+   "sortino": 1.505,
+   "cagr": 33.6,
+   "maxdd": -45.2,
+   "final": 8.55,
+   "exposure": 41.9,
+   "turnover": 42.0,
+   "fees_pct": 12.6,
+   "sub": {
+    "I": 1.5,
+    "II": 1.24,
+    "III": 1.99,
+    "IV": 1.6
+   }
+  },
+  "ocenjeno": {
+   "sortino": 1.949,
+   "cagr": 42.7,
+   "maxdd": -36.2,
+   "final": 13.86,
+   "exposure": 41.8,
+   "turnover": 99.3,
+   "fees_pct": 29.8,
+   "sub": {
+    "I": 2.41,
+    "II": 1.63,
+    "III": 2.01,
+    "IV": 1.77
+   }
+  },
+  "cisto": {
+   "sortino": 1.808,
+   "cagr": 46.4,
+   "maxdd": -47.1,
+   "final": 16.79,
+   "exposure": 54.6,
+   "turnover": 86.7,
+   "fees_pct": 26.0,
+   "sub": {
+    "I": 2.39,
+    "II": 0.83,
+    "III": 2.59,
+    "IV": 1.41
+   }
+  }
+ },
+ "labels": {
+  "danes": "binarno, vsi trije",
+  "ocenjeno": "ocenjeno k/3, s strojem stanj",
+  "cisto": "čisto k/3, brez stroja stanj"
+ },
+ "pbo_no_purge": 0.192,
+ "pbo_purged": 0.239,
+ "purge_days": 21
+}
