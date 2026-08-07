@@ -12,14 +12,22 @@ projektu — Sortino 1,949 proti 1,505, **enaka izpostavljenost**, boljša v vse
 
 **Skripta:** `testing/scripts/graded_full.py`
 
-**Štiri celice**, da se preveri tudi, ali se ocenjevanje in Donchian **prekrivata**:
+**Pet celic**, da se preveri tudi, ali se ocenjevanje in Donchian **prekrivata**
+in ali ocenjevanje kaj spremeni pri ATR stopu:
 
-| | vstop | velikost |
-|---|---|---|
-| 1 | vsi trije | binarno — **kontrola, mora reproducirati referenco** |
-| 2 | vsaj eden | `k/3` |
-| 3 | vsi trije + Donchian | binarno |
-| 4 | vsaj eden + Donchian | `k/4` |
+| | vstop | velikost | izstop |
+|---|---|---|---|
+| 1 | vsi trije | binarno | trackline — **kontrola, mora reproducirati referenco** |
+| 2 | vsaj eden | `k/3` | trackline |
+| 3 | vsi trije + Donchian | binarno | trackline |
+| 4 | vsaj eden + Donchian | `k/4` | trackline |
+| 5 | vsaj eden | `k/3` | **ATR × 3** |
+
+**Zakaj peta.** ATR stop je bil zavrnjen dvakrat, a v kombinaciji z **ocenjeno**
+velikostjo ni bil preizkušen — `retest_6_8.py` je testiral `2/3 + ATR3`, kar je
+pragovna in ne ocenjena oblika. Ocenjena velikost bi lahko ublažila to, kar ATR
+stopu očitamo — da preveč pogosto izpade iz trga —, ker izstop ne bi bil več
+vse-ali-nič. Malo verjetno, a ceneje preveriti kot pustiti odprto.
 
 **Testi:**
 
