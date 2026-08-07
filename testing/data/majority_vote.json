@@ -1,0 +1,244 @@
+{
+ "fee_per_side_pct": 0.3,
+ "n_shift": 1000,
+ "BTC": {
+  "mcs": {
+   "povprecen donos": {
+    "kept": [
+     "vsaj eden 1/3",
+     "D&naklon"
+    ],
+    "eliminated": [
+     [
+      "danes  A&naklon",
+      0.1
+     ],
+     [
+      "vsi trije 3/3",
+      0.068
+     ],
+     [
+      "vecina    2/3",
+      0.043
+     ]
+    ]
+   },
+   "s kaznijo za padce": {
+    "kept": [
+     "danes  A&naklon",
+     "vsi trije 3/3",
+     "vecina    2/3",
+     "vsaj eden 1/3",
+     "D&naklon"
+    ],
+    "eliminated": []
+   }
+  },
+  "shift": {
+   "cell": "D&naklon",
+   "real": 1.936,
+   "n": 1000,
+   "mean": 1.033,
+   "p05": 0.241,
+   "p95": 1.992,
+   "percentile": 94.1
+  },
+  "cells": {
+   "danes  A&naklon": {
+    "sortino": 1.505,
+    "cagr": 33.6,
+    "maxdd": -45.2,
+    "final": 8.55,
+    "exposure": 41.9,
+    "trades": 21,
+    "turnover": 42.0,
+    "sub": {
+     "I": 1.5,
+     "II": 1.24,
+     "III": 1.99,
+     "IV": 1.6
+    },
+    "channels": 1
+   },
+   "vsi trije 3/3": {
+    "sortino": 1.821,
+    "cagr": 36.1,
+    "maxdd": -33.1,
+    "final": 9.78,
+    "exposure": 32.9,
+    "trades": 17,
+    "turnover": 34.0,
+    "sub": {
+     "I": 2.39,
+     "II": 1.09,
+     "III": 2.8,
+     "IV": 1.45
+    },
+    "channels": 2
+   },
+   "vecina    2/3": {
+    "sortino": 1.611,
+    "cagr": 37.9,
+    "maxdd": -54.9,
+    "final": 10.78,
+    "exposure": 47.1,
+    "trades": 25,
+    "turnover": 51.0,
+    "sub": {
+     "I": 2.33,
+     "II": 1.46,
+     "III": 0.7,
+     "IV": 2.21
+    },
+    "channels": 2
+   },
+   "vsaj eden 1/3": {
+    "sortino": 1.817,
+    "cagr": 45.3,
+    "maxdd": -50.2,
+    "final": 15.82,
+    "exposure": 49.6,
+    "trades": 29,
+    "turnover": 59.0,
+    "sub": {
+     "I": 2.55,
+     "II": 1.38,
+     "III": 1.19,
+     "IV": 2.48
+    },
+    "channels": 2
+   },
+   "D&naklon": {
+    "sortino": 1.936,
+    "cagr": 39.7,
+    "maxdd": -30.2,
+    "final": 11.83,
+    "exposure": 35.4,
+    "trades": 19,
+    "turnover": 38.0,
+    "sub": {
+     "I": 2.88,
+     "II": 1.09,
+     "III": 2.61,
+     "IV": 1.45
+    },
+    "channels": 2
+   }
+  }
+ },
+ "ETH": {
+  "mcs": {
+   "povprecen donos": {
+    "kept": [
+     "danes  A&naklon",
+     "vsi trije 3/3",
+     "vecina    2/3",
+     "vsaj eden 1/3",
+     "D&naklon"
+    ],
+    "eliminated": []
+   },
+   "s kaznijo za padce": {
+    "kept": [
+     "danes  A&naklon",
+     "vsi trije 3/3",
+     "vecina    2/3",
+     "vsaj eden 1/3",
+     "D&naklon"
+    ],
+    "eliminated": []
+   }
+  },
+  "shift": {
+   "cell": "vsi trije 3/3",
+   "real": 1.87,
+   "n": 1000,
+   "mean": 1.011,
+   "p05": 0.184,
+   "p95": 2.025,
+   "percentile": 92.0
+  },
+  "cells": {
+   "danes  A&naklon": {
+    "sortino": 1.078,
+    "cagr": 28.5,
+    "maxdd": -60.7,
+    "final": 5.21,
+    "exposure": 37.1,
+    "trades": 17,
+    "turnover": 34.0,
+    "sub": {
+     "I": 0.96,
+     "II": 1.21,
+     "III": 1.59,
+     "IV": 0.98
+    },
+    "channels": 1
+   },
+   "vsi trije 3/3": {
+    "sortino": 1.87,
+    "cagr": 52.6,
+    "maxdd": -42.3,
+    "final": 16.07,
+    "exposure": 32.9,
+    "trades": 13,
+    "turnover": 26.0,
+    "sub": {
+     "I": 2.44,
+     "II": 1.9,
+     "III": 2.51,
+     "IV": 0.98
+    },
+    "channels": 2
+   },
+   "vecina    2/3": {
+    "sortino": 1.198,
+    "cagr": 34.8,
+    "maxdd": -60.7,
+    "final": 7.12,
+    "exposure": 44.5,
+    "trades": 21,
+    "turnover": 42.0,
+    "sub": {
+     "I": 1.53,
+     "II": 1.42,
+     "III": 0.96,
+     "IV": 1.0
+    },
+    "channels": 2
+   },
+   "vsaj eden 1/3": {
+    "sortino": 1.195,
+    "cagr": 34.8,
+    "maxdd": -60.7,
+    "final": 7.13,
+    "exposure": 46.4,
+    "trades": 30,
+    "turnover": 60.0,
+    "sub": {
+     "I": 1.82,
+     "II": 1.2,
+     "III": 0.91,
+     "IV": 0.97
+    },
+    "channels": 2
+   },
+   "D&naklon": {
+    "sortino": 1.858,
+    "cagr": 52.1,
+    "maxdd": -42.3,
+    "final": 15.75,
+    "exposure": 33.0,
+    "trades": 14,
+    "turnover": 28.0,
+    "sub": {
+     "I": 2.38,
+     "II": 1.9,
+     "III": 2.51,
+     "IV": 0.98
+    },
+    "channels": 2
+   }
+  }
+ }
+}
