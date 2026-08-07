@@ -1,0 +1,193 @@
+{
+ "fee_per_side_pct": 0.3,
+ "BTC": {
+  "without_A": {
+   "sortino": 1.936,
+   "cagr": 39.7,
+   "maxdd": -30.2,
+   "final": 11.83,
+   "exposure": 35.4,
+   "trades": 19,
+   "turnover": 38.0
+  },
+  "with_A": {
+   "sortino": 1.821,
+   "cagr": 36.1,
+   "maxdd": -33.1,
+   "final": 9.78,
+   "exposure": 32.9,
+   "trades": 17,
+   "turnover": 34.0
+  },
+  "A_blocks": {
+   "days": 66,
+   "episodes": [
+    {
+     "from": "2019-08-06",
+     "to": "2019-08-09",
+     "days": 4,
+     "ret": 0.4
+    },
+    {
+     "from": "2019-09-06",
+     "to": "2019-09-06",
+     "days": 1,
+     "ret": -2.5
+    },
+    {
+     "from": "2020-07-27",
+     "to": "2020-07-28",
+     "days": 2,
+     "ret": 9.8
+    },
+    {
+     "from": "2020-10-11",
+     "to": "2020-10-23",
+     "days": 13,
+     "ret": 14.4
+    },
+    {
+     "from": "2024-02-04",
+     "to": "2024-02-09",
+     "days": 6,
+     "ret": 9.6
+    },
+    {
+     "from": "2024-05-18",
+     "to": "2024-06-26",
+     "days": 40,
+     "ret": -9.2
+    }
+   ],
+   "cum_move_pct": 22.4,
+   "reverse_days": 0
+  },
+  "delta_sortino": {
+   "delta": -0.114,
+   "ci": [
+    -0.44,
+    0.205
+   ],
+   "pct_above_0": 23.6
+  },
+  "subperiods": {
+   "I": {
+    "without_A": 2.882,
+    "with_A": 2.387
+   },
+   "II": {
+    "without_A": 1.092,
+    "with_A": 1.092
+   },
+   "III": {
+    "without_A": 2.607,
+    "with_A": 2.802
+   },
+   "IV": {
+    "without_A": 1.446,
+    "with_A": 1.446
+   }
+  },
+  "with_A_wins": 1,
+  "walk_forward": {
+   "3y/1y": {
+    "picks": [
+     "brez A",
+     "brez A",
+     "brez A",
+     "z A"
+    ],
+    "refit": 1.988
+   },
+   "2y/1y": {
+    "picks": [
+     "brez A",
+     "brez A",
+     "brez A",
+     "brez A",
+     "z A"
+    ],
+    "refit": 1.246
+   }
+  }
+ },
+ "ETH": {
+  "without_A": {
+   "sortino": 1.858,
+   "cagr": 52.1,
+   "maxdd": -42.3,
+   "final": 15.75,
+   "exposure": 33.0,
+   "trades": 14,
+   "turnover": 28.0
+  },
+  "with_A": {
+   "sortino": 1.87,
+   "cagr": 52.6,
+   "maxdd": -42.3,
+   "final": 16.07,
+   "exposure": 32.9,
+   "trades": 13,
+   "turnover": 26.0
+  },
+  "A_blocks": {
+   "days": 1,
+   "episodes": [
+    {
+     "from": "2020-10-13",
+     "to": "2020-10-13",
+     "days": 1,
+     "ret": -1.4
+    }
+   ],
+   "cum_move_pct": -1.4,
+   "reverse_days": 0
+  },
+  "delta_sortino": {
+   "delta": 0.012,
+   "ci": [
+    0.0,
+    0.039
+   ],
+   "pct_above_0": 66.0
+  },
+  "subperiods": {
+   "I": {
+    "without_A": 2.383,
+    "with_A": 2.437
+   },
+   "II": {
+    "without_A": 1.904,
+    "with_A": 1.904
+   },
+   "III": {
+    "without_A": 2.51,
+    "with_A": 2.51
+   },
+   "IV": {
+    "without_A": 0.979,
+    "with_A": 0.979
+   }
+  },
+  "with_A_wins": 1,
+  "walk_forward": {
+   "3y/1y": {
+    "picks": [
+     "z A",
+     "brez A",
+     "brez A"
+    ],
+    "refit": 1.856
+   },
+   "2y/1y": {
+    "picks": [
+     "z A",
+     "brez A",
+     "brez A",
+     "brez A"
+    ],
+    "refit": 1.267
+   }
+  }
+ }
+}
