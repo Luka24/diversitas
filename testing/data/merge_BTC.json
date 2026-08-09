@@ -1,0 +1,221 @@
+{
+ "window": [
+  "2021-07-01",
+  "2026-06-30"
+ ],
+ "n": 1826,
+ "members": 81,
+ "fee_per_side_pct": 0.3,
+ "variants": {
+  "glasovanje, z vol_shockom": {
+   "sortino": 1.021,
+   "sharpe": 0.665,
+   "cagr": 17.3,
+   "maxdd": -43.1,
+   "final": 2.218,
+   "expo": 40.0,
+   "turnover": 24.0,
+   "trades": 12
+  },
+  "ena tocka, z vol_shockom": {
+   "sortino": 1.219,
+   "sharpe": 0.783,
+   "cagr": 21.6,
+   "maxdd": -39.8,
+   "final": 2.665,
+   "expo": 39.9,
+   "turnover": 22.0,
+   "trades": 11
+  },
+  "glasovanje, brez vol_shocka": {
+   "sortino": 0.981,
+   "sharpe": 0.639,
+   "cagr": 16.4,
+   "maxdd": -43.1,
+   "final": 2.134,
+   "expo": 40.4,
+   "turnover": 24.0,
+   "trades": 12
+  },
+  "ena tocka, brez vol_shocka": {
+   "sortino": 1.219,
+   "sharpe": 0.783,
+   "cagr": 21.6,
+   "maxdd": -39.8,
+   "final": 2.665,
+   "expo": 39.9,
+   "turnover": 22.0,
+   "trades": 11
+  }
+ },
+ "drop_vol_shock_glasovanje": {
+  "identical": false,
+  "days_different": 7,
+  "d_sortino": -0.04,
+  "ci_sortino": [
+   -0.156,
+   0.041
+  ],
+  "d_maxdd": 0.0,
+  "ci_maxdd": [
+   -5.184,
+   1.498
+  ]
+ },
+ "drop_vol_shock_ena_tocka": {
+  "identical": true,
+  "days_different": 0,
+  "d_sortino": 0.0,
+  "ci_sortino": [
+   0.0,
+   0.0
+  ],
+  "d_maxdd": 0.0,
+  "ci_maxdd": [
+   0.0,
+   0.0
+  ]
+ },
+ "parameter_plan": [
+  {
+   "name": "track_period",
+   "default": 75,
+   "kind": "plato",
+   "range": 0.642,
+   "best": 90.0,
+   "action": "pustiti pri miru",
+   "why": "plato, razpon 0.64; natančna vrednost ni pomembna",
+   "wakes_rule": false
+  },
+  {
+   "name": "track_buf_pct",
+   "default": 3.0,
+   "kind": "plato",
+   "range": 0.566,
+   "best": 2.5,
+   "action": "pustiti pri miru",
+   "why": "plato, razpon 0.57; natančna vrednost ni pomembna",
+   "wakes_rule": false
+  },
+  {
+   "name": "ma_med_len",
+   "default": 50,
+   "kind": "inerten",
+   "range": 0.101,
+   "best": 40.0,
+   "action": "odstraniti",
+   "why": "pravilo <code>above_ma_med</code> je mrtvo pri vseh nastavitvah",
+   "wakes_rule": false
+  },
+  {
+   "name": "ma_long_len",
+   "default": 200,
+   "kind": "ostra konica",
+   "range": 0.319,
+   "best": 200.0,
+   "action": "pustiti pri miru",
+   "why": "ostra konica, a glasovanja ne uvajamo; popravimo pričakovanje",
+   "wakes_rule": false
+  },
+  {
+   "name": "ma_slope",
+   "default": 5,
+   "kind": "plato",
+   "range": 0.215,
+   "best": 10.0,
+   "action": "pustiti pri miru",
+   "why": "plato, razpon 0.21; natančna vrednost ni pomembna",
+   "wakes_rule": false
+  },
+  {
+   "name": "track_slope_bars",
+   "default": 10,
+   "kind": "plato",
+   "range": 0.34,
+   "best": 16.0,
+   "action": "pustiti pri miru",
+   "why": "plato, razpon 0.34; natančna vrednost ni pomembna",
+   "wakes_rule": false
+  },
+  {
+   "name": "confirm_bars",
+   "default": 3,
+   "kind": "ostra konica",
+   "range": 0.326,
+   "best": 2.0,
+   "action": "pustiti pri miru",
+   "why": "ostra konica, a glasovanja ne uvajamo; popravimo pričakovanje",
+   "wakes_rule": false
+  },
+  {
+   "name": "reentry_hold",
+   "default": 15,
+   "kind": "ostra konica",
+   "range": 0.248,
+   "best": 15.0,
+   "action": "pustiti pri miru",
+   "why": "ostra konica, a glasovanja ne uvajamo; popravimo pričakovanje",
+   "wakes_rule": false
+  },
+  {
+   "name": "exit_grace_bars",
+   "default": 3,
+   "kind": "ostra konica",
+   "range": 0.514,
+   "best": 3.0,
+   "action": "pustiti pri miru",
+   "why": "ostra konica, a glasovanja ne uvajamo; popravimo pričakovanje",
+   "wakes_rule": false
+  },
+  {
+   "name": "blowoff_dist_pct",
+   "default": 25.0,
+   "kind": "ostra konica",
+   "range": 0.517,
+   "best": 25.0,
+   "action": "pustiti pri miru",
+   "why": "ostra konica, a glasovanja ne uvajamo; popravimo pričakovanje",
+   "wakes_rule": false
+  },
+  {
+   "name": "rsi_len",
+   "default": 14,
+   "kind": "inerten",
+   "range": 0.12,
+   "best": 12.0,
+   "action": "zakleniti",
+   "why": "inerten gumb (razpon 0.12); pravilo ostane",
+   "wakes_rule": false
+  },
+  {
+   "name": "vol_shock_mul",
+   "default": 1.5,
+   "kind": "inerten",
+   "range": 0.018,
+   "best": 1.35,
+   "action": "odstraniti",
+   "why": "pravilo <code>vol_shock</code> je mrtvo pri vseh nastavitvah",
+   "wakes_rule": true
+  },
+  {
+   "name": "vol_lookback",
+   "default": 20,
+   "kind": "inerten",
+   "range": 0.021,
+   "best": 10.0,
+   "action": "odstraniti",
+   "why": "pravilo <code>vol_shock</code> je mrtvo pri vseh nastavitvah",
+   "wakes_rule": true
+  },
+  {
+   "name": "min_dist_entry_pct",
+   "default": 0.0,
+   "kind": "inerten",
+   "range": 0.035,
+   "best": 0.0,
+   "action": "odstraniti",
+   "why": "pravilo <code>dist_entry_ok</code> je mrtvo pri vseh nastavitvah",
+   "wakes_rule": false
+  }
+ ]
+}

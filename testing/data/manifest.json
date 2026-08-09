@@ -1,0 +1,35 @@
+{
+  "BTC": {
+    "first": "2019-06-08 00:00:00+00:00",
+    "last": "2026-07-20 00:00:00+00:00",
+    "note": "zamrznjeno pred 2026-07-27; vir ni bil zapisan",
+    "rows": 2600,
+    "sha16": "c5b26cb8ee1601ac",
+    "source": "binance (ugotovljeno po volumnu, ne zapisano ob zajemu)",
+    "warning": "zadnji bar 2026-07-20 je NEDOKONCANA svecka: 64302.72 namesto zakljucka 65255.51; zamrznitev je tekla sredi dneva"
+  },
+  "ETH": {
+    "first": "2019-06-08 00:00:00+00:00",
+    "last": "2026-07-20 00:00:00+00:00",
+    "note": "zamrznjeno pred 2026-07-27; vir ni bil zapisan",
+    "rows": 2600,
+    "sha16": "cccefaac67564dd2",
+    "source": "unknown"
+  },
+  "SOL": {
+    "first": "2020-08-11 00:00:00+00:00",
+    "last": "2026-07-20 00:00:00+00:00",
+    "note": "zamrznjeno pred 2026-07-27; vir ni bil zapisan",
+    "rows": 2170,
+    "sha16": "f3db993f7afcae9e",
+    "source": "unknown"
+  },
+  "SPX": {
+    "first": "2016-03-16 00:00:00",
+    "last": "2026-07-20 00:00:00",
+    "note": "zamrznjeno pred 2026-07-27; vir ni bil zapisan",
+    "rows": 2600,
+    "sha16": "0bdf229a9cc9d140",
+    "source": "unknown"
+  }
+}

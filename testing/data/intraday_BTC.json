@@ -1,0 +1,138 @@
+{
+ "fee_per_side_pct": 0.3,
+ "nboot": 2000,
+ "seed": 20260731,
+ "clocks": [
+  {
+   "label": "dnevni bari",
+   "bars_per_day": 1,
+   "periods_per_year": 365,
+   "window": [
+    "2021-07-01",
+    "2026-06-30"
+   ],
+   "n_bars": 1826,
+   "members": 81,
+   "variants": {
+    "ena tocka (privzetki)": {
+     "sortino": 1.099,
+     "maxdd": -39.8,
+     "expo": 42.4,
+     "turnover": 16.0,
+     "trades": 8
+    },
+    "ansambel, zvezna": {
+     "sortino": 0.82,
+     "maxdd": -41.8,
+     "expo": 42.8,
+     "turnover": 17.7,
+     "trades": 40
+    },
+    "glasovanje: vecina": {
+     "sortino": 0.878,
+     "maxdd": -43.1,
+     "expo": 42.8,
+     "turnover": 18.0,
+     "trades": 9
+    },
+    "glasovanje: dve tretjini": {
+     "sortino": 0.96,
+     "maxdd": -43.1,
+     "expo": 42.2,
+     "turnover": 16.0,
+     "trades": 8
+    },
+    "sredina ravnine": {
+     "sortino": 0.983,
+     "maxdd": -42.1,
+     "expo": 44.2,
+     "turnover": 16.0,
+     "trades": 8
+    }
+   },
+   "plateau_minus_majority": {
+    "diff": 0.105,
+    "ci": [
+     -0.323,
+     0.603
+    ],
+    "sig": false
+   }
+  },
+  {
+   "label": "4-urni bari",
+   "bars_per_day": 6,
+   "periods_per_year": 2190,
+   "window": [
+    "2021-07-01",
+    "2026-06-30"
+   ],
+   "n_bars": 10951,
+   "members": 81,
+   "variants": {
+    "ena tocka (privzetki)": {
+     "sortino": 0.993,
+     "maxdd": -41.9,
+     "expo": 42.4,
+     "turnover": 16.0,
+     "trades": 8
+    },
+    "ansambel, zvezna": {
+     "sortino": 0.846,
+     "maxdd": -43.0,
+     "expo": 43.3,
+     "turnover": 16.4,
+     "trades": 40
+    },
+    "glasovanje: vecina": {
+     "sortino": 0.904,
+     "maxdd": -47.3,
+     "expo": 42.4,
+     "turnover": 16.0,
+     "trades": 8
+    },
+    "glasovanje: dve tretjini": {
+     "sortino": 0.851,
+     "maxdd": -45.7,
+     "expo": 42.1,
+     "turnover": 16.0,
+     "trades": 8
+    },
+    "sredina ravnine": {
+     "sortino": 1.152,
+     "maxdd": -41.2,
+     "expo": 45.0,
+     "turnover": 14.0,
+     "trades": 7
+    }
+   },
+   "plateau_minus_majority": {
+    "diff": 0.248,
+    "ci": [
+     -0.123,
+     0.66
+    ],
+    "sig": false
+   }
+  }
+ ],
+ "ranking": {
+  "daily": [
+   "ena tocka (privzetki)",
+   "sredina ravnine",
+   "glasovanje: dve tretjini",
+   "glasovanje: vecina",
+   "ansambel, zvezna"
+  ],
+  "h4": [
+   "sredina ravnine",
+   "ena tocka (privzetki)",
+   "glasovanje: vecina",
+   "glasovanje: dve tretjini",
+   "ansambel, zvezna"
+  ],
+  "concordant_pairs": 8,
+  "total_pairs": 10,
+  "kendall_tau": 0.6
+ }
+}

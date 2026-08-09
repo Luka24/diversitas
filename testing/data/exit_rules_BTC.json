@@ -1,0 +1,345 @@
+{
+ "symbol": "BTC",
+ "source": "binance",
+ "fee_per_side_pct": 0.3,
+ "from": "2019-03-09",
+ "to": "2026-07-29",
+ "n_days": 2700,
+ "nboot": 2000,
+ "seed": 20260731,
+ "blowoff_vs_extended": {
+  "n_extended": 211,
+  "n_fire": 31,
+  "n_holding_at_fire": 8,
+  "m": {
+   "donos": {
+    "5": {
+     "n_true": 31,
+     "n_false": 180,
+     "too_few": false,
+     "mean_true": 2.55,
+     "mean_false": 1.86,
+     "diff": 0.69,
+     "ci": [
+      -4.65,
+      5.88
+     ],
+     "sig": false
+    },
+    "20": {
+     "n_true": 31,
+     "n_false": 180,
+     "too_few": false,
+     "mean_true": -0.12,
+     "mean_false": 8.67,
+     "diff": -8.8,
+     "ci": [
+      -20.31,
+      0.1
+     ],
+     "sig": false
+    },
+    "60": {
+     "n_true": 31,
+     "n_false": 180,
+     "too_few": false,
+     "mean_true": 40.68,
+     "mean_false": 21.15,
+     "diff": 19.53,
+     "ci": [
+      -12.7,
+      45.72
+     ],
+     "sig": false
+    }
+   },
+   "maxdd": {
+    "5": {
+     "n_true": 31,
+     "n_false": 180,
+     "too_few": false,
+     "mean_true": -8.44,
+     "mean_false": -6.19,
+     "diff": -2.25,
+     "ci": [
+      -4.36,
+      -0.14
+     ],
+     "sig": true
+    },
+    "20": {
+     "n_true": 31,
+     "n_false": 180,
+     "too_few": false,
+     "mean_true": -16.66,
+     "mean_false": -14.71,
+     "diff": -1.95,
+     "ci": [
+      -6.07,
+      2.3
+     ],
+     "sig": false
+    },
+    "60": {
+     "n_true": 31,
+     "n_false": 180,
+     "too_few": false,
+     "mean_true": -21.46,
+     "mean_false": -24.08,
+     "diff": 2.62,
+     "ci": [
+      -2.14,
+      8.09
+     ],
+     "sig": false
+    }
+   }
+  }
+ },
+ "blowoff_exits": [
+  {
+   "date": "2019-05-10",
+   "close": 6373.3,
+   "dist_pct": 25.7,
+   "rsi": 81.8,
+   "ret5": 28.2,
+   "dd5": -1.5,
+   "ret20": 29.8,
+   "dd20": -11.2,
+   "ret60": 96.8,
+   "dd60": -18.9
+  },
+  {
+   "date": "2019-06-24",
+   "close": 11056.6,
+   "dist_pct": 36.0,
+   "rsi": 80.6,
+   "ret5": 7.7,
+   "dd5": -13.5,
+   "ret20": -8.0,
+   "dd20": -22.3,
+   "ret60": -6.0,
+   "dd60": -27.9
+  },
+  {
+   "date": "2020-11-18",
+   "close": 17776.1,
+   "dist_pct": 25.6,
+   "rsi": 80.5,
+   "ret5": 3.3,
+   "dd5": -1.8,
+   "ret20": 3.1,
+   "dd20": -10.5,
+   "ret60": 101.6,
+   "dd60": -16.1
+  },
+  {
+   "date": "2020-12-30",
+   "close": 28875.5,
+   "dist_pct": 43.5,
+   "rsi": 81.8,
+   "ret5": 10.8,
+   "dd5": -3.1,
+   "ret20": 24.3,
+   "dd20": -16.1,
+   "ret60": 56.3,
+   "dd60": -25.2
+  },
+  {
+   "date": "2021-02-21",
+   "close": 57408.6,
+   "dist_pct": 51.2,
+   "rsi": 80.3,
+   "ret5": -19.4,
+   "dd5": -19.4,
+   "ret20": 6.6,
+   "dd20": -21.4,
+   "ret60": -10.0,
+   "dd60": -21.4
+  },
+  {
+   "date": "2023-12-05",
+   "close": 44073.3,
+   "dist_pct": 25.1,
+   "rsi": 81.6,
+   "ret5": -0.6,
+   "dd5": -1.8,
+   "ret20": -1.1,
+   "dd20": -6.6,
+   "ret60": -2.4,
+   "dd60": -15.7
+  },
+  {
+   "date": "2024-03-04",
+   "close": 68245.7,
+   "dist_pct": 27.5,
+   "rsi": 86.2,
+   "ret5": 0.1,
+   "dd5": -6.6,
+   "ret20": -1.5,
+   "dd20": -15.2,
+   "ret60": -7.9,
+   "dd60": -20.1
+  },
+  {
+   "date": "2024-11-21",
+   "close": 98317.1,
+   "dist_pct": 28.8,
+   "rsi": 81.8,
+   "ret5": -6.5,
+   "dd5": -7.0,
+   "ret20": 2.9,
+   "dd20": -7.0,
+   "ret60": 4.0,
+   "dd60": -12.8
+  }
+ ],
+ "blowoff_exits_summary": {
+  "n": 8,
+  "n_price_fell_60d": 4,
+  "median_ret60": 0.8,
+  "median_dd60": -19.5
+ },
+ "vol_shock_actionable": {
+  "n_window": 41,
+  "n_fire_in_window": 0
+ },
+ "vol_shock_vs_below_tl": {
+  "m": {
+   "donos": {
+    "5": {
+     "n_true": 121,
+     "n_false": 882,
+     "too_few": false,
+     "mean_true": 0.81,
+     "mean_false": 0.22,
+     "diff": 0.59,
+     "ci": [
+      -1.3,
+      2.94
+     ],
+     "sig": false
+    },
+    "20": {
+     "n_true": 121,
+     "n_false": 867,
+     "too_few": false,
+     "mean_true": 3.48,
+     "mean_false": 1.03,
+     "diff": 2.46,
+     "ci": [
+      -2.57,
+      8.44
+     ],
+     "sig": false
+    },
+    "60": {
+     "n_true": 121,
+     "n_false": 828,
+     "too_few": false,
+     "mean_true": 15.48,
+     "mean_false": 4.18,
+     "diff": 11.3,
+     "ci": [
+      0.47,
+      21.4
+     ],
+     "sig": true
+    }
+   },
+   "maxdd": {
+    "5": {
+     "n_true": 121,
+     "n_false": 882,
+     "too_few": false,
+     "mean_true": -5.33,
+     "mean_false": -4.66,
+     "diff": -0.67,
+     "ci": [
+      -2.05,
+      0.73
+     ],
+     "sig": false
+    },
+    "20": {
+     "n_true": 121,
+     "n_false": 867,
+     "too_few": false,
+     "mean_true": -9.64,
+     "mean_false": -11.59,
+     "diff": 1.96,
+     "ci": [
+      -0.46,
+      4.49
+     ],
+     "sig": false
+    },
+    "60": {
+     "n_true": 121,
+     "n_false": 828,
+     "too_few": false,
+     "mean_true": -17.2,
+     "mean_false": -20.52,
+     "diff": 3.32,
+     "ci": [
+      -2.35,
+      9.12
+     ],
+     "sig": false
+    }
+   }
+  }
+ },
+ "vol_shock_threshold_sweep": [
+  {
+   "mul": 0.8,
+   "sortino": 1.218,
+   "maxdd": -49.7,
+   "exits": 23,
+   "fires": 708
+  },
+  {
+   "mul": 1.0,
+   "sortino": 1.393,
+   "maxdd": -47.8,
+   "exits": 22,
+   "fires": 487
+  },
+  {
+   "mul": 1.1,
+   "sortino": 1.393,
+   "maxdd": -47.8,
+   "exits": 22,
+   "fires": 365
+  },
+  {
+   "mul": 1.2,
+   "sortino": 1.493,
+   "maxdd": -44.2,
+   "exits": 21,
+   "fires": 302
+  },
+  {
+   "mul": 1.5,
+   "sortino": 1.505,
+   "maxdd": -45.2,
+   "exits": 21,
+   "fires": 121
+  },
+  {
+   "mul": 2.0,
+   "sortino": 1.505,
+   "maxdd": -45.2,
+   "exits": 21,
+   "fires": 41
+  },
+  {
+   "mul": 999.0,
+   "sortino": 1.505,
+   "maxdd": -45.2,
+   "exits": 21,
+   "fires": 0
+  }
+ ],
+ "vol_shock_off_sortino": 1.505
+}
