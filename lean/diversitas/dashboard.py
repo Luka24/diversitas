@@ -1546,10 +1546,14 @@ def _render_gates_and_status(df: pd.DataFrame, s: dict, cfg: LeanConfig,
             f'Entry gates · {symbol} · all must PASS for BULL</div>',
             unsafe_allow_html=True,
         )
+        # Entry gate changed 2026-08-10: the trackline band no longer decides
+        # entry, the Donchian channel does. The trackline row would misreport.
         gates = [
-            ("Above trackline + buffer",
-             bool(last["above_tl"]),
-             "Price must be above the adaptive trackline plus a safety buffer."),
+            (f"Top quartile of {cfg.donchian_period}-day range",
+             bool(last["donchian_ok"]),
+             f"Entry requires the close in the top quarter of the "
+             f"{cfg.donchian_period}-day high/low range — a real breakout rather "
+             f"than a trackline crossing. The trackline still drives the EXIT."),
             (f"Trackline rising ({cfg.track_slope_bars}-bar slope)",
              bool(last["track_rising_window"]),
              f"The trackline must have a positive slope over the last {cfg.track_slope_bars} bars."),

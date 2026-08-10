@@ -128,12 +128,16 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
     # pause removed, 12 of 32 entries land on a blow-off bar. Guarded by
     # `test_no_entry_while_an_exit_rule_is_firing`, which removes the pause so the
     # test can actually fail.
+    # ENTRY GATE CHANGED 2026-08-10. `above_tl` used to sit here; the gate is now
+    # `donchian_ok`. The trackline has NOT gone away — it still drives the exit
+    # (`below_tl`), the slope condition and the blow-off distance — so `above_tl`
+    # stays computed for the display state and the dashboard. It simply no longer
+    # decides entry. See config.py for the evidence and for the limits on it.
     df["bull_condition"] = (
-        df["above_tl"]
+        df["donchian_ok"]
         & df["track_rising_window"]
         & df["regime_ok"]
         & df["btc_filter_ok"]
-        & df["donchian_ok"]
         & ~df["blowoff"]
     ).fillna(False)
 

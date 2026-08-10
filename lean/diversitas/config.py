@@ -69,11 +69,46 @@ class LeanConfig:
     #                    before it can be called dead. Probe:
     #                    `testing/scripts/dead_rules_robust.py`.
 
-    # Donchian breakout confirmation (validated improvement; OFF by default so the
-    # a-priori Lean is unchanged). When ON, entry also requires the close to sit in
-    # the top quartile of the `donchian_period`-day high/low channel.
-    use_donchian: bool = False
-    donchian_period: int = 55
+    # ENTRY GATE. On 2026-08-10 this replaced the old gate — close above the
+    # 75-day trackline plus `track_buf_pct` — which is now used for the EXIT only.
+    # Entry requires the close in the top quartile of the 20-day high/low channel.
+    #
+    # Written out, the Donchian condition is the same shape as the trackline it
+    # replaced: close > midpoint(20d) + 0.25 x range(20d), against the old
+    # close > midpoint(75d) + 3 % of price. Two differences — the lookback, and a
+    # band measured in units of the range rather than as a fixed percentage, so it
+    # widens when the market is wild and narrows when it is calm.
+    #
+    # Measured on BTC / ETH, net of 0.30 % per side:
+    #   full window   Sortino 1.505 -> 1.936 and 1.078 -> 1.858
+    #                 worst drawdown -45.2 % -> -30.2 % and -60.7 % -> -42.3 %
+    #   from 2021     Sortino 1.321 -> 1.569 and 1.366 -> 1.876
+    #                 worst drawdown -39.8 % -> -29.0 % and -42.8 % -> -42.3 %
+    # Fewer trades and lower fees on both assets in both windows. It cleared the
+    # nested walk-forward in both schemes, ETH out of sample, CSCV at 97.5 %, and
+    # the circular-shift placebo at the 96th percentile.
+    #
+    # What it is NOT: a return improvement. On BTC the episode ledger is close to
+    # even — seven favourable against eight unfavourable — and it wins on size, not
+    # frequency. The confidence interval on BTC spans zero, it beats the old gate
+    # in 2 of 4 sub-periods there, and PBO for choosing among the variants tested
+    # was 0.711. Everything rests on 8 to 21 trades. It was adopted for the
+    # mechanism — during a collapse the close cannot be in the top quartile of the
+    # 20-day range — rather than for the numbers.
+    #
+    # Note also: it has changed nothing since 2024-12-15 on BTC and 2024-04-18 on
+    # ETH. The last 18 months neither support nor contradict this.
+    use_donchian: bool = True
+
+    # 20 is the classic Donchian/Turtle short-term breakout length, chosen outside
+    # this data. It is NOT to be tuned: PBO for selecting a period here was 0.672,
+    # and the in-sample pick alternates between 12 and 40 — opposite ends of the
+    # grid. The value in the rule is the rule, not the number.
+    #
+    # The previous default of 55 (the other Turtle length) sat in the WORST part of
+    # the grid at Sortino 1.47, below the disabled state's 1.55, so anyone turning
+    # the old flag on would have been misled.
+    donchian_period: int = 20
     donchian_top_frac: float = 0.75
 
     # Optional cross-asset filter — OFF by default in Lean
