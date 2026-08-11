@@ -100,13 +100,19 @@ def _binance_get(params: dict) -> "requests.Response":
     Network-level failures move to the next host too. A block is often a reset
     connection or a poisoned DNS answer rather than a polite 451, and an
     exception that escaped here would skip the host that actually works.
+
+    The raised error names EVERY host and what it answered. Reporting only the
+    last one made "the second host is blocked too" and "the second host was
+    never tried" produce the same message, which is exactly the ambiguity that
+    kept this bug alive.
     """
-    last: Optional[Exception] = None
+    tried: list[str] = []
     for i, url in enumerate(BINANCE_HOSTS):
+        host = url.split("/")[2]
         try:
             r = requests.get(url, params=params, timeout=15)
         except Exception as e:  # noqa: BLE001 — connection reset, DNS, timeout
-            last = DataSourceError(f"Binance {url}: {type(e).__name__}: {str(e)[:150]}")
+            tried.append(f"{host} -> {type(e).__name__}: {str(e)[:90]}")
             continue
         if r.status_code == 200:
             if i:
@@ -114,9 +120,13 @@ def _binance_get(params: dict) -> "requests.Response":
             return r
         if r.status_code in (418, 429):
             raise DataSourceError(
-                f"Binance rate limit hit (HTTP {r.status_code}) — back off and retry")
-        last = DataSourceError(f"Binance HTTP {r.status_code}: {r.text[:200]}")
-    raise last
+                f"Binance rate limit hit on {host} (HTTP {r.status_code}) — "
+                f"back off and retry")
+        tried.append(f"{host} -> HTTP {r.status_code}: "
+                     f"{' '.join(r.text.split())[:110]}")
+    raise DataSourceError(
+        f"Binance: vsi gostitelji ({len(BINANCE_HOSTS)}) so odpovedali  ||  "
+        + "  ||  ".join(tried))
 
 
 def _binance_fetch(symbol_binance: str, interval: str, bars: int) -> pd.DataFrame:
