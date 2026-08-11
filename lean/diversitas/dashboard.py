@@ -11,6 +11,7 @@ for p in (_PROJECT_ROOT, _VARIANT_ROOT):
 
 import datetime
 import math
+import time
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -78,21 +79,40 @@ def _load_candles(symbol: str, bars: int) -> pd.DataFrame:
     whole trades (3 percentage points of CAGR between Binance and Yahoo on BTC).
     A fallback is therefore allowed, but never silent: the caller marks it and the
     footer shows it.
+
+    Two things were wrong here until 2026-08-11, and together they hid a fallback
+    that had been running for weeks. Only `type(e).__name__` was kept, so the
+    reason became the word "DataSourceError" — no status code, no body, nothing
+    that says whether it was a timeout, a rate limit or a geo-block. And the
+    string it went into, `attrs["source_errors"]`, was never rendered anywhere.
+    The banner said Binance was unreachable and there was no way to learn why.
+    Both are fixed: the real message is kept, and the banner prints it.
+
+    The primary venue also gets one retry. A single 15-second timeout used to be
+    enough to drop the whole session onto Coinbase.
     """
     errors = []
     for i, src in enumerate(PRICE_SOURCE_CHAIN):
-        try:
-            df = fetch_candles(symbol, "1d", bars=bars, config=DEFAULT_CONFIG,
-                               prefer=src, strict=True)
-        except Exception as e:  # noqa: BLE001
-            errors.append(f"{src}: {type(e).__name__}")
+        attempts = 2 if i == 0 else 1     # retry the pinned source only
+        for attempt in range(attempts):
+            try:
+                df = fetch_candles(symbol, "1d", bars=bars, config=DEFAULT_CONFIG,
+                                   prefer=src, strict=True)
+            except Exception as e:  # noqa: BLE001
+                if attempt + 1 < attempts:
+                    time.sleep(1.0)
+                    continue
+                errors.append(f"{src}: {type(e).__name__}: {str(e)[:300]}")
+                df = None
+            break
+        if df is None:
             continue
         df.attrs["source"] = src
         if i:
             df.attrs["fell_back_from"] = PRICE_SOURCE_CHAIN[0]
-            df.attrs["source_errors"] = "; ".join(errors)
+            df.attrs["source_errors"] = " | ".join(errors)
         return df
-    raise RuntimeError(f"{symbol}: noben vir ni odgovoril — {'; '.join(errors)}")
+    raise RuntimeError(f"{symbol}: noben vir ni odgovoril — {' | '.join(errors)}")
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -1621,26 +1641,34 @@ def entry_gates(last: pd.Series, cfg: LeanConfig) -> list:
              f"   TL {cfg.track_slope_bars} bars ago = {_num(tref, px)}"
              f"   change {tl_chg:+.2f} %",
          ])),
-        ("Regime OK (not a confirmed bear)",
+        (f"Close above MA{cfg.ma_long_len}, or MA{cfg.ma_long_len} not falling",
          bool(last["regime_ok"]),
-         f"close {'&gt;' if bool(last['above_ma_long']) else '&le;'} MA200"
-         f"  ·  MA200 {'falling' if bool(last['ma_long_falling']) else 'not falling'}",
-         "not both at once",
+         f"close {_num(last['close'], px)} "
+         f"{'above' if bool(last['above_ma_long']) else 'below'} MA{cfg.ma_long_len} "
+         f"{_num(mal, px)}  ·  MA{cfg.ma_long_len} "
+         f"{'falling' if bool(last['ma_long_falling']) else 'not falling'}",
+         "either one",
          nl.join([
-             "ENTRY GATE &mdash; a block, not a trigger.",
+             "ENTRY GATE.",
              "",
-             f"  MA200 = simple average of the last {cfg.ma_long_len} closes",
-             f"  bear  = (close &le; MA200) AND (MA200(today) &lt; MA200({cfg.ma_slope} bars ago))",
-             "  PASS when NOT bear",
+             f"  MA{cfg.ma_long_len} = simple average of the last {cfg.ma_long_len} closes",
              "",
-             "BOTH halves must hold to fail. Sitting below the 200-day average",
-             "is not enough while that average is still rising.",
+             f"  PASS when  close &gt; MA{cfg.ma_long_len}",
+             f"        OR   MA{cfg.ma_long_len}(today) &ge; MA{cfg.ma_long_len}"
+             f"({cfg.ma_slope} bars ago)",
              "",
-             f"Today:  close = {_num(last['close'], px)}   MA200 = {_num(mal, px)}"
-             f"   &rarr; {'above' if bool(last['above_ma_long']) else 'below'}",
-             f"        MA200 = {_num(mal, px)}   {cfg.ma_slope} bars ago"
-             f" = {_num(maref, px)}"
-             f"   &rarr; {'falling' if bool(last['ma_long_falling']) else 'not falling'}",
+             "Either one on its own is enough. Entry is blocked only when BOTH",
+             "fail at once &mdash; price below the average AND the average falling.",
+             "A dip below a still-rising average does not block anything.",
+             "",
+             f"Today:  close = {_num(last['close'], px)}"
+             f"   MA{cfg.ma_long_len} = {_num(mal, px)}"
+             f"   &rarr; {'above &mdash; PASS' if bool(last['above_ma_long']) else 'below'}",
+             f"        MA{cfg.ma_long_len} = {_num(mal, px)}"
+             f"   {cfg.ma_slope} bars ago = {_num(maref, px)}"
+             f"   &rarr; {'falling' if bool(last['ma_long_falling']) else 'not falling &mdash; PASS'}",
+             "",
+             f"  &rarr; {'PASS' if bool(last['regime_ok']) else 'BLOCKED (both failed)'}",
              "",
              "This blocks ENTRY only. The strategy holds through it once long.",
          ])),
@@ -2034,6 +2062,18 @@ def main() -> None:
             f"že desetinka odstotka premakne cel posel. Za primerjavo s poročilom "
             f"počakaj, da je `{daily.attrs['fell_back_from']}` spet dosegljiv."
         )
+        # Without this the banner says only THAT it failed. A timeout, a rate
+        # limit and a geo-block all need different responses, and the difference
+        # was being thrown away.
+        err = daily.attrs.get("source_errors")
+        if err:
+            st.caption(f"Razlog: `{err}`")
+            if "451" in err or "403" in err:
+                st.caption(
+                    "HTTP 451/403 pomeni, da Binance blokira ta IP glede na "
+                    "lokacijo — ne gre za izpad. Preveri VPN oz. omrežje; "
+                    "`python testing/scripts/check_data_sources.py` to potrdi."
+                )
 
     df_full = result.df
     df = df_full
