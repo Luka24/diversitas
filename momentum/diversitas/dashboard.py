@@ -73,8 +73,28 @@ CRYPTO_SOURCE_CHAIN = ("binance", "coinbase")
 STOCK_SOURCE_CHAIN = ("yahoo",)
 
 
+def _pinned_source() -> str | None:
+    """Explicitly chosen venue, from the env or Streamlit secrets — see the Lean
+    dashboard. Binance geo-blocks datacenter IPs, so a hosted deployment gets a
+    permanent HTTP 451 where a laptop gets 200; pinning turns that from a
+    recurring alarm into a decision."""
+    import os
+    val = os.environ.get("DIVERSITAS_PRICE_SOURCE")
+    if not val:
+        try:
+            val = st.secrets.get("price_source")
+        except Exception:
+            val = None
+    val = (val or "").strip().lower()
+    return val if val in ("binance", "coinbase", "yahoo") else None
+
+
 def _source_chain(symbol: str) -> tuple[str, ...]:
-    return STOCK_SOURCE_CHAIN if symbol in STOCK_SYMBOLS else CRYPTO_SOURCE_CHAIN
+    default = STOCK_SOURCE_CHAIN if symbol in STOCK_SYMBOLS else CRYPTO_SOURCE_CHAIN
+    pin = _pinned_source()
+    if pin is None or symbol in STOCK_SYMBOLS:
+        return default
+    return (pin,) + tuple(s for s in default if s != pin)
 
 
 @st.cache_data(ttl=60, show_spinner=False)

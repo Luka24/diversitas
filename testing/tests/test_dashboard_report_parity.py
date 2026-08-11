@@ -158,6 +158,33 @@ def test_price_source_chain_is_ordered_and_never_falls_back_silently():
         "the reason was recorded but never rendered for weeks; keep it rendered"
 
 
+def test_a_pinned_source_leads_the_chain_and_silences_the_fallback_banner():
+    """Binance geo-blocks datacenter IPs, so the hosted deployment gets HTTP 451
+    permanently while a laptop gets 200. Telling the user to wait for it to come
+    back is telling them to wait for nothing, so the venue can be pinned per
+    deployment and the page then reports a choice rather than a failure."""
+    import os
+    from diversitas import dashboard as dash
+    prev = os.environ.get("DIVERSITAS_PRICE_SOURCE")
+    try:
+        os.environ.pop("DIVERSITAS_PRICE_SOURCE", None)
+        assert dash._source_chain("BTC") == ("binance", "coinbase")
+
+        os.environ["DIVERSITAS_PRICE_SOURCE"] = "coinbase"
+        assert dash._source_chain("BTC") == ("coinbase", "binance"), \
+            "the pin must lead, with the rest of the chain kept behind it"
+        # equities have one venue; a crypto pin must not redirect them
+        assert dash._source_chain("SPY") == ("yahoo",)
+
+        # garbage must not silently become the source
+        os.environ["DIVERSITAS_PRICE_SOURCE"] = "not-a-venue"
+        assert dash._source_chain("BTC") == ("binance", "coinbase")
+    finally:
+        os.environ.pop("DIVERSITAS_PRICE_SOURCE", None)
+        if prev is not None:
+            os.environ["DIVERSITAS_PRICE_SOURCE"] = prev
+
+
 def test_every_symbol_that_claims_a_fallback_actually_has_one():
     """LeanConfig's symbol_map overrides the shared default. When it omitted the
     `coinbase` ids, that branch raised and was skipped, so the chain was really

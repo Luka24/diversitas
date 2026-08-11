@@ -11,6 +11,7 @@ for p in (_PROJECT_ROOT, _VARIANT_ROOT):
 
 import datetime
 import math
+import os
 import time
 import numpy as np
 import pandas as pd
@@ -89,8 +90,36 @@ CRYPTO_SOURCE_CHAIN = ("binance", "coinbase")
 STOCK_SOURCE_CHAIN = ("yahoo",)
 
 
+def _pinned_source() -> str | None:
+    """An explicitly chosen venue, from the env or Streamlit secrets.
+
+    Binance geo-blocks datacenter IPs, so the hosted deployment gets HTTP 451
+    where a laptop gets 200 — permanently, not as an outage. Waiting for it to
+    come back is waiting for something that will not happen, and the banner
+    saying so on every render is noise rather than news.
+
+    Setting this makes the venue a decision instead: the page pins what is
+    actually reachable, says which one it is, and stops crying wolf. It is read
+    per deployment, so a laptop can stay on Binance while the cloud runs on
+    Coinbase.
+    """
+    val = os.environ.get("DIVERSITAS_PRICE_SOURCE")
+    if not val:
+        try:
+            val = st.secrets.get("price_source")      # .streamlit/secrets.toml
+        except Exception:                             # no secrets file at all
+            val = None
+    val = (val or "").strip().lower()
+    return val if val in ("binance", "coinbase", "yahoo") else None
+
+
 def _source_chain(symbol: str) -> tuple[str, ...]:
-    return STOCK_SOURCE_CHAIN if symbol in STOCK_SYMBOLS else CRYPTO_SOURCE_CHAIN
+    default = STOCK_SOURCE_CHAIN if symbol in STOCK_SYMBOLS else CRYPTO_SOURCE_CHAIN
+    pin = _pinned_source()
+    if pin is None or symbol in STOCK_SYMBOLS:
+        return default
+    # The pin leads; whatever else was in the chain stays behind it as backup.
+    return (pin,) + tuple(s for s in default if s != pin)
 
 
 @st.cache_data(ttl=60, show_spinner=False)
