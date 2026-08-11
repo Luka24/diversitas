@@ -34,10 +34,12 @@ LAG_DAYS = 1
 # different axis of risk, none of them a variation on another.
 TICKERS = {
     "DX-Y.NYB": "dxy",     # dollar
-    "^VIX": "vix",         # equity vol
+    "^VIX": "vix",         # equity vol, spot
+    "^VIX3M": "vix3m",     # equity vol, 3-month — for the term structure
     "^MOVE": "move",       # bond vol
     "HYG": "hyg",          # high-yield credit
-    "IEF": "ief",          # duration-matched treasuries, for the credit ratio
+    "IEF": "ief",          # duration-matched treasuries
+    "LQD": "lqd",          # investment-grade credit
 }
 
 
@@ -71,6 +73,17 @@ def build() -> pd.DataFrame:
     # Credit stress as one number. Falling ratio = high yield underperforming
     # duration-matched treasuries = spreads widening.
     df["credit"] = df["hyg"] / df["ief"]
+
+    # HY against IG instead of against treasuries. Both legs are corporate, so
+    # the rate move largely cancels and what is left is closer to compensation
+    # for default risk alone.
+    df["credit_hy_ig"] = df["hyg"] / df["lqd"]
+
+    # VIX term structure. Above 1 the curve is inverted — spot fear above
+    # three-month fear — which is the shape that shows up in real crises rather
+    # than in expensive-looking markets. The threshold is the shape itself, so
+    # unlike every other signal here it has no number to tune.
+    df["vix_ts"] = df["vix"] / df["vix3m"]
 
     # Daily grid, forward-filled across weekends and holidays, then lagged.
     # Crypto trades on days these markets do not; carrying the last known value
