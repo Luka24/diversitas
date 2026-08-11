@@ -19,7 +19,7 @@ for p in (ROOT, ROOT / "lean"):
 
 import requests
 
-from shared.data_source import BINANCE_URL, fetch_candles
+from shared.data_source import BINANCE_HOSTS, fetch_candles
 from shared.warmup import required_history
 from diversitas.config import DEFAULT_CONFIG, LeanConfig
 
@@ -56,9 +56,16 @@ def main() -> int:
     print("=" * 78)
 
     print("\n1. Neposredni HTTP klici")
-    probe("binance ping", "https://api.binance.com/api/v3/ping")
-    probe("binance klines BTCUSDT", BINANCE_URL,
-          params={"symbol": "BTCUSDT", "interval": "1d", "limit": 3})
+    # Both Binance hosts, in the order the fetcher tries them. The trading host
+    # is the one that answers 451; the data-only host usually does not, and that
+    # difference is the whole point of probing them separately.
+    bin_ok = []
+    for i, url in enumerate(BINANCE_HOSTS):
+        host = url.split("/")[2]
+        code = probe(f"binance [{i + 1}] {host}"[:26], url,
+                     params={"symbol": "BTCUSDT", "interval": "1d", "limit": 3})
+        if code == 200:
+            bin_ok.append(host)
     probe("coinbase BTC-USD", "https://api.exchange.coinbase.com/products/BTC-USD/candles",
           params={"granularity": 86400})
     probe("yahoo BTC-USD",
@@ -86,8 +93,14 @@ def main() -> int:
 
     print("\n" + "=" * 78)
     if "binance" in worked:
-        print("SKLEP: Binance deluje s tega stroja. Če dashboard vseeno kaže opozorilo,")
-        print("       je šlo za trenutno napako — od 2026-08-11 banner izpiše razlog.")
+        if len(bin_ok) == 1 and "vision" in bin_ok[0]:
+            print("SKLEP: trgovalni host api.binance.com je blokiran, podatkovni host")
+            print(f"       {bin_ok[0]} pa odgovarja — in vrača iste sveče.")
+            print("       Dashboard samodejno uporabi drugega, zato so številke")
+            print("       primerljive s poročili. Ni treba ukrepati.")
+        else:
+            print("SKLEP: Binance deluje s tega stroja. Če dashboard vseeno kaže")
+            print("       opozorilo, je šlo za trenutno napako — banner izpiše razlog.")
     elif worked:
         print(f"SKLEP: Binance NE deluje, delujejo pa: {', '.join(worked)}.")
         print("       Dashboard bo uporabil prvi delujoči vir in to izpisal. Številke")

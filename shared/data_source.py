@@ -56,6 +56,22 @@ def _resolve_symbol_map(config: Any) -> Mapping[str, Mapping[str, str]]:
 
 
 BINANCE_URL = "https://api.binance.com/api/v3/klines"
+
+# `data-api.binance.vision` is Binance's own market-data-only host: no account,
+# no auth, no trading endpoints. Because it serves nothing but candles it is not
+# behind the jurisdiction check that makes `api.binance.com` answer
+#
+#     HTTP 451 {"code": 0, "msg": "Service unavailable from a restricted
+#                                  location according to 'b. Eligibility'..."}
+#
+# from some networks. Verified 2026-08-11 to return byte-identical klines to
+# api.binance.com for BTCUSDT 1d. It is a second address for the same data, not
+# a way around the restriction — the restriction is on trading, and we only ever
+# read prices.
+BINANCE_HOSTS = (
+    "https://api.binance.com/api/v3/klines",
+    "https://data-api.binance.vision/api/v3/klines",
+)
 COINBASE_URL = "https://api.exchange.coinbase.com/products/{pid}/candles"
 
 # Logical interval -> per-source code / granularity.
@@ -71,6 +87,36 @@ _INTERVAL_MAP = {
 
 class DataSourceError(RuntimeError):
     pass
+
+
+def _binance_get(params: dict) -> "requests.Response":
+    """One klines call, trying each Binance host in turn.
+
+    A 451 is a property of the host, not of the request, so retrying the same
+    address is pointless — but the data-only host answers where the trading host
+    will not. Rate limits (418/429) are NOT retried on the second host: that
+    would be the same account-less caller hammering the same exchange.
+
+    Network-level failures move to the next host too. A block is often a reset
+    connection or a poisoned DNS answer rather than a polite 451, and an
+    exception that escaped here would skip the host that actually works.
+    """
+    last: Optional[Exception] = None
+    for i, url in enumerate(BINANCE_HOSTS):
+        try:
+            r = requests.get(url, params=params, timeout=15)
+        except Exception as e:  # noqa: BLE001 — connection reset, DNS, timeout
+            last = DataSourceError(f"Binance {url}: {type(e).__name__}: {str(e)[:150]}")
+            continue
+        if r.status_code == 200:
+            if i:
+                r.headers["X-Diversitas-Host"] = url    # for the diagnostic
+            return r
+        if r.status_code in (418, 429):
+            raise DataSourceError(
+                f"Binance rate limit hit (HTTP {r.status_code}) — back off and retry")
+        last = DataSourceError(f"Binance HTTP {r.status_code}: {r.text[:200]}")
+    raise last
 
 
 def _binance_fetch(symbol_binance: str, interval: str, bars: int) -> pd.DataFrame:
@@ -92,13 +138,7 @@ def _binance_fetch(symbol_binance: str, interval: str, bars: int) -> pd.DataFram
         }
         if end_time is not None:
             params["endTime"] = end_time
-        r = requests.get(BINANCE_URL, params=params, timeout=15)
-        if r.status_code == 429:
-            raise DataSourceError("Binance rate limit hit (HTTP 429)")
-        if r.status_code != 200:
-            raise DataSourceError(
-                f"Binance HTTP {r.status_code}: {r.text[:200]}"
-            )
+        r = _binance_get(params)
         raw = r.json()
         if not raw:
             break
