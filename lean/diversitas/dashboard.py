@@ -13,6 +13,7 @@ import datetime
 import math
 import os
 import time
+import tomllib
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -88,6 +89,7 @@ def _set_theme(dark: bool) -> None:
 # Equities keep it because it is the only venue that has them at all.
 CRYPTO_SOURCE_CHAIN = ("binance", "coinbase")
 STOCK_SOURCE_CHAIN = ("yahoo",)
+VENUES = ("binance", "coinbase", "yahoo")
 
 
 def _pinned_source() -> str | None:
@@ -102,15 +104,42 @@ def _pinned_source() -> str | None:
     actually reachable, says which one it is, and stops crying wolf. It is read
     per deployment, so a laptop can stay on Binance while the cloud runs on
     Coinbase.
+
+    Read from the environment, then Streamlit secrets, then deployment.toml at
+    the repo root. The committed file is last so either of the other two can
+    override it for a single session, and it exists at all because Streamlit
+    Cloud has no way to set an environment variable without going through the
+    secrets UI — this keeps the choice in version control, where the reasoning
+    can sit next to it.
     """
-    val = os.environ.get("DIVERSITAS_PRICE_SOURCE")
-    if not val:
+    def _secret():
         try:
-            val = st.secrets.get("price_source")      # .streamlit/secrets.toml
+            return st.secrets.get("price_source")     # .streamlit/secrets.toml
         except Exception:                             # no secrets file at all
-            val = None
-    val = (val or "").strip().lower()
-    return val if val in ("binance", "coinbase", "yahoo") else None
+            return None
+
+    # Each layer is validated on its own, so a typo in the environment falls
+    # through to the file rather than silently disabling the deployed choice.
+    for get in (lambda: os.environ.get("DIVERSITAS_PRICE_SOURCE"), _secret,
+                lambda: _deployment_setting("price_source")):
+        val = (get() or "").strip().lower()
+        if val in VENUES:
+            return val
+    return None
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _deployment_settings() -> dict:
+    path = _PROJECT_ROOT / "deployment.toml"
+    try:
+        with open(path, "rb") as fh:
+            return tomllib.load(fh)
+    except Exception:            # absent or malformed — fall back to defaults
+        return {}
+
+
+def _deployment_setting(key: str):
+    return _deployment_settings().get(key)
 
 
 def _source_chain(symbol: str) -> tuple[str, ...]:

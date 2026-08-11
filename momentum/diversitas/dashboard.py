@@ -78,11 +78,18 @@ def _pinned_source() -> str | None:
     dashboard. Binance geo-blocks datacenter IPs, so a hosted deployment gets a
     permanent HTTP 451 where a laptop gets 200; pinning turns that from a
     recurring alarm into a decision."""
-    import os
+    import os, tomllib
     val = os.environ.get("DIVERSITAS_PRICE_SOURCE")
     if not val:
         try:
             val = st.secrets.get("price_source")
+        except Exception:
+            val = None
+    if not val:
+        # deployment.toml at the repo root, committed and not secret
+        try:
+            with open(_PROJECT_ROOT / "deployment.toml", "rb") as fh:
+                val = tomllib.load(fh).get("price_source")
         except Exception:
             val = None
     val = (val or "").strip().lower()

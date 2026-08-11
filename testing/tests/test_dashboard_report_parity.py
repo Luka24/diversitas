@@ -141,7 +141,9 @@ def test_price_source_chain_is_ordered_and_never_falls_back_silently():
         "crypto falls back only to another real exchange"
     assert "yahoo" not in dash.CRYPTO_SOURCE_CHAIN, \
         "a Yahoo fallback silently draws a different strategy"
-    assert dash._source_chain("BTC") == dash.CRYPTO_SOURCE_CHAIN
+    # The effective chain is a reordering of that set, never a different set —
+    # whichever venue is pinned, Yahoo must not appear behind it for crypto.
+    assert set(dash._source_chain("BTC")) == set(dash.CRYPTO_SOURCE_CHAIN)
     # equities have no other venue, so they must keep it
     assert dash._source_chain("SPY") == ("yahoo",), \
         "SPY/QQQ/GLD exist only on Yahoo; dropping it would break them"
@@ -167,7 +169,9 @@ def test_a_pinned_source_leads_the_chain_and_silences_the_fallback_banner():
     from diversitas import dashboard as dash
     prev = os.environ.get("DIVERSITAS_PRICE_SOURCE")
     try:
-        os.environ.pop("DIVERSITAS_PRICE_SOURCE", None)
+        # Set it explicitly rather than relying on it being unset — deployment.toml
+        # now pins a venue, so "unset" is no longer the same as "unpinned".
+        os.environ["DIVERSITAS_PRICE_SOURCE"] = "binance"
         assert dash._source_chain("BTC") == ("binance", "coinbase")
 
         os.environ["DIVERSITAS_PRICE_SOURCE"] = "coinbase"
@@ -176,9 +180,43 @@ def test_a_pinned_source_leads_the_chain_and_silences_the_fallback_banner():
         # equities have one venue; a crypto pin must not redirect them
         assert dash._source_chain("SPY") == ("yahoo",)
 
-        # garbage must not silently become the source
+        # Garbage must not become the source, and must not silently cancel the
+        # deployed choice either — it falls through to the next layer.
         os.environ["DIVERSITAS_PRICE_SOURCE"] = "not-a-venue"
-        assert dash._source_chain("BTC") == ("binance", "coinbase")
+        from_file = dash._deployment_setting("price_source")
+        expected = ((from_file,) + tuple(s for s in dash.CRYPTO_SOURCE_CHAIN
+                                         if s != from_file)
+                    if from_file in dash.VENUES else dash.CRYPTO_SOURCE_CHAIN)
+        assert dash._source_chain("BTC") == expected
+    finally:
+        os.environ.pop("DIVERSITAS_PRICE_SOURCE", None)
+        if prev is not None:
+            os.environ["DIVERSITAS_PRICE_SOURCE"] = prev
+
+
+def test_deployment_toml_is_the_committed_default():
+    """Streamlit Cloud cannot set an environment variable without its secrets UI,
+    so the choice lives in a committed file instead — where the reasoning for it
+    sits next to it in version control rather than in someone's browser."""
+    import os
+    import tomllib
+    from pathlib import Path
+    from diversitas import dashboard as dash
+
+    path = Path(dash._PROJECT_ROOT) / "deployment.toml"
+    assert path.exists(), "deployment.toml is the committed source of the setting"
+    with open(path, "rb") as fh:
+        cfg = tomllib.load(fh)
+    assert cfg.get("price_source") in ("binance", "coinbase", "yahoo")
+
+    prev = os.environ.get("DIVERSITAS_PRICE_SOURCE")
+    try:
+        os.environ.pop("DIVERSITAS_PRICE_SOURCE", None)
+        assert dash._pinned_source() == cfg["price_source"], \
+            "the file must actually drive the choice, not just document it"
+        # and the environment must still win over it
+        os.environ["DIVERSITAS_PRICE_SOURCE"] = "yahoo"
+        assert dash._pinned_source() == "yahoo"
     finally:
         os.environ.pop("DIVERSITAS_PRICE_SOURCE", None)
         if prev is not None:
