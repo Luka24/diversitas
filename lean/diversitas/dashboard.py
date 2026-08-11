@@ -19,7 +19,8 @@ from plotly.subplots import make_subplots
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
-from shared.data_source import fetch_candles, fetch_btc_daily, fetch_spx_daily
+from shared.data_source import (fetch_candles, fetch_btc_daily, fetch_spx_daily,
+                                BINANCE_HOSTS)
 from shared.warmup import trim_warmup, warmup_bars, required_history
 from shared.costs import turnover as shared_turnover
 from diversitas.config import LeanConfig, DEFAULT_CONFIG
@@ -111,6 +112,11 @@ def _load_candles(symbol: str, bars: int) -> pd.DataFrame:
         if i:
             df.attrs["fell_back_from"] = PRICE_SOURCE_CHAIN[0]
             df.attrs["source_errors"] = " | ".join(errors)
+            # A banner with no time on it cannot be told apart from a stale one
+            # left on screen since the last failure — which is exactly how an
+            # already-fixed outage kept looking live.
+            df.attrs["failed_at"] = datetime.datetime.now(datetime.timezone.utc)
+            df.attrs["binance_hosts"] = len(BINANCE_HOSTS)
         return df
     raise RuntimeError(f"{symbol}: noben vir ni odgovoril — {' | '.join(errors)}")
 
@@ -2065,14 +2071,32 @@ def main() -> None:
         # Without this the banner says only THAT it failed. A timeout, a rate
         # limit and a geo-block all need different responses, and the difference
         # was being thrown away.
+        when = daily.attrs.get("failed_at")
+        if when is not None:
+            age = (datetime.datetime.now(datetime.timezone.utc) - when).total_seconds()
+            st.caption(
+                f"Poskus ob {when:%H:%M:%S UTC} — pred {age:.0f} s."
+                + ("  ⚠️ Če je to precej v preteklosti, banner je zastal: "
+                   "stran ni bila ponovno pognana." if age > 180 else "")
+            )
+        # A process that predates the multi-host failover reports one host and
+        # looks identical to one where both hosts are blocked. Say which it is.
+        n_hosts = daily.attrs.get("binance_hosts", 1)
+        if n_hosts < 2:
+            st.caption(
+                "⚠️ Ta proces še nima podpore za drugi Binance gostitelj. "
+                "**Do konca ustavi Streamlit (Ctrl+C) in ga zaženi znova** — "
+                "osvežitev brskalnika ne zadošča, ker Streamlit ne uvozi na "
+                "novo spremenjenih modulov."
+            )
         err = daily.attrs.get("source_errors")
         if err:
             st.caption(f"Razlog: `{err}`")
-            if "451" in err or "403" in err:
+            if ("451" in err or "403" in err) and n_hosts >= 2:
                 st.caption(
-                    "HTTP 451/403 pomeni, da Binance blokira ta IP glede na "
-                    "lokacijo — ne gre za izpad. Preveri VPN oz. omrežje; "
-                    "`python testing/scripts/check_data_sources.py` to potrdi."
+                    "HTTP 451/403 je geo-blokada, ne izpad — in odpovedala sta "
+                    "oba Binance gostitelja. Poženi "
+                    "`python testing/scripts/check_data_sources.py`."
                 )
 
     df_full = result.df
