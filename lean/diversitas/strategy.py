@@ -56,10 +56,18 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
     track_low = ind.lowest(low, cfg.track_period)
     df["trackline"] = (track_high + track_low) / 2.0
     df["track_rising"] = df["trackline"] > df["trackline"].shift(1)
-    df["track_rising_window"] = df["trackline"] > df["trackline"].shift(cfg.track_slope_bars)
+    # NOTE the shape of this: ONE comparison of today against the bar
+    # `track_slope_bars` ago. It does NOT require the trackline to have risen on
+    # each of those bars — it may fall for nine days and still pass, as long as
+    # today sits above where it was ten days back. The every-bar version is
+    # `track_rising` above, which only colours the chart.
+    df["track_ref"] = df["trackline"].shift(cfg.track_slope_bars)
+    df["track_rising_window"] = df["trackline"] > df["track_ref"]
     buf_amt = df["trackline"] * (cfg.track_buf_pct / 100.0)
-    df["above_tl"] = close > (df["trackline"] + buf_amt)
-    df["below_tl"] = close < (df["trackline"] - buf_amt)
+    df["tl_upper"] = df["trackline"] + buf_amt
+    df["tl_lower"] = df["trackline"] - buf_amt
+    df["above_tl"] = close > df["tl_upper"]
+    df["below_tl"] = close < df["tl_lower"]
     df["dist_pct"] = (close - df["trackline"]) / df["trackline"] * 100.0
 
     # --- Moving averages ---
@@ -71,8 +79,9 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
     df["ma_long"] = ma_long
     df["above_ma_med"] = close > ma_med
     df["above_ma_long"] = close > ma_long
-    df["ma_long_rising"] = ma_long > ma_long.shift(cfg.ma_slope)
-    df["ma_long_falling"] = ma_long < ma_long.shift(cfg.ma_slope)
+    df["ma_long_ref"] = ma_long.shift(cfg.ma_slope)
+    df["ma_long_rising"] = ma_long > df["ma_long_ref"]
+    df["ma_long_falling"] = ma_long < df["ma_long_ref"]
     df["bear_regime"] = (~df["above_ma_long"]) & df["ma_long_falling"]
     df["regime_ok"] = ~df["bear_regime"]
 
@@ -105,8 +114,16 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
         dc_lo = ind.lowest(low, cfg.donchian_period)
         pos_in_chan = (close - dc_lo) / (dc_hi - dc_lo).replace(0, np.nan)
         df["donchian_ok"] = (pos_in_chan > cfg.donchian_top_frac).fillna(False)
+        # Display only. `donchian_trigger` is the close the gate would need today:
+        # it is the same inequality solved for price, so the dashboard never
+        # restates the formula and cannot drift away from it.
+        df["dc_hi"], df["dc_lo"] = dc_hi, dc_lo
+        df["donchian_pos"] = pos_in_chan
+        df["donchian_trigger"] = dc_lo + cfg.donchian_top_frac * (dc_hi - dc_lo)
     else:
         df["donchian_ok"] = True
+        df["dc_hi"] = df["dc_lo"] = np.nan
+        df["donchian_pos"] = df["donchian_trigger"] = np.nan
 
     df["trend_break"] = df["below_tl"]
     df["blowoff"] = (df["dist_pct"] > cfg.blowoff_dist_pct) & (df["rsi"] > 80)

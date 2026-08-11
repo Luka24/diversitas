@@ -10,6 +10,7 @@ for p in (_PROJECT_ROOT, _VARIANT_ROOT):
         sys.path.insert(0, str(p))
 
 import datetime
+import math
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -643,19 +644,45 @@ def _row(label: str, value: str, colour: str = "", tip: str = "") -> str:
     )
 
 
-def _gate_row(label: str, passed: bool) -> str:
+def _gate_row(label: str, passed: bool, now: str = "", need: str = "") -> str:
+    """One gate. `now` and `need` sit under the label and are always visible —
+    the hover text carries the formula, but the two numbers that decide the gate
+    should not require a hover to read."""
     icon = "PASS" if passed else "FAIL"
     col  = COL_BULL if passed else COL_BEAR
     bg   = f"{COL_BULL}11" if passed else f"{COL_BEAR}11"
+    detail = ""
+    if now or need:
+        parts = []
+        if now:
+            parts.append(f'<span style="color:{COL_TEXT}">{now}</span>')
+        if need:
+            parts.append(f'<span style="color:{COL_DIM}">needs {need}</span>')
+        detail = (
+            f'<div style="font-family:monospace;font-size:10px;margin-top:3px;'
+            f'line-height:1.35">{"  ·  ".join(parts)}</div>'
+        )
     return (
         f'<div style="display:flex;justify-content:space-between;align-items:center;'
-        f'padding:8px 12px;border-bottom:1px solid {COL_BORDER};background:{bg}">'
-        f'<span style="color:{COL_TEXT};font-size:11px">{label}</span>'
+        f'gap:10px;padding:8px 12px;border-bottom:1px solid {COL_BORDER};background:{bg}">'
+        f'<div style="min-width:0"><div style="color:{COL_TEXT};font-size:11px">{label}</div>'
+        f'{detail}</div>'
         f'<span style="background:{col}22;color:{col};padding:2px 10px;'
-        f'border-radius:3px;font-size:10px;font-weight:700;'
+        f'border-radius:3px;font-size:10px;font-weight:700;flex:none;'
         f'letter-spacing:0.5px;font-family:monospace">{icon}</span>'
         f'</div>'
     )
+
+
+def _num(v, dec: int = 0, suffix: str = "") -> str:
+    """Format a possibly-NaN scalar for the gate rows."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return "n/a"
+    if not math.isfinite(f):
+        return "n/a"
+    return f"{f:,.{dec}f}{suffix}"
 
 
 def _section_label(txt: str) -> str:
@@ -1532,11 +1559,203 @@ def _render_trade_ledger(trades: list[dict], n: int = 12) -> str:
 
 # ── gates + status panel (reusable for A and B) ──────────────────────────────
 
+def entry_gates(last: pd.Series, cfg: LeanConfig) -> list:
+    """(label, passed, now, needed, hover) per entry gate, for the last bar.
+
+    Split out of the renderer so it can be exercised without Streamlit — see
+    `tests/test_gate_rows.py`, which checks the stated formulas against the
+    columns they claim to describe.
+    """
+    # Entry gate changed 2026-08-10: the trackline band no longer decides
+    # entry, the Donchian channel does. The trackline row would misreport.
+    px  = 0 if float(last["close"]) >= 100 else 2   # majors vs cheap alts
+    nl  = "&#10;"
+    pct = cfg.donchian_top_frac * 100.0
+    tl, tref = float(last["trackline"]), float(last["track_ref"])
+    tl_chg = (tl / tref - 1.0) * 100.0 if math.isfinite(tref) and tref else float("nan")
+    mal, maref = float(last["ma_long"]), float(last["ma_long_ref"])
+
+    gates = [
+        (f"Close in top {100 - pct:.0f} % of {cfg.donchian_period}-day range",
+         bool(last["donchian_ok"]),
+         f"pos {_num(float(last['donchian_pos']) * 100, 1, ' %')}",
+         f"&gt; {pct:.0f} %  (close &gt; {_num(last['donchian_trigger'], px)})",
+         nl.join([
+             "ENTRY GATE.",
+             "",
+             f"  HH = highest high of the last {cfg.donchian_period} bars (today included)",
+             f"  LL = lowest low   of the last {cfg.donchian_period} bars (today included)",
+             "  pos = (close &minus; LL) / (HH &minus; LL)",
+             "",
+             f"  PASS when pos &gt; {cfg.donchian_top_frac:.2f}",
+             "",
+             f"Today:  HH = {_num(last['dc_hi'], px)}   LL = {_num(last['dc_lo'], px)}"
+             f"   close = {_num(last['close'], px)}",
+             f"        pos = {_num(float(last['donchian_pos']) * 100, 1, ' %')}",
+             "",
+             "Solved for price, the same rule reads",
+             f"  close &gt; LL + {cfg.donchian_top_frac:.2f} &times; (HH &minus; LL) "
+             f"= {_num(last['donchian_trigger'], px)}",
+             "",
+             "This replaced the trackline band as the entry gate on 2026-08-10.",
+             "The trackline still drives the EXIT.",
+         ])),
+        (f"Trackline higher than {cfg.track_slope_bars} bars ago",
+         bool(last["track_rising_window"]),
+         f"{_num(tl, px)} vs {_num(tref, px)} ({tl_chg:+.2f} %)",
+         f"&gt; {_num(tref, px)}",
+         nl.join([
+             "ENTRY GATE.",
+             "",
+             f"  TL = (highest high of {cfg.track_period} bars"
+             f" + lowest low of {cfg.track_period} bars) / 2",
+             f"  PASS when TL(today) &gt; TL({cfg.track_slope_bars} bars ago)",
+             "",
+             "This is ONE comparison: today against the bar "
+             f"{cfg.track_slope_bars} days back.",
+             "It does NOT require the trackline to rise on each of those days.",
+             f"It may fall on {cfg.track_slope_bars - 1} of them and still PASS,",
+             "as long as today sits above where it was then.",
+             "",
+             f"Today:  TL = {_num(tl, px)}"
+             f"   TL {cfg.track_slope_bars} bars ago = {_num(tref, px)}"
+             f"   change {tl_chg:+.2f} %",
+         ])),
+        ("Regime OK (not a confirmed bear)",
+         bool(last["regime_ok"]),
+         f"close {'&gt;' if bool(last['above_ma_long']) else '&le;'} MA200"
+         f"  ·  MA200 {'falling' if bool(last['ma_long_falling']) else 'not falling'}",
+         "not both at once",
+         nl.join([
+             "ENTRY GATE &mdash; a block, not a trigger.",
+             "",
+             f"  MA200 = simple average of the last {cfg.ma_long_len} closes",
+             f"  bear  = (close &le; MA200) AND (MA200(today) &lt; MA200({cfg.ma_slope} bars ago))",
+             "  PASS when NOT bear",
+             "",
+             "BOTH halves must hold to fail. Sitting below the 200-day average",
+             "is not enough while that average is still rising.",
+             "",
+             f"Today:  close = {_num(last['close'], px)}   MA200 = {_num(mal, px)}"
+             f"   &rarr; {'above' if bool(last['above_ma_long']) else 'below'}",
+             f"        MA200 = {_num(mal, px)}   {cfg.ma_slope} bars ago"
+             f" = {_num(maref, px)}"
+             f"   &rarr; {'falling' if bool(last['ma_long_falling']) else 'not falling'}",
+             "",
+             "This blocks ENTRY only. The strategy holds through it once long.",
+         ])),
+        ("No blow-off top",
+         not bool(last["blowoff"]),
+         f"dist {_num(last['dist_pct'], 1, ' %')}  ·  RSI {_num(last['rsi'], 1)}",
+         f"not (dist &gt; {cfg.blowoff_dist_pct:.0f} % AND RSI &gt; 80)",
+         nl.join([
+             "ENTRY GATE and EXIT RULE &mdash; the same test does both jobs.",
+             "",
+             "  dist = (close &minus; TL) / TL &times; 100",
+             f"  blowoff = (dist &gt; {cfg.blowoff_dist_pct:.0f} %) AND (RSI{cfg.rsi_len} &gt; 80)",
+             "  PASS when NOT blowoff",
+             "",
+             "BOTH must hold to fire. A stretched price with a calm RSI does",
+             "nothing, and so does a hot RSI close to the trackline.",
+             "",
+             f"Today:  dist = {_num(last['dist_pct'], 2, ' %')}"
+             f"   RSI{cfg.rsi_len} = {_num(last['rsi'], 1)}",
+             "",
+             "It sits on the entry side too so the strategy never buys on a bar",
+             "it would sell on.",
+         ])),
+    ]
+    if cfg.use_btc_filter:
+        gates.append((
+            "BTC bull (cross-asset)",
+            bool(last["btc_filter_ok"]),
+            f"BTC {'above' if bool(last['btc_bull']) else 'below'} its 50-day EMA",
+            "BTC above EMA50",
+            nl.join([
+                "ENTRY GATE &mdash; optional, off by default in Lean.",
+                "",
+                "  PASS when BTC close &gt; EMA50 of BTC close",
+                "",
+                f"Today:  BTC is {'above' if bool(last['btc_bull']) else 'below'} its EMA50.",
+            ]),
+        ))
+    return gates
+
+
+def exit_gates(last: pd.Series, cfg: LeanConfig) -> list:
+    """(label, passed, now, needed, hover) per exit gate, for the last bar.
+
+    These are the ONLY two exits the state machine has. `regime_ok` used to be
+    listed here as a third, described as forcing an exit in a bear market — it
+    does not. It sits in bull_condition, so it blocks ENTRY only, and the
+    strategy holds through it: 4412 bars across the parameter grid are BULL
+    while regime_ok is false. It is listed under the entry gates instead.
+    """
+    px = 0 if float(last["close"]) >= 100 else 2
+    nl = "&#10;"
+    below_n = int(last["below_count"])
+    gates = [
+        (f"Not below trackline band {cfg.exit_grace_bars} days running",
+         not (bool(last["below_tl"]) and below_n >= cfg.exit_grace_bars),
+         f"{_num(last['close'], px)} vs {_num(last['tl_lower'], px)}"
+         f"  ·  {below_n} day{'' if below_n == 1 else 's'} below",
+         f"&lt; {cfg.exit_grace_bars} days below",
+         nl.join([
+             "EXIT RULE &mdash; trend break.",
+             "",
+             f"  TL    = (highest high of {cfg.track_period} bars"
+             f" + lowest low of {cfg.track_period} bars) / 2",
+             f"  lower = TL &times; (1 &minus; {cfg.track_buf_pct:.0f} / 100)"
+             f" = {_num(last['tl_lower'], px)}",
+             "  below = close &lt; lower",
+             f"  EXIT when below has held {cfg.exit_grace_bars} consecutive days",
+             "",
+             "One day below is not enough, and the count resets the moment the",
+             "close comes back above the band.",
+             "",
+             f"Today:  close = {_num(last['close'], px)}"
+             f"   lower = {_num(last['tl_lower'], px)}"
+             f"   &rarr; {'below' if bool(last['below_tl']) else 'not below'}",
+             f"        consecutive days below = {below_n} of {cfg.exit_grace_bars}",
+             "",
+             "The trackline band no longer gates entry, only this exit.",
+         ])),
+        ("No blow-off top",
+         not bool(last["blowoff"]),
+         f"dist {_num(last['dist_pct'], 1, ' %')}  ·  RSI {_num(last['rsi'], 1)}",
+         f"not (dist &gt; {cfg.blowoff_dist_pct:.0f} % AND RSI &gt; 80)",
+         nl.join([
+             "EXIT RULE &mdash; fires immediately, no grace period.",
+             "",
+             "  dist = (close &minus; TL) / TL &times; 100",
+             f"  blowoff = (dist &gt; {cfg.blowoff_dist_pct:.0f} %) AND (RSI{cfg.rsi_len} &gt; 80)",
+             "",
+             "BOTH must hold. Unlike the trend break this needs no confirmation:",
+             "the bar it fires on is the bar the strategy sells on.",
+             "",
+             f"Today:  dist = {_num(last['dist_pct'], 2, ' %')}"
+             f"   RSI{cfg.rsi_len} = {_num(last['rsi'], 1)}",
+             "",
+             "It also blocks entry, so the strategy never buys on a bar it",
+             "would sell on.",
+         ])),
+    ]
+    return gates
+
+
 def _render_gates_and_status(df: pd.DataFrame, s: dict, cfg: LeanConfig,
                               symbol: str) -> None:
     """Entry gates · exit gates · status detail — 3-column layout."""
     last = df.iloc[-1]
     left, mid, right = st.columns([4, 4, 4], gap="medium")
+
+    def panel(rows: list) -> str:
+        inner = "".join(
+            f'<div title="{tip}" style="cursor:help">{_gate_row(lbl, ok, now, need)}</div>'
+            for lbl, ok, now, need, tip in rows
+        )
+        return (f'<div style="background:{COL_PANEL};border:1px solid {COL_BORDER};'
+                f'border-radius:4px;overflow:hidden">{inner}</div>')
 
     with left:
         st.markdown(
@@ -1546,48 +1765,13 @@ def _render_gates_and_status(df: pd.DataFrame, s: dict, cfg: LeanConfig,
             f'Entry gates · {symbol} · all must PASS for BULL</div>',
             unsafe_allow_html=True,
         )
-        # Entry gate changed 2026-08-10: the trackline band no longer decides
-        # entry, the Donchian channel does. The trackline row would misreport.
-        gates = [
-            (f"Top quartile of {cfg.donchian_period}-day range",
-             bool(last["donchian_ok"]),
-             f"Entry requires the close in the top quarter of the "
-             f"{cfg.donchian_period}-day high/low range — a real breakout rather "
-             f"than a trackline crossing. The trackline still drives the EXIT."),
-            (f"Trackline rising ({cfg.track_slope_bars}-bar slope)",
-             bool(last["track_rising_window"]),
-             f"The trackline must have a positive slope over the last {cfg.track_slope_bars} bars."),
-            ("Regime OK (not bear block)",
-             bool(last["regime_ok"]),
-             "The 200-day MA regime must not be in a confirmed bear market."),
-            ("No blow-off top",
-             not bool(last["blowoff"]),
-             "Blow-off is an exit rule, so it also blocks entry — the strategy "
-             "never buys on a bar it would sell on."),
-        ]
-        if cfg.use_btc_filter:
-            gates.append((
-                "BTC bull (cross-asset)",
-                bool(last["btc_filter_ok"]),
-                "BTC itself must be in a bull regime for entries.",
-            ))
-        gate_html = "".join(
-            f'<div title="{tip}">{_gate_row(lbl, ok)}</div>'
-            for lbl, ok, tip in gates
-        )
-        st.markdown(
-            f'<div style="background:{COL_PANEL};border:1px solid {COL_BORDER};'
-            f'border-radius:4px;overflow:hidden">{gate_html}</div>',
-            unsafe_allow_html=True,
-        )
-        wrn = []
-        if s["blowoff"]:   wrn.append("BLOW-OFF top")
-        if wrn:
+        st.markdown(panel(entry_gates(last, cfg)), unsafe_allow_html=True)
+        if s["blowoff"]:
             st.markdown(
                 f'<div style="background:{COL_PANEL};border:1px solid {COL_BEAR};'
                 f'border-radius:4px;padding:9px 14px;margin-top:8px;'
                 f'color:{COL_BEAR};font-size:12px;font-weight:700;'
-                f'letter-spacing:0.5px;text-transform:uppercase">{"  ·  ".join(wrn)}</div>',
+                f'letter-spacing:0.5px;text-transform:uppercase">BLOW-OFF top</div>',
                 unsafe_allow_html=True,
             )
 
@@ -1599,32 +1783,7 @@ def _render_gates_and_status(df: pd.DataFrame, s: dict, cfg: LeanConfig,
             f'Exit gates · any FAIL triggers exit</div>',
             unsafe_allow_html=True,
         )
-        # These are the ONLY two exits the state machine has. `regime_ok` used to be
-        # listed here as a third, described as forcing an exit in a bear market — it
-        # does not. It sits in bull_condition, so it blocks ENTRY only, and the
-        # strategy holds through it: 4412 bars across the parameter grid are BULL
-        # while regime_ok is false. It is listed under the entry gates, where it
-        # belongs.
-        exit_gates = [
-            (f"Not below trackline for {cfg.exit_grace_bars} days",
-             not (bool(last["below_tl"]) and int(last["below_count"]) >= cfg.exit_grace_bars),
-             f"Trend break: the close must sit below the trackline minus the buffer "
-             f"for {cfg.exit_grace_bars} consecutive days before the strategy exits. "
-             f"A single day below is not enough."),
-            ("No blow-off top",
-             not bool(last["blowoff"]),
-             "A parabolic blow-off top triggers an immediate exit — and also blocks "
-             "entry, so the strategy never buys on a bar it would sell on."),
-        ]
-        exit_html = "".join(
-            f'<div title="{tip}">{_gate_row(lbl, ok)}</div>'
-            for lbl, ok, tip in exit_gates
-        )
-        st.markdown(
-            f'<div style="background:{COL_PANEL};border:1px solid {COL_BORDER};'
-            f'border-radius:4px;overflow:hidden">{exit_html}</div>',
-            unsafe_allow_html=True,
-        )
+        st.markdown(panel(exit_gates(last, cfg)), unsafe_allow_html=True)
 
     with right:
         st.markdown(
