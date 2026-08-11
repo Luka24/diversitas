@@ -19,8 +19,16 @@ from plotly.subplots import make_subplots
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
-from shared.data_source import (fetch_candles, fetch_btc_daily, fetch_spx_daily,
-                                BINANCE_HOSTS)
+from shared.data_source import fetch_candles, fetch_btc_daily, fetch_spx_daily
+try:
+    from shared.data_source import BINANCE_HOSTS
+except ImportError:
+    # A deployment can be mid-update: this file already asks for the constant
+    # while the `shared` it imports still predates it. That used to take the
+    # whole app down with an ImportError. One host is also the truthful answer
+    # for that older module, and it is what the banner reads to tell you the
+    # process is stale — so the degraded case reports itself.
+    BINANCE_HOSTS = ("https://api.binance.com/api/v3/klines",)
 from shared.warmup import trim_warmup, warmup_bars, required_history
 from shared.costs import turnover as shared_turnover
 from diversitas.config import LeanConfig, DEFAULT_CONFIG
