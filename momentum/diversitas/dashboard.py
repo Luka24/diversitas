@@ -64,7 +64,17 @@ def _set_theme(dark: bool) -> None:
 
 # ── caching ───────────────────────────────────────────────────────────────────
 
-PRICE_SOURCE_CHAIN = ("binance", "coinbase", "yahoo")
+# Yahoo left the crypto chain on 2026-08-11 — see the Lean dashboard for the
+# measurement. Short version: against Binance it costs 7.6 points of CAGR and
+# nine of drawdown on BTC, where Coinbase costs 1.7 and takes the same trades.
+# A Coinbase fallback is the same strategy on slightly different prices; a Yahoo
+# fallback is a different one. Equities keep it as their only venue.
+CRYPTO_SOURCE_CHAIN = ("binance", "coinbase")
+STOCK_SOURCE_CHAIN = ("yahoo",)
+
+
+def _source_chain(symbol: str) -> tuple[str, ...]:
+    return STOCK_SOURCE_CHAIN if symbol in STOCK_SYMBOLS else CRYPTO_SOURCE_CHAIN
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -87,7 +97,8 @@ def _load_candles(symbol: str, bars: int) -> pd.DataFrame:
     to a whole jurisdiction looked the same as a timeout.
     """
     errors = []
-    for i, src in enumerate(PRICE_SOURCE_CHAIN):
+    chain = _source_chain(symbol)
+    for i, src in enumerate(chain):
         attempts = 2 if i == 0 else 1     # retry the pinned source only
         for attempt in range(attempts):
             try:
@@ -104,7 +115,7 @@ def _load_candles(symbol: str, bars: int) -> pd.DataFrame:
             continue
         df.attrs["source"] = src
         if i:
-            df.attrs["fell_back_from"] = PRICE_SOURCE_CHAIN[0]
+            df.attrs["fell_back_from"] = chain[0]
             df.attrs["source_errors"] = " | ".join(errors)
         return df
     raise RuntimeError(f"{symbol}: noben vir ni odgovoril — {' | '.join(errors)}")

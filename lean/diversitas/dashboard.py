@@ -67,7 +67,22 @@ def _set_theme(dark: bool) -> None:
 
 # ── caching ───────────────────────────────────────────────────────────────────
 
-PRICE_SOURCE_CHAIN = ("binance", "coinbase", "yahoo")
+# Yahoo left the crypto chain on 2026-08-11. It is a scraped composite, not an
+# exchange, and it is not a near-substitute: on BTC 2020-07-14 to 2026-08-11 at
+# 0.30 %/side it costs 7.6 points of CAGR and nine points of drawdown against
+# Binance, with two extra trades. Coinbase costs 1.7 points and takes the same
+# eleven trades (testing/scripts/source_impact.py). Falling back to Coinbase
+# shows the same strategy on slightly different prices; falling back to Yahoo
+# shows a different strategy, which is not a fallback — better to say there is
+# no data than to draw that.
+#
+# Equities keep it because it is the only venue that has them at all.
+CRYPTO_SOURCE_CHAIN = ("binance", "coinbase")
+STOCK_SOURCE_CHAIN = ("yahoo",)
+
+
+def _source_chain(symbol: str) -> tuple[str, ...]:
+    return STOCK_SOURCE_CHAIN if symbol in STOCK_SYMBOLS else CRYPTO_SOURCE_CHAIN
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -93,7 +108,8 @@ def _load_candles(symbol: str, bars: int) -> pd.DataFrame:
     enough to drop the whole session onto Coinbase.
     """
     errors = []
-    for i, src in enumerate(PRICE_SOURCE_CHAIN):
+    chain = _source_chain(symbol)
+    for i, src in enumerate(chain):
         attempts = 2 if i == 0 else 1     # retry the pinned source only
         for attempt in range(attempts):
             try:
@@ -110,7 +126,7 @@ def _load_candles(symbol: str, bars: int) -> pd.DataFrame:
             continue
         df.attrs["source"] = src
         if i:
-            df.attrs["fell_back_from"] = PRICE_SOURCE_CHAIN[0]
+            df.attrs["fell_back_from"] = chain[0]
             df.attrs["source_errors"] = " | ".join(errors)
             # A banner with no time on it cannot be told apart from a stale one
             # left on screen since the last failure — which is exactly how an
@@ -711,6 +727,41 @@ def _num(v, dec: int = 0, suffix: str = "") -> str:
     return f"{f:,.{dec}f}{suffix}"
 
 
+def _coloured_line(fig, xs, ys, flags, colours, name: str, group: str,
+                   hover: str, width: float = 1.6, dash=None, row: int = 1) -> None:
+    """A line whose colour switches with `flags`, hovering exactly once per date.
+
+    The segments have to overlap by one point or the line shows a gap at every
+    colour change. That overlap used to be the whole story, and it meant the bar
+    where the colour flips belonged to two traces — so `hovermode="x unified"`
+    listed the trackline twice on those dates, with the same number repeated.
+
+    So the coloured segments no longer answer the hover at all. One transparent
+    trace spanning the whole series owns it, which also keeps the reading
+    identical on every date rather than depending on which segment you are over.
+    """
+    n = len(ys)
+    start, first = 0, True
+    for i in range(1, n + 1):
+        if i == n or flags[i] != flags[start]:
+            end = i + (0 if i == n else 1)      # overlap by one: no visual gap
+            fig.add_trace(go.Scatter(
+                x=xs[start:end], y=ys[start:end], mode="lines",
+                line=dict(color=colours[int(bool(flags[start]))], width=width,
+                          dash=dash),
+                name=name, showlegend=first, legendgroup=group,
+                hoverinfo="skip",
+            ), row=row, col=1)
+            first = False
+            start = i
+    fig.add_trace(go.Scatter(
+        x=xs, y=ys, mode="lines",
+        line=dict(color="rgba(0,0,0,0)", width=max(width, 6)),
+        name=name, legendgroup=group, showlegend=False,
+        hovertemplate=hover,
+    ), row=row, col=1)
+
+
 def _section_label(txt: str) -> str:
     return (
         f'<div style="color:{COL_DIM};font-size:10px;text-transform:uppercase;'
@@ -830,22 +881,13 @@ def _build_price_chart(df: pd.DataFrame, symbol: str,
     # Trackline coloured by 1-bar slope — matches Pine `plot(trackline,
     # color=trackRising ? green : red)` (diversitas_lean.pine:173). The status
     # table separately uses the 10-bar `track_rising_window`, as Pine does at :226.
-    rising = df["track_rising"].fillna(False).to_numpy()
-    tl     = df["trackline"].to_numpy()
-    xs     = df.index
-    seg_start, first = 0, True
-    for i in range(1, len(df) + 1):
-        if i == len(df) or rising[i] != rising[seg_start]:
-            col = COL_BULL if rising[seg_start] else COL_BEAR
-            end = i + (0 if i == len(df) else 1)
-            fig.add_trace(go.Scatter(
-                x=xs[seg_start:end], y=tl[seg_start:end],
-                mode="lines", line=dict(color=col, width=1.6),
-                name="Trackline", showlegend=first, legendgroup="tl",
-                hovertemplate="TL %{y:,.2f}<extra></extra>",
-            ), row=1, col=1)
-            first = False
-            seg_start = i
+    xs = df.index
+    _coloured_line(
+        fig, xs, df["trackline"].to_numpy(),
+        df["track_rising"].fillna(False).to_numpy(),
+        (COL_BEAR, COL_BULL), "Trackline", "tl", "TL %{y:,.2f}<extra></extra>",
+        width=1.6,
+    )
 
     # 50 MA (trend filter)
     fig.add_trace(go.Scatter(
@@ -856,21 +898,12 @@ def _build_price_chart(df: pd.DataFrame, symbol: str,
 
     # 200 MA coloured by direction — reuse the column the strategy already computed
     # (it honours cfg.ma_slope; the previous inline expression hard-coded 5).
-    rising_long = df["ma_long_rising"].fillna(False).to_numpy()
-    ml          = df["ma_long"].to_numpy()
-    seg2, fl2   = 0, True
-    for i in range(1, len(df) + 1):
-        if i == len(df) or rising_long[i] != rising_long[seg2]:
-            col = COL_MA200 if rising_long[seg2] else COL_BEAR
-            end = i + (0 if i == len(df) else 1)
-            fig.add_trace(go.Scatter(
-                x=xs[seg2:end], y=ml[seg2:end], mode="lines",
-                line=dict(color=col, width=1.2, dash="dot"),
-                name="200 MA (regime)", showlegend=fl2, legendgroup="ma200",
-                hovertemplate="200 MA %{y:,.2f}<extra></extra>",
-            ), row=1, col=1)
-            fl2  = False
-            seg2 = i
+    _coloured_line(
+        fig, xs, df["ma_long"].to_numpy(),
+        df["ma_long_rising"].fillna(False).to_numpy(),
+        (COL_BEAR, COL_MA200), "200 MA (regime)", "ma200",
+        "200 MA %{y:,.2f}<extra></extra>", width=1.2, dash="dot",
+    )
 
     # Condition dots — hollow
     green = df[df["green_dot"]]

@@ -129,22 +129,33 @@ def test_position_survives_the_trim_boundary(frozen):
 
 
 def test_price_source_chain_is_ordered_and_never_falls_back_silently():
-    """The venues agree on price to ~0.1 %, but entry is a threshold, so that is
-    enough to move whole trades — 3 pp of CAGR between Binance and Yahoo on BTC.
-    So the order is fixed (real exchanges first, the scraped composite last), each
-    venue is tried strictly in turn, and any fallback is surfaced."""
+    """Entry is a threshold, so ~0.1 % of price moves whole trades. Measured on
+    BTC 2020-07-14 to 2026-08-11 at 0.30 %/side, Coinbase costs 1.7 points of
+    CAGR against Binance and takes the same eleven trades; Yahoo costs 7.6 and
+    nine points of drawdown, and takes thirteen. Coinbase is the same strategy
+    on slightly different prices, Yahoo is a different one — so Yahoo left the
+    crypto chain on 2026-08-11 and stays only where it is the sole venue."""
     import inspect
     from diversitas import dashboard as dash
-    assert dash.PRICE_SOURCE_CHAIN == ("binance", "coinbase", "yahoo"), \
-        "exchanges before the scraper, and the order must be explicit"
+    assert dash.CRYPTO_SOURCE_CHAIN == ("binance", "coinbase"), \
+        "crypto falls back only to another real exchange"
+    assert "yahoo" not in dash.CRYPTO_SOURCE_CHAIN, \
+        "a Yahoo fallback silently draws a different strategy"
+    assert dash._source_chain("BTC") == dash.CRYPTO_SOURCE_CHAIN
+    # equities have no other venue, so they must keep it
+    assert dash._source_chain("SPY") == ("yahoo",), \
+        "SPY/QQQ/GLD exist only on Yahoo; dropping it would break them"
     src = inspect.getsource(dash._load_candles)
     assert "strict=True" in src, "each venue must be tried without a hidden fallback"
-    assert "PRICE_SOURCE_CHAIN" in src, "the order must come from the named chain"
+    assert "_source_chain(" in src, "the order must come from the named chain"
     assert 'attrs["source"]' in src, "the venue that answered must be recorded"
     assert "fell_back_from" in src, "a fallback must be marked so the UI can warn"
+    assert "failed_at" in src, "a banner with no time cannot be told from a stale one"
     main = inspect.getsource(dash)
     assert 'attrs.get("fell_back_from")' in main and "st.error(" in main, \
         "a fallback must surface as a visible error, not pass silently"
+    assert 'attrs.get("source_errors")' in main, \
+        "the reason was recorded but never rendered for weeks; keep it rendered"
 
 
 def test_every_symbol_that_claims_a_fallback_actually_has_one():
