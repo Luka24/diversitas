@@ -10,6 +10,7 @@ for p in (_PROJECT_ROOT, _VARIANT_ROOT):
         sys.path.insert(0, str(p))
 
 import datetime
+import time
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
@@ -73,24 +74,40 @@ def _load_candles(symbol: str, bars: int) -> pd.DataFrame:
     Order is deliberate: Binance and Coinbase are real exchanges whose prices you
     can actually trade at; Yahoo is a scraped composite and sits last. It matters
     which one you get — entry is a threshold, so ~0.1 % of price difference moves
-    whole trades (3 percentage points of CAGR between Binance and Yahoo on BTC).
-    A fallback is therefore allowed, but never silent: the caller marks it and the
-    footer shows it.
+    whole trades. Measured on BTC 2020-07-14 to 2026-08-11 at 0.30 %/side:
+    Coinbase costs 1.7 points of CAGR against Binance, Yahoo costs 7.6 and nine
+    points of drawdown (`testing/scripts/source_impact.py`). A fallback is
+    therefore allowed, but never silent: the caller marks it and the banner
+    shows it.
+
+    Same fix as the Lean dashboard, 2026-08-11. Only `type(e).__name__` used to
+    be kept, so every failure read "DataSourceError" with no status code, and
+    the string it went into was never rendered anywhere — a fallback that had
+    run for weeks was indistinguishable from a blip. Binance answering HTTP 451
+    to a whole jurisdiction looked the same as a timeout.
     """
     errors = []
     for i, src in enumerate(PRICE_SOURCE_CHAIN):
-        try:
-            df = fetch_candles(symbol, "1d", bars=bars, config=DEFAULT_CONFIG,
-                               prefer=src, strict=True)
-        except Exception as e:  # noqa: BLE001
-            errors.append(f"{src}: {type(e).__name__}")
+        attempts = 2 if i == 0 else 1     # retry the pinned source only
+        for attempt in range(attempts):
+            try:
+                df = fetch_candles(symbol, "1d", bars=bars, config=DEFAULT_CONFIG,
+                                   prefer=src, strict=True)
+            except Exception as e:  # noqa: BLE001
+                if attempt + 1 < attempts:
+                    time.sleep(1.0)
+                    continue
+                errors.append(f"{src}: {type(e).__name__}: {str(e)[:300]}")
+                df = None
+            break
+        if df is None:
             continue
         df.attrs["source"] = src
         if i:
             df.attrs["fell_back_from"] = PRICE_SOURCE_CHAIN[0]
-            df.attrs["source_errors"] = "; ".join(errors)
+            df.attrs["source_errors"] = " | ".join(errors)
         return df
-    raise RuntimeError(f"{symbol}: noben vir ni odgovoril — {'; '.join(errors)}")
+    raise RuntimeError(f"{symbol}: noben vir ni odgovoril — {' | '.join(errors)}")
 
 
 @st.cache_data(ttl=60, show_spinner=False)
@@ -2041,6 +2058,28 @@ def main() -> None:
     except Exception as e:
         st.error(f"Data load failed for {symbol}: {e}")
         st.stop()
+
+    # Until 2026-08-11 this page fell back to another venue with no indication at
+    # all — `fell_back_from` was set and never read, so the numbers quietly came
+    # from Coinbase or Yahoo and looked exactly like Binance ones.
+    if daily.attrs.get("fell_back_from"):
+        st.error(
+            f"⚠️ **{daily.attrs['fell_back_from'].upper()} ni bil dosegljiv — "
+            f"prikazani podatki so z vira `{daily.attrs.get('source', '?')}`.**  \n"
+            f"Številke na tej strani **niso primerljive** s poročili, računanimi "
+            f"na `{daily.attrs['fell_back_from']}`. Izmerjeno na BTC: Coinbase "
+            f"stane 1,7 odstotne točke CAGR, Yahoo 7,6 in devet odstotnih točk "
+            f"večji padec — vstopni pogoj je prag, zato že desetinka odstotka "
+            f"premakne cel posel."
+        )
+        err = daily.attrs.get("source_errors")
+        if err:
+            st.caption(f"Razlog: `{err}`")
+            if "451" in err or "403" in err:
+                st.caption(
+                    "HTTP 451/403 je geo-blokada, ne izpad. Poženi "
+                    "`python testing/scripts/check_data_sources.py`."
+                )
 
     df_full = result.df
     df = df_full
