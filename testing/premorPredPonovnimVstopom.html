@@ -1,0 +1,381 @@
+<title>Korak 4 — premor pred ponovnim vstopom</title>
+
+<style>
+  :root{
+    --ground:#F6F8F6; --panel:#FFFFFF; --panel-2:#F0F4F1;
+    --ink:#17211F; --muted:#65736E; --rule:#DCE3DF;
+    --accent:#0E6455; --accent-soft:#DCEDE8;
+    --pass:#2C7A52; --fail:#A34329; --dim:#B4C0BA;
+    --serif:Georgia,"Iowan Old Style","Palatino Linotype",Palatino,serif;
+    --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    --mono:ui-monospace,"Cascadia Mono","SF Mono",Consolas,monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --ground:#0E1413; --panel:#151D1B; --panel-2:#1A2422;
+      --ink:#E2E9E5; --muted:#8C9A95; --rule:#26312E;
+      --accent:#4FBCA4; --accent-soft:#173029;
+      --pass:#5CB786; --fail:#D9805E; --dim:#3A4744;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#0E1413; --panel:#151D1B; --panel-2:#1A2422;
+    --ink:#E2E9E5; --muted:#8C9A95; --rule:#26312E;
+    --accent:#4FBCA4; --accent-soft:#173029;
+    --pass:#5CB786; --fail:#D9805E; --dim:#3A4744;
+  }
+  :root[data-theme="light"]{
+    --ground:#F6F8F6; --panel:#FFFFFF; --panel-2:#F0F4F1;
+    --ink:#17211F; --muted:#65736E; --rule:#DCE3DF;
+    --accent:#0E6455; --accent-soft:#DCEDE8;
+    --pass:#2C7A52; --fail:#A34329; --dim:#B4C0BA;
+  }
+
+  body{background:var(--ground);color:var(--ink);font-family:var(--sans);
+       line-height:1.6;font-size:16.5px;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:840px;margin:0 auto;padding:52px 24px 84px;
+        display:flex;flex-direction:column;gap:38px;}
+  .prose{max-width:62ch;}
+  p{margin:0 0 12px;} p:last-child{margin-bottom:0;}
+  h1,h2{font-family:var(--serif);font-weight:600;text-wrap:balance;margin:0;}
+  h1{font-size:2.4rem;line-height:1.14;letter-spacing:-.015em;}
+  h2{font-size:1.42rem;line-height:1.22;margin-bottom:4px;}
+  .eyebrow{font-family:var(--mono);font-size:.7rem;letter-spacing:.16em;
+           text-transform:uppercase;color:var(--accent);margin-bottom:11px;}
+  .lede{font-size:1.1rem;color:var(--muted);max-width:56ch;margin-top:13px;}
+  .meta{font-family:var(--mono);font-size:.76rem;color:var(--muted);
+        border-top:1px solid var(--rule);padding-top:13px;margin-top:22px;
+        display:flex;flex-wrap:wrap;gap:6px 22px;}
+  section{display:flex;flex-direction:column;gap:16px;}
+  hr{border:0;border-top:1px solid var(--rule);margin:0;}
+
+  .verdict{background:var(--panel);border:1px solid var(--rule);
+           border-left:4px solid var(--accent);border-radius:3px;padding:24px 28px;}
+  .verdict .big{font-family:var(--serif);font-size:1.6rem;line-height:1.28;
+                margin-bottom:10px;}
+
+  .scroll{overflow-x:auto;}
+  table{border-collapse:collapse;width:100%;font-size:.89rem;}
+  th,td{padding:8px 12px;text-align:right;border-bottom:1px solid var(--rule);
+        white-space:nowrap;}
+  th:first-child,td:first-child{text-align:left;}
+  thead th{font-family:var(--mono);font-size:.69rem;letter-spacing:.09em;
+           text-transform:uppercase;color:var(--muted);font-weight:500;
+           border-bottom:1px solid var(--ink);}
+  tbody td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;}
+  tr.hi td{background:var(--accent-soft);}
+
+  .fig{background:var(--panel);border:1px solid var(--rule);border-radius:3px;
+       padding:22px 24px;display:flex;flex-direction:column;gap:13px;}
+  .fig-title{font-size:.85rem;font-weight:600;}
+  .fig-note{font-size:.81rem;color:var(--muted);}
+  .track{position:relative;height:42px;background:var(--panel-2);
+         border-radius:2px;overflow:hidden;}
+  .track .mark{position:absolute;top:0;bottom:0;background:var(--fail);min-width:3px;}
+  .axis{display:flex;justify-content:space-between;font-family:var(--mono);
+        font-size:.7rem;color:var(--muted);}
+
+  .defs{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media (max-width:640px){.defs{grid-template-columns:1fr;}}
+  .def{background:var(--panel);border:1px solid var(--rule);border-radius:3px;
+       padding:18px 20px;display:flex;flex-direction:column;gap:10px;}
+  .def .who{font-family:var(--serif);font-size:1.1rem;}
+  .def .q{font-size:.92rem;font-style:italic;color:var(--accent);
+          border-left:2px solid var(--accent);padding-left:10px;}
+  .fork{display:flex;flex-direction:column;gap:6px;font-size:.86rem;}
+  .fork div{display:grid;grid-template-columns:auto 1fr;gap:9px;align-items:baseline;}
+  .fork .yn{font-family:var(--mono);font-size:.71rem;letter-spacing:.06em;
+            padding:1px 6px;border-radius:2px;white-space:nowrap;}
+  .fork .yn.y{background:var(--accent-soft);color:var(--accent);}
+  .fork .yn.n{background:var(--panel-2);color:var(--muted);}
+  .def .freq{font-size:.81rem;color:var(--muted);border-top:1px solid var(--rule);
+             padding-top:10px;margin-top:auto;}
+
+  .bars{display:flex;flex-direction:column;gap:15px;}
+  .grp{display:flex;flex-direction:column;gap:4px;}
+  .grp-h{display:flex;justify-content:space-between;font-size:.79rem;
+         color:var(--muted);font-family:var(--mono);}
+  .row{display:grid;grid-template-columns:20px 1fr 44px;align-items:center;gap:10px;
+       font-size:.79rem;}
+  .row .lbl{font-family:var(--mono);color:var(--muted);}
+  .bar{height:14px;background:var(--dim);border-radius:1px;}
+  .bar.win{background:var(--accent);}
+  .row .v{font-family:var(--mono);font-variant-numeric:tabular-nums;
+          text-align:right;color:var(--muted);}
+  .row.w .lbl,.row.w .v{color:var(--ink);font-weight:600;}
+
+  .days{display:flex;flex-direction:column;gap:6px;}
+  .dayrow{display:grid;grid-template-columns:74px 1fr;align-items:center;gap:10px;}
+  .cells{display:grid;grid-template-columns:repeat(17,1fr);gap:3px;}
+  .cell{aspect-ratio:1;border-radius:1px;background:var(--panel-2);
+        border:1px solid var(--rule);}
+  .cell.in{background:var(--accent);border-color:var(--accent);}
+  .cell.sig{background:var(--fail);border-color:var(--fail);}
+  .cell.mini{aspect-ratio:auto;height:9px;}
+  .dlbl{font-family:var(--mono);font-size:.75rem;color:var(--muted);}
+  .dnums{display:grid;grid-template-columns:repeat(17,1fr);gap:3px;
+         font-family:var(--mono);font-size:.62rem;color:var(--muted);text-align:center;}
+  .legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:.78rem;color:var(--muted);}
+  .key{display:inline-flex;align-items:center;gap:6px;}
+  .sw{width:11px;height:11px;border-radius:1px;border:1px solid var(--rule);}
+  .sw.in{background:var(--accent);border-color:var(--accent);}
+  .sw.out{background:var(--panel-2);}
+  .sw.bo{background:var(--fail);border-color:var(--fail);height:3px;width:14px;}
+
+  ul{margin:0;padding-left:1.1em;}
+  li{margin-bottom:6px;} li:last-child{margin-bottom:0;}
+  strong{font-weight:650;}
+  @media (max-width:620px){
+    h1{font-size:1.9rem;} body{font-size:15.5px;}
+    .wrap{padding:36px 18px 64px;gap:30px;}
+    .dayrow{grid-template-columns:54px 1fr;}
+  }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <div class="eyebrow">Diversitas Lean · korak 4 · BTC</div>
+    <h1>Premor pred ponovnim vstopom ostane</h1>
+    <p class="lede">Štiri različice pravila, ki po prodaji petnajst dni prepove
+      nakup. Nobena ni prestala vnaprej postavljenih pogojev.</p>
+    <div class="meta">
+      <span>BTC · Binance</span><span>2019-03-09 → 2026-07-29</span>
+      <span>2700 dni</span><span>0,30 % na stran</span>
+    </div>
+  </header>
+
+  <div class="verdict">
+    <p class="big">Razlike ni. Ostane, kar imamo.</p>
+    <p class="prose">Trije predlogi so na papirju izgledali bolje. Njihova
+      prednost živi izključno v letih 2019–2020. <strong>V zadnjih petih letih
+      in pol so vse tri ista strategija</strong> — in tam je sedanje pravilo
+      boljše od vseh.</p>
+  </div>
+
+  <section>
+    <h2>Kaj smo primerjali</h2>
+    <div class="prose">
+      <p>Po prodaji strategija danes počaka 15 dni, preden sme spet kupiti — da
+        ne skače noter-ven okoli iste cene. <strong>Nobena različica ne uvaja
+        nove nastavitve.</strong> B in C čakata le včasih; razlikujeta se v tem,
+        kaj vprašata.</p>
+    </div>
+
+    <div class="defs">
+      <div class="def">
+        <div class="who">B — gleda naš izid</div>
+        <div class="q">Je posel, ki sem ga pravkar zaprl, prinesel dobiček?</div>
+        <div class="fork">
+          <div><span class="yn y">dobiček</span><span>kupi takoj</span></div>
+          <div><span class="yn n">izguba</span><span>počakaj 15 dni</span></div>
+        </div>
+        <div class="freq">Izid neto, po odbitih stroških. Od 21 poslov jih je
+          bilo dobičkonosnih 13 — <strong>B čaka le 8-krat od 21</strong>.</div>
+      </div>
+      <div class="def">
+        <div class="who">C — gleda trg</div>
+        <div class="q">Ali dolgoročni trend še vedno raste?</div>
+        <div class="fork">
+          <div><span class="yn y">raste</span><span>kupi takoj</span></div>
+          <div><span class="yn n">ne raste</span><span>počakaj 15 dni</span></div>
+        </div>
+        <div class="freq">»Raste« = 200-dnevno povprečje je višje kot pred
+          petimi dnevi. Ni nov prag — strategija to že računa. Drži
+          <strong>66 % dni</strong>.</div>
+      </div>
+    </div>
+
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Različica</th><th>Sortino</th><th>Najv. padec</th>
+          <th>Čas v trgu</th><th>Poslov</th></tr></thead>
+        <tbody>
+          <tr class="hi"><td><strong>A</strong> — danes, brezpogojnih 15 dni</td>
+            <td class="n">1,505</td><td class="n">−45,2 %</td>
+            <td class="n">41,9 %</td><td class="n">21</td></tr>
+          <tr><td><strong>B</strong> — 15 dni samo po izgubi</td>
+            <td class="n">1,764</td><td class="n">−44,9 %</td>
+            <td class="n">45,6 %</td><td class="n">32</td></tr>
+          <tr><td><strong>C</strong> — brez čakanja v uptrendu</td>
+            <td class="n">1,565</td><td class="n">−47,9 %</td>
+            <td class="n">46,1 %</td><td class="n">32</td></tr>
+          <tr><td><strong>D</strong> — brez premora</td>
+            <td class="n">1,603</td><td class="n">−47,9 %</td>
+            <td class="n">46,2 %</td><td class="n">32</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="prose">
+      <p>B izgleda kot jasna zmaga: 1,764 proti 1,505. Ne zdrži.</p>
+    </div>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Vsa razlika je stara pet let</h2>
+    <div class="fig">
+      <div class="fig-title">Dnevi, ko se B in C razlikujeta — 23 od 2700</div>
+      <div class="track">
+        <div class="mark" style="left:2.37%;width:0.26%"></div>
+        <div class="mark" style="left:5.52%;width:0.15%"></div>
+        <div class="mark" style="left:24.96%;width:0.52%"></div>
+      </div>
+      <div class="axis"><span>mar 2019</span><span>2021</span><span>2023</span>
+        <span>jul 2026</span></div>
+      <div class="fig-note">6 dni maja 2019, 3 dni avgusta 2019, 14 dni januarja
+        2021. Nato pet let in pol nič — <strong>od takrat sta ista
+        strategija</strong>. Po letu 2021 so bili posli večinoma dobičkonosni
+        <em>in</em> trend je rasel, zato ni čakal nobeden.</div>
+    </div>
+
+    <div class="fig">
+      <div class="fig-title">Sortino po obdobjih — meje določene vnaprej</div>
+      <div class="bars">
+        <div class="grp">
+          <div class="grp-h"><span>I &nbsp; mar 2019 → jan 2021</span><span>zmaga B</span></div>
+          <div class="row"><span class="lbl">A</span><span class="bar" style="width:50.2%"></span><span class="v">1,505</span></div>
+          <div class="row w"><span class="lbl">B</span><span class="bar win" style="width:94.6%"></span><span class="v">2,837</span></div>
+          <div class="row"><span class="lbl">C</span><span class="bar" style="width:72.5%"></span><span class="v">2,175</span></div>
+          <div class="row"><span class="lbl">D</span><span class="bar" style="width:76.3%"></span><span class="v">2,290</span></div>
+        </div>
+        <div class="grp">
+          <div class="grp-h"><span>II &nbsp; feb 2021 → nov 2022</span><span>zmaga A</span></div>
+          <div class="row w"><span class="lbl">A</span><span class="bar win" style="width:41.3%"></span><span class="v">1,239</span></div>
+          <div class="row"><span class="lbl">B</span><span class="bar" style="width:38.0%"></span><span class="v">1,139</span></div>
+          <div class="row"><span class="lbl">C</span><span class="bar" style="width:38.0%"></span><span class="v">1,139</span></div>
+          <div class="row"><span class="lbl">D</span><span class="bar" style="width:38.0%"></span><span class="v">1,139</span></div>
+        </div>
+        <div class="grp">
+          <div class="grp-h"><span>III &nbsp; dec 2022 → sep 2024</span><span>zmaga A</span></div>
+          <div class="row w"><span class="lbl">A</span><span class="bar win" style="width:66.3%"></span><span class="v">1,990</span></div>
+          <div class="row"><span class="lbl">B</span><span class="bar" style="width:59.1%"></span><span class="v">1,773</span></div>
+          <div class="row"><span class="lbl">C</span><span class="bar" style="width:59.1%"></span><span class="v">1,773</span></div>
+          <div class="row"><span class="lbl">D</span><span class="bar" style="width:59.1%"></span><span class="v">1,773</span></div>
+        </div>
+        <div class="grp">
+          <div class="grp-h"><span>IV &nbsp; okt 2024 → jul 2026</span><span>zmaga A</span></div>
+          <div class="row w"><span class="lbl">A</span><span class="bar win" style="width:53.4%"></span><span class="v">1,603</span></div>
+          <div class="row"><span class="lbl">B</span><span class="bar" style="width:34.1%"></span><span class="v">1,022</span></div>
+          <div class="row"><span class="lbl">C</span><span class="bar" style="width:34.1%"></span><span class="v">1,022</span></div>
+          <div class="row"><span class="lbl">D</span><span class="bar" style="width:34.1%"></span><span class="v">1,022</span></div>
+        </div>
+      </div>
+      <div class="fig-note">V obdobjih II, III in IV so B, C in D <em>enake</em>
+        številke, ker so ista strategija. <strong>A zmaga v treh oknih od
+        štirih</strong>; B samo v najstarejšem, a tam s toliko naskoka, da obrne
+        celotno vsoto.</div>
+    </div>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Čemu je premor namenjen — maj 2019</h2>
+    <div class="prose">
+      <p>Bitcoin je v dveh tednih zrasel s 6.200 na 8.800 dolarjev. Cena
+        25–35 % nad razponom, RSI nad 80 — strategija je to brala kot pregretje
+        in <strong>prožila izstop dan za dnem</strong>. B nima premora, ker je
+        bil zadnji posel dobičkonosen, zato je vsakič naslednji dan kupila
+        nazaj.</p>
+      <p>Nekaj vredno omembe: strategija preveri izstop <em>samo, kadar je že v
+        trgu</em>. Ko je B zunaj, gre po veji za vstop — in 14. maja vstopi na
+        dan, ko se pregretje spet sproži. <strong>Premor pri A to nerodnost
+        prekriva</strong>, ker ponoven vstop tako ali tako prepove.</p>
+    </div>
+
+    <div class="fig">
+      <div class="fig-title">Maj 2019 — kaj smo držali, dan za dnem</div>
+      <div class="days">
+        <div class="dayrow"><span></span>
+          <div class="dnums">
+            <span>10</span><span>11</span><span>12</span><span>13</span><span>14</span>
+            <span>15</span><span>16</span><span>17</span><span>18</span><span>19</span>
+            <span>20</span><span>21</span><span>22</span><span>23</span><span>24</span>
+            <span>25</span><span>26</span>
+          </div>
+        </div>
+        <div class="dayrow"><span class="dlbl">pregretje</span>
+          <div class="cells">
+            <span class="cell mini sig"></span><span class="cell mini sig"></span><span class="cell mini"></span>
+            <span class="cell mini sig"></span><span class="cell mini sig"></span><span class="cell mini sig"></span>
+            <span class="cell mini sig"></span><span class="cell mini"></span><span class="cell mini"></span>
+            <span class="cell mini"></span><span class="cell mini"></span><span class="cell mini"></span>
+            <span class="cell mini"></span><span class="cell mini"></span><span class="cell mini"></span>
+            <span class="cell mini"></span><span class="cell mini"></span>
+          </div>
+        </div>
+        <div class="dayrow"><span class="dlbl">A — danes</span>
+          <div class="cells">
+            <span class="cell in"></span><span class="cell"></span><span class="cell"></span>
+            <span class="cell"></span><span class="cell"></span><span class="cell"></span>
+            <span class="cell"></span><span class="cell"></span><span class="cell"></span>
+            <span class="cell"></span><span class="cell"></span><span class="cell"></span>
+            <span class="cell"></span><span class="cell"></span><span class="cell"></span>
+            <span class="cell"></span><span class="cell in"></span>
+          </div>
+        </div>
+        <div class="dayrow"><span class="dlbl">B</span>
+          <div class="cells">
+            <span class="cell in"></span><span class="cell"></span><span class="cell in"></span>
+            <span class="cell in"></span><span class="cell"></span><span class="cell in"></span>
+            <span class="cell"></span><span class="cell in"></span><span class="cell in"></span>
+            <span class="cell in"></span><span class="cell in"></span><span class="cell in"></span>
+            <span class="cell in"></span><span class="cell in"></span><span class="cell in"></span>
+            <span class="cell in"></span><span class="cell in"></span>
+          </div>
+        </div>
+      </div>
+      <div class="legend">
+        <span class="key"><span class="sw in"></span>držimo bitcoin</span>
+        <span class="key"><span class="sw out"></span>v gotovini</span>
+        <span class="key"><span class="sw bo"></span>pregretje se sproži ob zaključku dneva</span>
+      </div>
+      <div class="fig-note">Pregretje se sproži <strong>ob zaključku</strong>,
+        prodamo pa <strong>naslednji dan</strong> — zato rdeč signal 13. maja
+        pomeni, da smo zunaj šele 14. maja. B v tem tednu zamenja pozicijo
+        <strong>šestkrat</strong>, A dvakrat. Pri 0,30 % na stran je to 1,80 %
+        proti 0,60 % kapitala. Čez vso zgodovino ima A 21 poslov, ostale tri 32 —
+        prihranek obratov je edini učinek premora, ki je enak v vseh štirih
+        obdobjih.</div>
+    </div>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Kako smo se odločili</h2>
+    <div class="prose">
+      <p>Pragove smo shranili <strong>pred prvim zagonom</strong>, da jih ne bi
+        mogli prilagoditi rezultatu. Nobena različica jih ni dosegla.</p>
+    </div>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Različica</th><th>Izid</th><th>Odločilni razlog</th></tr></thead>
+        <tbody>
+          <tr><td><strong>B</strong> — 15 dni po izgubi</td>
+            <td>ne prestane</td>
+            <td>boljša le v 1 obdobju od 4</td></tr>
+          <tr><td><strong>C</strong> — brez čakanja v uptrendu</td>
+            <td>ne prestane</td>
+            <td>slabša od D (1,565 &lt; 1,603)</td></tr>
+          <tr><td><strong>D</strong> — brez premora</td>
+            <td>ne prestane</td>
+            <td>ob izenačenem času v trgu lovi 1,9 o. t. več padcev</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Kaj to pomeni za naprej</h2>
+    <div class="prose">
+      <p><strong>Strategija ostane nespremenjena.</strong> Premor pri 15 dneh,
+        nastavitev je še naprej deset.</p>
+    </div>
+  </section>
+
+</div>

@@ -1,0 +1,16 @@
+{
+ "symbol": "BTC",
+ "n_bars": 2899,
+ "n_dates": 200,
+ "from": "2019-05-23",
+ "to": "2026-07-23",
+ "required_history": 220,
+ "seed": 20260803,
+ "control_detected_pct": {
+  "signal": 50.0,
+  "window": 100.0
+ },
+ "n_leaking_dates": 0,
+ "leaks": {},
+ "verdict": "cisto"
+}

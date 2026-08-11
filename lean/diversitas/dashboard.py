@@ -699,8 +699,6 @@ def _status_bar(s: dict, symbol: str, cfg: LeanConfig) -> str:
     warnings = ""
     if s.get("blowoff"):
         warnings += f'<span style="color:{COL_BEAR};font-weight:700;font-size:11px;margin-left:14px">⚠ BLOW-OFF</span>'
-    if s.get("vol_shock"):
-        warnings += f'<span style="color:{COL_BEAR};font-weight:700;font-size:11px;margin-left:8px">⚠ VOL SHOCK</span>'
 
     btc_part = ""
     if cfg.use_btc_filter:
@@ -1447,9 +1445,7 @@ def _build_trade_ledger(df: pd.DataFrame) -> list[dict]:
             }
         elif sig == S_BEAR and open_entry is not None:
             pnl = (row["close"] / open_entry["entry_px"] - 1.0) * 100.0
-            reason = ("blow-off" if bool(row["blowoff"])
-                      else "vol-shock" if bool(row["vol_shock"])
-                      else "trend-break")
+            reason = "blow-off" if bool(row["blowoff"]) else "trend-break"
             trades.append({**open_entry,
                            "exit_date":     ts,
                            "exit_px":       float(row["close"]),
@@ -1550,22 +1546,24 @@ def _render_gates_and_status(df: pd.DataFrame, s: dict, cfg: LeanConfig,
             f'Entry gates · {symbol} · all must PASS for BULL</div>',
             unsafe_allow_html=True,
         )
+        # Entry gate changed 2026-08-10: the trackline band no longer decides
+        # entry, the Donchian channel does. The trackline row would misreport.
         gates = [
-            ("Above trackline + buffer",
-             bool(last["above_tl"]),
-             "Price must be above the adaptive trackline plus a safety buffer."),
-            ("Above 50 MA (trend)",
-             bool(last["above_ma_med"]),
-             "Price must be above the 50-day moving average, confirming the medium-term uptrend."),
+            (f"Top quartile of {cfg.donchian_period}-day range",
+             bool(last["donchian_ok"]),
+             f"Entry requires the close in the top quarter of the "
+             f"{cfg.donchian_period}-day high/low range — a real breakout rather "
+             f"than a trackline crossing. The trackline still drives the EXIT."),
             (f"Trackline rising ({cfg.track_slope_bars}-bar slope)",
              bool(last["track_rising_window"]),
              f"The trackline must have a positive slope over the last {cfg.track_slope_bars} bars."),
-            (f"Distance >= {cfg.track_buf_pct + cfg.min_dist_entry_pct:.1f}%",
-             bool(last["dist_entry_ok"]),
-             "Price must be far enough above the trackline to avoid entering on a weak bounce."),
             ("Regime OK (not bear block)",
              bool(last["regime_ok"]),
              "The 200-day MA regime must not be in a confirmed bear market."),
+            ("No blow-off top",
+             not bool(last["blowoff"]),
+             "Blow-off is an exit rule, so it also blocks entry — the strategy "
+             "never buys on a bar it would sell on."),
         ]
         if cfg.use_btc_filter:
             gates.append((
@@ -1584,7 +1582,6 @@ def _render_gates_and_status(df: pd.DataFrame, s: dict, cfg: LeanConfig,
         )
         wrn = []
         if s["blowoff"]:   wrn.append("BLOW-OFF top")
-        if s["vol_shock"]: wrn.append("Volatility shock")
         if wrn:
             st.markdown(
                 f'<div style="background:{COL_PANEL};border:1px solid {COL_BEAR};'
@@ -1602,19 +1599,22 @@ def _render_gates_and_status(df: pd.DataFrame, s: dict, cfg: LeanConfig,
             f'Exit gates · any FAIL triggers exit</div>',
             unsafe_allow_html=True,
         )
+        # These are the ONLY two exits the state machine has. `regime_ok` used to be
+        # listed here as a third, described as forcing an exit in a bear market — it
+        # does not. It sits in bull_condition, so it blocks ENTRY only, and the
+        # strategy holds through it: 4412 bars across the parameter grid are BULL
+        # while regime_ok is false. It is listed under the entry gates, where it
+        # belongs.
         exit_gates = [
-            ("Above trackline",
-             bool(last["above_tl"]),
-             "Primary exit trigger: if price closes below the trackline the strategy exits."),
-            ("Regime OK (no bear block)",
-             bool(last["regime_ok"]),
-             "A confirmed bear market forces an exit even if price is still above the trackline."),
+            (f"Not below trackline for {cfg.exit_grace_bars} days",
+             not (bool(last["below_tl"]) and int(last["below_count"]) >= cfg.exit_grace_bars),
+             f"Trend break: the close must sit below the trackline minus the buffer "
+             f"for {cfg.exit_grace_bars} consecutive days before the strategy exits. "
+             f"A single day below is not enough."),
             ("No blow-off top",
              not bool(last["blowoff"]),
-             "A parabolic blow-off top triggers an exit."),
-            ("No volatility shock",
-             not bool(last["vol_shock"]),
-             "A sudden volatility spike triggers an exit."),
+             "A parabolic blow-off top triggers an immediate exit — and also blocks "
+             "entry, so the strategy never buys on a bar it would sell on."),
         ]
         exit_html = "".join(
             f'<div title="{tip}">{_gate_row(lbl, ok)}</div>'
@@ -1643,8 +1643,10 @@ def _render_gates_and_status(df: pd.DataFrame, s: dict, cfg: LeanConfig,
         rsi_fmt = f"{rsi_val:.1f}" if not pd.isna(rsi_val) else "—"
         detail  = [
             _row("200 MA (regime)", s["ma_long_status"], ma_col),
-            _row("50 MA (trend)", "ABOVE" if s["above_ma_med"] else "BELOW",
-                 COL_BULL if s["above_ma_med"] else COL_BEAR),
+            # Informational only since 2026-08-03 — the 50 MA no longer gates entry,
+            # so it is drawn in neutral rather than bull/bear colours.
+            _row("50 MA (info)", "ABOVE" if s["above_ma_med"] else "BELOW",
+                 COL_NEUTRAL),
             _row("Trackline slope", tl_dir, tl_col),
             _row("RSI", rsi_fmt, rsi_col),
             _row("Annual vol", f'{s["annual_vol"]:.1f}%', COL_NEUTRAL),

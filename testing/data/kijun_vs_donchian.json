@@ -1,0 +1,165 @@
+{
+ "fee_per_side_pct": 0.3,
+ "cells": {
+  "A": "mid75 + 3 % cene  (danes)",
+  "B": "mid20 + 3 % cene",
+  "C": "mid75 + 25 % razpona75",
+  "D": "mid20 + 25 % razpona20  (Donchian)"
+ },
+ "BTC": {
+  "A": {
+   "label": "mid75 + 3 % cene  (danes)",
+   "period": 75,
+   "buffer": "cena",
+   "sortino": 1.505,
+   "cagr": 33.6,
+   "maxdd": -45.2,
+   "final": 8.55,
+   "exposure": 41.9,
+   "trades": 21,
+   "turnover": 42.0,
+   "band_median_pct": 2.9,
+   "sub": {
+    "I": 1.5,
+    "II": 1.24,
+    "III": 1.99,
+    "IV": 1.6
+   }
+  },
+  "B": {
+   "label": "mid20 + 3 % cene",
+   "period": 20,
+   "buffer": "cena",
+   "sortino": 1.606,
+   "cagr": 34.4,
+   "maxdd": -41.6,
+   "final": 8.92,
+   "exposure": 38.2,
+   "trades": 24,
+   "turnover": 49.0,
+   "band_median_pct": 3.0,
+   "sub": {
+    "I": 2.95,
+    "II": 0.38,
+    "III": 0.97,
+    "IV": 1.63
+   }
+  },
+  "C": {
+   "label": "mid75 + 25 % razpona75",
+   "period": 75,
+   "buffer": "razpon",
+   "sortino": 1.047,
+   "cagr": 24.1,
+   "maxdd": -61.1,
+   "final": 4.93,
+   "exposure": 48.1,
+   "trades": 18,
+   "turnover": 36.0,
+   "band_median_pct": 9.8,
+   "sub": {
+    "I": 1.16,
+    "II": 0.61,
+    "III": 1.74,
+    "IV": 1.04
+   }
+  },
+  "D": {
+   "label": "mid20 + 25 % razpona20  (Donchian)",
+   "period": 20,
+   "buffer": "razpon",
+   "sortino": 2.196,
+   "cagr": 53.6,
+   "maxdd": -38.0,
+   "final": 23.96,
+   "exposure": 37.6,
+   "trades": 18,
+   "turnover": 37.0,
+   "band_median_pct": 4.8,
+   "sub": {
+    "I": 4.01,
+    "II": 1.03,
+    "III": 0.9,
+    "IV": 2.53
+   }
+  }
+ },
+ "ETH": {
+  "A": {
+   "label": "mid75 + 3 % cene  (danes)",
+   "period": 75,
+   "buffer": "cena",
+   "sortino": 1.078,
+   "cagr": 28.5,
+   "maxdd": -60.7,
+   "final": 5.21,
+   "exposure": 37.1,
+   "trades": 17,
+   "turnover": 34.0,
+   "band_median_pct": 2.9,
+   "sub": {
+    "I": 0.96,
+    "II": 1.21,
+    "III": 1.59,
+    "IV": 0.98
+   }
+  },
+  "B": {
+   "label": "mid20 + 3 % cene",
+   "period": 20,
+   "buffer": "cena",
+   "sortino": 2.211,
+   "cagr": 60.4,
+   "maxdd": -41.7,
+   "final": 22.39,
+   "exposure": 32.1,
+   "trades": 22,
+   "turnover": 44.0,
+   "band_median_pct": 3.0,
+   "sub": {
+    "I": 5.29,
+    "II": 2.05,
+    "III": 0.61,
+    "IV": 1.17
+   }
+  },
+  "C": {
+   "label": "mid75 + 25 % razpona75",
+   "period": 75,
+   "buffer": "razpon",
+   "sortino": 1.241,
+   "cagr": 35.1,
+   "maxdd": -60.7,
+   "final": 7.22,
+   "exposure": 38.6,
+   "trades": 13,
+   "turnover": 26.0,
+   "band_median_pct": 13.1,
+   "sub": {
+    "I": 1.47,
+    "II": 1.44,
+    "III": 2.3,
+    "IV": 0.31
+   }
+  },
+  "D": {
+   "label": "mid20 + 25 % razpona20  (Donchian)",
+   "period": 20,
+   "buffer": "razpon",
+   "sortino": 1.832,
+   "cagr": 54.3,
+   "maxdd": -52.5,
+   "final": 17.31,
+   "exposure": 37.7,
+   "trades": 19,
+   "turnover": 38.0,
+   "band_median_pct": 6.2,
+   "sub": {
+    "I": 4.83,
+    "II": 1.7,
+    "III": 0.43,
+    "IV": 0.52
+   }
+  }
+ }
+}

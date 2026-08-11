@@ -1,0 +1,160 @@
+{
+ "atr_len": 14,
+ "grid": [
+  1.5,
+  2.0,
+  2.5,
+  3.0,
+  4.0
+ ],
+ "BTC": {
+  "trackline (danes)": {
+   "sortino": 1.505,
+   "cagr": 33.6,
+   "maxdd": -45.2,
+   "final": 8.55,
+   "exposure": 41.9,
+   "trades": 21,
+   "turnover": 42.0,
+   "days_long": 1132,
+   "downside_capture_in_pos": 37.8,
+   "worst_drawdown_while_long": -43.9
+  },
+  "ATR × 1.5": {
+   "sortino": 0.868,
+   "cagr": 12.4,
+   "maxdd": -35.5,
+   "final": 2.37,
+   "exposure": 20.9,
+   "trades": 40,
+   "turnover": 80.0,
+   "days_long": 565,
+   "downside_capture_in_pos": 19.5,
+   "worst_drawdown_while_long": -32.7
+  },
+  "ATR × 2.0": {
+   "sortino": 0.837,
+   "cagr": 12.7,
+   "maxdd": -39.4,
+   "final": 2.41,
+   "exposure": 24.7,
+   "trades": 36,
+   "turnover": 72.0,
+   "days_long": 666,
+   "downside_capture_in_pos": 23.1,
+   "worst_drawdown_while_long": -37.0
+  },
+  "ATR × 2.5": {
+   "sortino": 0.952,
+   "cagr": 15.5,
+   "maxdd": -50.6,
+   "final": 2.9,
+   "exposure": 27.9,
+   "trades": 31,
+   "turnover": 62.0,
+   "days_long": 753,
+   "downside_capture_in_pos": 25.9,
+   "worst_drawdown_while_long": -49.4
+  },
+  "ATR × 3.0": {
+   "sortino": 1.483,
+   "cagr": 29.4,
+   "maxdd": -46.2,
+   "final": 6.71,
+   "exposure": 31.6,
+   "trades": 27,
+   "turnover": 54.0,
+   "days_long": 853,
+   "downside_capture_in_pos": 29.2,
+   "worst_drawdown_while_long": -44.9
+  },
+  "ATR × 4.0": {
+   "sortino": 0.988,
+   "cagr": 18.0,
+   "maxdd": -48.5,
+   "final": 3.4,
+   "exposure": 36.4,
+   "trades": 25,
+   "turnover": 50.0,
+   "days_long": 982,
+   "downside_capture_in_pos": 34.3,
+   "worst_drawdown_while_long": -46.6
+  }
+ },
+ "BTC_passes": "ATR × 4.0",
+ "BTC 4h": {
+  "trackline (danes)": {
+   "sortino": 0.463,
+   "cagr": null,
+   "maxdd": -56.5,
+   "final": 5.74,
+   "exposure": 45.4,
+   "trades": 62,
+   "turnover": 123.0,
+   "days_long": 7619,
+   "downside_capture_in_pos": 42.3,
+   "worst_drawdown_while_long": -52.2
+  },
+  "ATR × 1.5": {
+   "sortino": 0.219,
+   "cagr": null,
+   "maxdd": -39.3,
+   "final": 1.57,
+   "exposure": 16.7,
+   "trades": 169,
+   "turnover": 338.0,
+   "days_long": 2813,
+   "downside_capture_in_pos": 16.4,
+   "worst_drawdown_while_long": -25.4
+  },
+  "ATR × 2.0": {
+   "sortino": 0.227,
+   "cagr": null,
+   "maxdd": -45.9,
+   "final": 1.68,
+   "exposure": 20.2,
+   "trades": 144,
+   "turnover": 288.0,
+   "days_long": 3392,
+   "downside_capture_in_pos": 20.2,
+   "worst_drawdown_while_long": -35.0
+  },
+  "ATR × 2.5": {
+   "sortino": 0.424,
+   "cagr": null,
+   "maxdd": -39.3,
+   "final": 3.58,
+   "exposure": 24.0,
+   "trades": 124,
+   "turnover": 248.0,
+   "days_long": 4033,
+   "downside_capture_in_pos": 23.7,
+   "worst_drawdown_while_long": -31.5
+  },
+  "ATR × 3.0": {
+   "sortino": 0.458,
+   "cagr": null,
+   "maxdd": -48.6,
+   "final": 4.28,
+   "exposure": 27.8,
+   "trades": 112,
+   "turnover": 224.0,
+   "days_long": 4669,
+   "downside_capture_in_pos": 26.9,
+   "worst_drawdown_while_long": -39.2
+  },
+  "ATR × 4.0": {
+   "sortino": 0.433,
+   "cagr": null,
+   "maxdd": -45.8,
+   "final": 4.31,
+   "exposure": 32.8,
+   "trades": 89,
+   "turnover": 178.0,
+   "days_long": 5510,
+   "downside_capture_in_pos": 31.9,
+   "worst_drawdown_while_long": -40.7
+  }
+ },
+ "BTC 4h_passes": "ATR × 4.0"
+}

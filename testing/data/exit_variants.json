@@ -1,0 +1,355 @@
+{
+ "fee_per_side_pct": 0.3,
+ "cells": [
+  "E0  danes",
+  "E0h brez milost",
+  "E10 Turtle S1",
+  "E20 Turtle S2",
+  "E55"
+ ],
+ "control_ok": true,
+ "BTC": {
+  "cells": {
+   "E0  danes": {
+    "sortino": 1.505,
+    "cagr": 33.6,
+    "maxdd": -45.2,
+    "final": 8.55,
+    "exposure": 41.9,
+    "trades": 21,
+    "turnover": 42.0,
+    "sub": {
+     "I": 1.5,
+     "II": 1.24,
+     "III": 1.99,
+     "IV": 1.6
+    }
+   },
+   "E0h brez milost": {
+    "sortino": 1.18,
+    "cagr": 23.4,
+    "maxdd": -49.6,
+    "final": 4.73,
+    "exposure": 38.1,
+    "trades": 23,
+    "turnover": 46.0,
+    "sub": {
+     "I": 1.33,
+     "II": 1.28,
+     "III": 0.98,
+     "IV": 1.2
+    }
+   },
+   "E10 Turtle S1": {
+    "sortino": 1.293,
+    "cagr": 23.2,
+    "maxdd": -43.7,
+    "final": 4.68,
+    "exposure": 28.8,
+    "trades": 31,
+    "turnover": 62.0,
+    "sub": {
+     "I": 1.5,
+     "II": 0.88,
+     "III": 2.09,
+     "IV": 0.83
+    }
+   },
+   "E20 Turtle S2": {
+    "sortino": 0.884,
+    "cagr": 15.4,
+    "maxdd": -55.5,
+    "final": 2.89,
+    "exposure": 36.1,
+    "trades": 27,
+    "turnover": 54.0,
+    "sub": {
+     "I": 1.39,
+     "II": 0.56,
+     "III": 1.03,
+     "IV": 0.37
+    }
+   },
+   "E55": {
+    "sortino": 1.351,
+    "cagr": 31.2,
+    "maxdd": -46.9,
+    "final": 7.45,
+    "exposure": 47.7,
+    "trades": 18,
+    "turnover": 36.0,
+    "sub": {
+     "I": 1.75,
+     "II": 0.73,
+     "III": 2.13,
+     "IV": 0.87
+    }
+   }
+  },
+  "bootstrap": {
+   "E0h brez milost": {
+    "delta": -0.325,
+    "ci": [
+     -0.827,
+     0.108
+    ],
+    "excl0": false
+   },
+   "E10 Turtle S1": {
+    "delta": -0.212,
+    "ci": [
+     -0.899,
+     0.477
+    ],
+    "excl0": false
+   },
+   "E20 Turtle S2": {
+    "delta": -0.621,
+    "ci": [
+     -1.217,
+     -0.037
+    ],
+    "excl0": true
+   },
+   "E55": {
+    "delta": -0.154,
+    "ci": [
+     -0.659,
+     0.319
+    ],
+    "excl0": false
+   }
+  },
+  "mcs": {
+   "povprecen donos": {
+    "kept": [
+     "E0  danes",
+     "E0h brez milost",
+     "E10 Turtle S1",
+     "E20 Turtle S2",
+     "E55"
+    ],
+    "eliminated": []
+   },
+   "s kaznijo za padce": {
+    "kept": [
+     "E0  danes",
+     "E0h brez milost",
+     "E10 Turtle S1",
+     "E20 Turtle S2",
+     "E55"
+    ],
+    "eliminated": []
+   }
+  },
+  "walk_forward": {
+   "3y/1y": {
+    "picks": [
+     "E0",
+     "E0h",
+     "E0",
+     "E10"
+    ],
+    "refit": 0.675,
+    "E0": 1.43
+   },
+   "2y/1y": {
+    "picks": [
+     "E10",
+     "E55",
+     "E0",
+     "E10",
+     "E10"
+    ],
+    "refit": 0.555,
+    "E0": 1.051
+   }
+  },
+  "pbo": 0.324,
+  "pbo_picked": {
+   "E0  danes": 571,
+   "E0h brez milost": 2,
+   "E10 Turtle S1": 233,
+   "E20 Turtle S2": 0,
+   "E55": 118
+  },
+  "shift": {
+   "cell": "E0  danes",
+   "real": 1.505,
+   "mean": 0.791,
+   "percentile": 94.1
+  },
+  "counts_as_evidence": true
+ },
+ "ETH": {
+  "cells": {
+   "E0  danes": {
+    "sortino": 1.078,
+    "cagr": 28.5,
+    "maxdd": -60.7,
+    "final": 5.21,
+    "exposure": 37.1,
+    "trades": 17,
+    "turnover": 34.0,
+    "sub": {
+     "I": 0.96,
+     "II": 1.21,
+     "III": 1.59,
+     "IV": 0.98
+    }
+   },
+   "E0h brez milost": {
+    "sortino": 1.109,
+    "cagr": 26.8,
+    "maxdd": -54.6,
+    "final": 4.76,
+    "exposure": 33.7,
+    "trades": 20,
+    "turnover": 40.0,
+    "sub": {
+     "I": 1.73,
+     "II": 0.81,
+     "III": 1.24,
+     "IV": 1.01
+    }
+   },
+   "E10 Turtle S1": {
+    "sortino": 0.895,
+    "cagr": 17.7,
+    "maxdd": -54.3,
+    "final": 2.92,
+    "exposure": 24.1,
+    "trades": 27,
+    "turnover": 54.0,
+    "sub": {
+     "I": 1.94,
+     "II": 0.54,
+     "III": 1.12,
+     "IV": 0.32
+    }
+   },
+   "E20 Turtle S2": {
+    "sortino": 1.181,
+    "cagr": 29.1,
+    "maxdd": -64.8,
+    "final": 5.37,
+    "exposure": 34.7,
+    "trades": 22,
+    "turnover": 44.0,
+    "sub": {
+     "I": 2.67,
+     "II": 0.69,
+     "III": 0.89,
+     "IV": 0.84
+    }
+   },
+   "E55": {
+    "sortino": 0.91,
+    "cagr": 21.6,
+    "maxdd": -65.3,
+    "final": 3.62,
+    "exposure": 49.3,
+    "trades": 16,
+    "turnover": 32.0,
+    "sub": {
+     "I": 1.33,
+     "II": 1.04,
+     "III": 0.96,
+     "IV": 0.32
+    }
+   }
+  },
+  "bootstrap": {
+   "E0h brez milost": {
+    "delta": 0.031,
+    "ci": [
+     -0.466,
+     0.55
+    ],
+    "excl0": false
+   },
+   "E10 Turtle S1": {
+    "delta": -0.183,
+    "ci": [
+     -0.905,
+     0.638
+    ],
+    "excl0": false
+   },
+   "E20 Turtle S2": {
+    "delta": 0.102,
+    "ci": [
+     -0.492,
+     0.74
+    ],
+    "excl0": false
+   },
+   "E55": {
+    "delta": -0.168,
+    "ci": [
+     -0.793,
+     0.44
+    ],
+    "excl0": false
+   }
+  },
+  "mcs": {
+   "povprecen donos": {
+    "kept": [
+     "E0  danes",
+     "E0h brez milost",
+     "E10 Turtle S1",
+     "E20 Turtle S2",
+     "E55"
+    ],
+    "eliminated": []
+   },
+   "s kaznijo za padce": {
+    "kept": [
+     "E0  danes",
+     "E0h brez milost",
+     "E10 Turtle S1",
+     "E20 Turtle S2",
+     "E55"
+    ],
+    "eliminated": []
+   }
+  },
+  "walk_forward": {
+   "3y/1y": {
+    "picks": [
+     "E20",
+     "E0",
+     "E0"
+    ],
+    "refit": 1.054,
+    "E0": 1.42
+   },
+   "2y/1y": {
+    "picks": [
+     "E20",
+     "E0",
+     "E0",
+     "E0"
+    ],
+    "refit": 0.899,
+    "E0": 0.938
+   }
+  },
+  "pbo": 0.646,
+  "pbo_picked": {
+   "E0  danes": 336,
+   "E0h brez milost": 145,
+   "E10 Turtle S1": 14,
+   "E20 Turtle S2": 355,
+   "E55": 74
+  },
+  "shift": {
+   "cell": "E20 Turtle S2",
+   "real": 1.181,
+   "mean": 0.815,
+   "percentile": 82.8
+  },
+  "counts_as_evidence": false
+ }
+}

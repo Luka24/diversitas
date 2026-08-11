@@ -1,0 +1,340 @@
+{
+ "symbol": "BTC",
+ "fee_per_side_pct": 0.3,
+ "nboot": 2000,
+ "block": 20,
+ "baseline": {
+  "sortino": 1.505,
+  "maxdd": -45.2,
+  "cagr": 33.6,
+  "exposure": 41.9,
+  "trades": 21,
+  "exit_reasons": {
+   "below_tl": 13,
+   "blowoff": 8,
+   "vol_shock": 0
+  }
+ },
+ "ablations": [
+  {
+   "name": "baseline",
+   "label": "vse pravilo vklopljeno",
+   "sortino": 1.505,
+   "maxdd": -45.2,
+   "cagr": 33.6,
+   "exposure": 41.9,
+   "trades": 21
+  },
+  {
+   "name": "brez_vol_shock",
+   "label": "vol-shock izklopljen",
+   "sortino": 1.505,
+   "maxdd": -45.2,
+   "cagr": 33.6,
+   "exposure": 41.9,
+   "trades": 21,
+   "d_sortino": 0.0,
+   "ci_d_sortino": [
+    0.0,
+    0.0
+   ],
+   "sig": false,
+   "d_maxdd": 0.0,
+   "ci_d_maxdd": [
+    0.0,
+    0.0
+   ],
+   "sig_maxdd": false
+  },
+  {
+   "name": "brez_blowoff",
+   "label": "blow-off izklopljen",
+   "sortino": 1.729,
+   "maxdd": -47.2,
+   "cagr": 45.2,
+   "exposure": 46.4,
+   "trades": 13,
+   "d_sortino": 0.224,
+   "ci_d_sortino": [
+    -0.272,
+    0.709
+   ],
+   "sig": false,
+   "d_maxdd": -2.0,
+   "ci_d_maxdd": [
+    -8.3,
+    12.7
+   ],
+   "sig_maxdd": false
+  },
+  {
+   "name": "brez_obeh",
+   "label": "oba izklopljena",
+   "sortino": 1.729,
+   "maxdd": -47.2,
+   "cagr": 45.2,
+   "exposure": 46.4,
+   "trades": 13,
+   "d_sortino": 0.224,
+   "ci_d_sortino": [
+    -0.261,
+    0.707
+   ],
+   "sig": false,
+   "d_maxdd": -2.0,
+   "ci_d_maxdd": [
+    -8.6,
+    13.5
+   ],
+   "sig_maxdd": false
+  }
+ ],
+ "sweeps": [
+  {
+   "knob": "ma_med_len",
+   "points": [
+    {
+     "value": 20,
+     "sortino": 1.421,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 30,
+     "sortino": 1.448,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 40,
+     "sortino": 1.505,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 50,
+     "sortino": 1.505,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 60,
+     "sortino": 1.505,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 80,
+     "sortino": 1.505,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 100,
+     "sortino": 1.505,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 120,
+     "sortino": 1.505,
+     "maxdd": -45.2,
+     "trades": 21
+    }
+   ],
+   "range_sortino": 0.084,
+   "inert": true
+  },
+  {
+   "knob": "rsi_len",
+   "points": [
+    {
+     "value": 7,
+     "sortino": 1.327,
+     "maxdd": -44.9,
+     "trades": 23
+    },
+    {
+     "value": 10,
+     "sortino": 1.412,
+     "maxdd": -44.9,
+     "trades": 22
+    },
+    {
+     "value": 14,
+     "sortino": 1.505,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 21,
+     "sortino": 1.776,
+     "maxdd": -41.2,
+     "trades": 18
+    },
+    {
+     "value": 28,
+     "sortino": 1.701,
+     "maxdd": -41.2,
+     "trades": 16
+    }
+   ],
+   "range_sortino": 0.449,
+   "inert": false
+  },
+  {
+   "knob": "vol_shock_mul",
+   "points": [
+    {
+     "value": 1.2,
+     "sortino": 1.493,
+     "maxdd": -44.2,
+     "trades": 21
+    },
+    {
+     "value": 1.5,
+     "sortino": 1.505,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 1.8,
+     "sortino": 1.505,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 2.2,
+     "sortino": 1.505,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 2.6,
+     "sortino": 1.505,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 3.0,
+     "sortino": 1.505,
+     "maxdd": -45.2,
+     "trades": 21
+    }
+   ],
+   "range_sortino": 0.012,
+   "inert": true
+  },
+  {
+   "knob": "vol_lookback",
+   "points": [
+    {
+     "value": 10,
+     "sortino": 1.505,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 14,
+     "sortino": 1.505,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 20,
+     "sortino": 1.505,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 30,
+     "sortino": 1.505,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 40,
+     "sortino": 1.505,
+     "maxdd": -45.2,
+     "trades": 21
+    }
+   ],
+   "range_sortino": 0.0,
+   "inert": true
+  },
+  {
+   "knob": "min_dist_entry_pct",
+   "points": [
+    {
+     "value": 0.0,
+     "sortino": 1.505,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 0.5,
+     "sortino": 1.505,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 1.0,
+     "sortino": 1.497,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 2.0,
+     "sortino": 1.497,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 3.0,
+     "sortino": 1.558,
+     "maxdd": -39.8,
+     "trades": 20
+    }
+   ],
+   "range_sortino": 0.061,
+   "inert": true
+  },
+  {
+   "knob": "blowoff_dist_pct",
+   "points": [
+    {
+     "value": 15.0,
+     "sortino": 1.086,
+     "maxdd": -45.2,
+     "trades": 26
+    },
+    {
+     "value": 20.0,
+     "sortino": 1.298,
+     "maxdd": -45.2,
+     "trades": 24
+    },
+    {
+     "value": 25.0,
+     "sortino": 1.505,
+     "maxdd": -45.2,
+     "trades": 21
+    },
+    {
+     "value": 30.0,
+     "sortino": 1.54,
+     "maxdd": -45.2,
+     "trades": 18
+    },
+    {
+     "value": 35.0,
+     "sortino": 1.602,
+     "maxdd": -45.2,
+     "trades": 17
+    }
+   ],
+   "range_sortino": 0.516,
+   "inert": false
+  }
+ ]
+}

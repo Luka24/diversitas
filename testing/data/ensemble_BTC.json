@@ -1,0 +1,283 @@
+{
+ "symbol": "BTC",
+ "fee_per_side_pct": 0.3,
+ "window": [
+  "2021-07-01",
+  "2026-06-30"
+ ],
+ "n_days": 1826,
+ "members": 81,
+ "grid": {
+  "ma_long_len": [
+   150,
+   200,
+   250
+  ],
+  "confirm_bars": [
+   2,
+   3,
+   4
+  ],
+  "reentry_hold": [
+   10,
+   15,
+   20
+  ],
+  "exit_grace_bars": [
+   2,
+   3,
+   4
+  ]
+ },
+ "defaults": {
+  "ma_long_len": 200,
+  "confirm_bars": 3,
+  "reentry_hold": 15,
+  "exit_grace_bars": 3
+ },
+ "simplified": {
+  "vol_shock_mul": 999.0,
+  "blowoff_dist_pct": 9999.0
+ },
+ "point": {
+  "sortino": 1.099,
+  "maxdd": -39.8,
+  "cagr": 19.9,
+  "expo": 42.4,
+  "turnover": 16.0
+ },
+ "ensemble": {
+  "sortino": 0.82,
+  "maxdd": -41.8,
+  "cagr": 13.1,
+  "expo": 42.8,
+  "turnover": 17.7
+ },
+ "peak_premium": 0.279,
+ "ci_peak_premium": [
+  0.077,
+  0.546
+ ],
+ "sig_peak_premium": true,
+ "d_maxdd": 2.0,
+ "ci_d_maxdd": [
+  -1.495,
+  13.097
+ ],
+ "default_percentile_among_members": 95.1,
+ "member_sortino": {
+  "min": 0.529,
+  "max": 1.23,
+  "mean": 0.804,
+  "sd": 0.146,
+  "all": [
+   0.648,
+   0.85,
+   0.698,
+   0.648,
+   0.977,
+   0.786,
+   0.684,
+   0.891,
+   0.701,
+   0.625,
+   0.677,
+   0.529,
+   0.625,
+   0.803,
+   0.652,
+   0.572,
+   0.753,
+   0.566,
+   0.684,
+   0.737,
+   0.62,
+   0.684,
+   0.882,
+   0.749,
+   0.642,
+   0.844,
+   0.672,
+   0.849,
+   1.094,
+   0.937,
+   0.849,
+   1.23,
+   1.031,
+   0.888,
+   1.141,
+   0.944,
+   0.876,
+   0.966,
+   0.811,
+   0.876,
+   1.099,
+   0.941,
+   0.822,
+   1.049,
+   0.853,
+   0.684,
+   0.775,
+   0.64,
+   0.684,
+   0.921,
+   0.767,
+   0.642,
+   0.883,
+   0.691,
+   0.723,
+   0.967,
+   0.813,
+   0.723,
+   1.099,
+   0.905,
+   0.76,
+   1.011,
+   0.817,
+   0.784,
+   0.874,
+   0.721,
+   0.784,
+   1.005,
+   0.85,
+   0.729,
+   0.955,
+   0.762,
+   0.689,
+   0.78,
+   0.644,
+   0.689,
+   0.926,
+   0.772,
+   0.647,
+   0.888,
+   0.696
+  ]
+ },
+ "main_effects": {
+  "ma_long_len": 0.176,
+  "confirm_bars": 0.138,
+  "reentry_hold": 0.084,
+  "exit_grace_bars": 0.206
+ },
+ "interactions": {
+  "ma_long_len x confirm_bars": 0.079,
+  "ma_long_len x reentry_hold": 0.001,
+  "ma_long_len x exit_grace_bars": 0.016,
+  "confirm_bars x reentry_hold": 0.006,
+  "confirm_bars x exit_grace_bars": 0.042,
+  "reentry_hold x exit_grace_bars": 0.044
+ },
+ "robust_values": {
+  "ma_long_len": {
+   "default": 200,
+   "peak": 200,
+   "robust": 225,
+   "score_default": 1.219,
+   "drop_to_neighbour": 0.0,
+   "worst_neighbour_drop": 0.12
+  },
+  "confirm_bars": {
+   "default": 3,
+   "peak": 2,
+   "robust": 1,
+   "score_default": 1.219,
+   "drop_to_neighbour": -0.137,
+   "worst_neighbour_drop": 0.189
+  },
+  "reentry_hold": {
+   "default": 15,
+   "peak": 15,
+   "robust": 15,
+   "score_default": 1.219,
+   "drop_to_neighbour": 0.019,
+   "worst_neighbour_drop": 0.088
+  },
+  "exit_grace_bars": {
+   "default": 3,
+   "peak": 3,
+   "robust": 4,
+   "score_default": 1.219,
+   "drop_to_neighbour": 0.172,
+   "worst_neighbour_drop": 0.197
+  }
+ },
+ "nboot": 2000,
+ "block": 20,
+ "seed": 20260730,
+ "binary_variants": [
+  {
+   "name": "danes: ena tocka",
+   "note": "privzete vrednosti, vse-ali-nic",
+   "binary": true,
+   "trades": 8,
+   "sortino": 1.099,
+   "maxdd": -39.8,
+   "cagr": 19.9,
+   "expo": 42.4,
+   "turnover": 16.0
+  },
+  {
+   "name": "ansambel, zvezna pozicija",
+   "note": "povprecje 81 sosedov; zahteva delne pozicije",
+   "binary": false,
+   "trades": 40,
+   "sortino": 0.82,
+   "maxdd": -41.8,
+   "cagr": 13.1,
+   "expo": 42.8,
+   "turnover": 17.7
+  },
+  {
+   "name": "glasovanje: vec kot tretjina sosedov",
+   "note": "vse-ali-nic; v poziciji, ko je zanjo vec kot tretjina od 81 razlicic",
+   "binary": true,
+   "trades": 10,
+   "sortino": 0.67,
+   "maxdd": -40.7,
+   "cagr": 9.8,
+   "expo": 45.6,
+   "turnover": 20.0
+  },
+  {
+   "name": "glasovanje: vecina sosedov",
+   "note": "vse-ali-nic; v poziciji, ko je zanjo vecina od 81 razlicic",
+   "binary": true,
+   "trades": 9,
+   "sortino": 0.878,
+   "maxdd": -43.1,
+   "cagr": 14.6,
+   "expo": 42.8,
+   "turnover": 18.0
+  },
+  {
+   "name": "glasovanje: dve tretjini sosedov",
+   "note": "vse-ali-nic; v poziciji, ko je zanjo dve tretjini od 81 razlicic",
+   "binary": true,
+   "trades": 8,
+   "sortino": 0.96,
+   "maxdd": -43.1,
+   "cagr": 16.5,
+   "expo": 42.2,
+   "turnover": 16.0
+  },
+  {
+   "name": "sredina ravnine, ena tocka",
+   "note": "vse-ali-nic; ma_long_len=225, confirm_bars=1, reentry_hold=15, exit_grace_bars=4",
+   "binary": true,
+   "trades": 8,
+   "sortino": 0.983,
+   "maxdd": -42.1,
+   "cagr": 17.3,
+   "expo": 44.2,
+   "turnover": 16.0
+  }
+ ],
+ "robust_config": {
+  "ma_long_len": 225,
+  "confirm_bars": 1,
+  "reentry_hold": 15,
+  "exit_grace_bars": 4
+ },
+ "recommended_binary": "glasovanje: dve tretjini sosedov"
+}

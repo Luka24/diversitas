@@ -15,19 +15,20 @@ class LeanConfig:
     track_buf_pct: float = 3.0
 
     # Moving averages
-    ma_med_len: int = 50     # trend MA, price must be above for BULL
     ma_long_len: int = 200   # regime MA, hard block when below + falling
     ma_slope: int = 5        # lookback bars for regime MA slope
 
     # Exits
     blowoff_dist_pct: float = 25.0
+    # rsi_len is DELIBERATELY NOT A KNOB. RSI feeds only the blow-off detector,
+    # where it is paired with a hard 80 threshold; sweeping the length while the
+    # threshold stays fixed measures the interaction, not the rule. 14 is the
+    # textbook value and is left at it so the blow-off rule has one free
+    # parameter (blowoff_dist_pct) rather than two.
     rsi_len: int = 14
-    vol_shock_mul: float = 1.5
-    vol_lookback: int = 20
 
     # Range filter (kills sideways chop)
     track_slope_bars: int = 10
-    min_dist_entry_pct: float = 0.0
 
     # Anti-churn
     confirm_bars: int = 3
@@ -46,11 +47,68 @@ class LeanConfig:
     # average exposure matched or beat it on drawdown. See
     # `testing/porocilo_ER_lean.md` and `testing/porocilo_ER_BTC.html`.
 
-    # Donchian breakout confirmation (validated improvement; OFF by default so the
-    # a-priori Lean is unchanged). When ON, entry also requires the close to sit in
-    # the top quartile of the `donchian_period`-day high/low channel.
-    use_donchian: bool = False
-    donchian_period: int = 55
+    # NOTE: three rules and their four parameters were removed on 2026-08-03
+    # (`min_dist_entry_pct`, `ma_med_len`, `vol_shock_mul`, `vol_lookback`; 14
+    # tunable parameters → 10). Each was switched off and the position series came
+    # back bit-identical on all 2700 bars — see `testing/data/reference_positions.*`
+    # and `testing/tests/test_simplification.py`.
+    #
+    #   dist_entry_ok    arithmetic duplicate of `above_tl`. `above_tl` already
+    #                    requires dist_pct > track_buf_pct, and with
+    #                    min_dist_entry_pct = 0 the extra test asked for
+    #                    dist_pct >= track_buf_pct. Alive at 0 of 151 settings.
+    #   above_ma_med     blocked 65 days over the whole history; none of them would
+    #                    have become a trade, because the other conditions blocked
+    #                    them too. Alive at 3 of 151.
+    #   vol_shock        fired on 0 of 21 exits — but it is NOT structurally dead.
+    #                    It is inert at THESE FOUR VALUES specifically:
+    #                    track_period 75 · track_buf_pct 3 % · exit_grace_bars 3 ·
+    #                    reentry_hold 15. At exit_grace_bars = 2 it fires on 6 days,
+    #                    and across the probe it woke at 67 of 151 settings. If any
+    #                    of those four ever changes, this rule has to be re-measured
+    #                    before it can be called dead. Probe:
+    #                    `testing/scripts/dead_rules_robust.py`.
+
+    # ENTRY GATE. On 2026-08-10 this replaced the old gate — close above the
+    # 75-day trackline plus `track_buf_pct` — which is now used for the EXIT only.
+    # Entry requires the close in the top quartile of the 20-day high/low channel.
+    #
+    # Written out, the Donchian condition is the same shape as the trackline it
+    # replaced: close > midpoint(20d) + 0.25 x range(20d), against the old
+    # close > midpoint(75d) + 3 % of price. Two differences — the lookback, and a
+    # band measured in units of the range rather than as a fixed percentage, so it
+    # widens when the market is wild and narrows when it is calm.
+    #
+    # Measured on BTC / ETH, net of 0.30 % per side:
+    #   full window   Sortino 1.505 -> 1.936 and 1.078 -> 1.858
+    #                 worst drawdown -45.2 % -> -30.2 % and -60.7 % -> -42.3 %
+    #   from 2021     Sortino 1.321 -> 1.569 and 1.366 -> 1.876
+    #                 worst drawdown -39.8 % -> -29.0 % and -42.8 % -> -42.3 %
+    # Fewer trades and lower fees on both assets in both windows. It cleared the
+    # nested walk-forward in both schemes, ETH out of sample, CSCV at 97.5 %, and
+    # the circular-shift placebo at the 96th percentile.
+    #
+    # What it is NOT: a return improvement. On BTC the episode ledger is close to
+    # even — seven favourable against eight unfavourable — and it wins on size, not
+    # frequency. The confidence interval on BTC spans zero, it beats the old gate
+    # in 2 of 4 sub-periods there, and PBO for choosing among the variants tested
+    # was 0.711. Everything rests on 8 to 21 trades. It was adopted for the
+    # mechanism — during a collapse the close cannot be in the top quartile of the
+    # 20-day range — rather than for the numbers.
+    #
+    # Note also: it has changed nothing since 2024-12-15 on BTC and 2024-04-18 on
+    # ETH. The last 18 months neither support nor contradict this.
+    use_donchian: bool = True
+
+    # 20 is the classic Donchian/Turtle short-term breakout length, chosen outside
+    # this data. It is NOT to be tuned: PBO for selecting a period here was 0.672,
+    # and the in-sample pick alternates between 12 and 40 — opposite ends of the
+    # grid. The value in the rule is the rule, not the number.
+    #
+    # The previous default of 55 (the other Turtle length) sat in the WORST part of
+    # the grid at Sortino 1.47, below the disabled state's 1.55, so anyone turning
+    # the old flag on would have been misled.
+    donchian_period: int = 20
     donchian_top_frac: float = 0.75
 
     # Optional cross-asset filter — OFF by default in Lean

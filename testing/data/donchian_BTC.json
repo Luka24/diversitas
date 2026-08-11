@@ -1,0 +1,431 @@
+{
+ "symbol": "BTC",
+ "fee_per_side_pct": 0.3,
+ "top_frac": 0.75,
+ "periods": [
+  10,
+  12,
+  15,
+  20,
+  25,
+  30,
+  40,
+  55
+ ],
+ "preregistered": "testing/nacrt_korak6_donchian.md",
+ "control_matches_reference": true,
+ "fixed": {
+  "off": {
+   "sortino": 1.505,
+   "cagr": 33.6,
+   "maxdd": -45.2,
+   "final": 8.55,
+   "exposure": 41.9,
+   "trades": 21,
+   "turnover": 42.0,
+   "sub": {
+    "I": 1.505,
+    "II": 1.239,
+    "III": 1.99,
+    "IV": 1.603
+   }
+  },
+  "10": {
+   "sortino": 1.747,
+   "cagr": 34.1,
+   "maxdd": -33.1,
+   "final": 8.78,
+   "exposure": 32.6,
+   "trades": 17,
+   "turnover": 34.0,
+   "sub": {
+    "I": 2.161,
+    "II": 1.203,
+    "III": 2.802,
+    "IV": 1.164
+   }
+  },
+  "12": {
+   "sortino": 1.897,
+   "cagr": 38.1,
+   "maxdd": -30.2,
+   "final": 10.9,
+   "exposure": 33.7,
+   "trades": 17,
+   "turnover": 34.0,
+   "sub": {
+    "I": 2.527,
+    "II": 1.203,
+    "III": 2.802,
+    "IV": 1.446
+   }
+  },
+  "15": {
+   "sortino": 1.821,
+   "cagr": 36.1,
+   "maxdd": -33.1,
+   "final": 9.78,
+   "exposure": 32.9,
+   "trades": 17,
+   "turnover": 34.0,
+   "sub": {
+    "I": 2.387,
+    "II": 1.092,
+    "III": 2.802,
+    "IV": 1.446
+   }
+  },
+  "20": {
+   "sortino": 1.821,
+   "cagr": 36.1,
+   "maxdd": -33.1,
+   "final": 9.78,
+   "exposure": 32.9,
+   "trades": 17,
+   "turnover": 34.0,
+   "sub": {
+    "I": 2.387,
+    "II": 1.092,
+    "III": 2.802,
+    "IV": 1.446
+   }
+  },
+  "25": {
+   "sortino": 1.744,
+   "cagr": 35.9,
+   "maxdd": -39.8,
+   "final": 9.69,
+   "exposure": 36.8,
+   "trades": 18,
+   "turnover": 36.0,
+   "sub": {
+    "I": 2.513,
+    "II": 0.697,
+    "III": 2.802,
+    "IV": 1.545
+   }
+  },
+  "30": {
+   "sortino": 1.604,
+   "cagr": 32.3,
+   "maxdd": -39.8,
+   "final": 7.92,
+   "exposure": 37.0,
+   "trades": 18,
+   "turnover": 36.0,
+   "sub": {
+    "I": 2.988,
+    "II": 0.299,
+    "III": 1.988,
+    "IV": 1.603
+   }
+  },
+  "40": {
+   "sortino": 1.809,
+   "cagr": 39.4,
+   "maxdd": -39.8,
+   "final": 11.67,
+   "exposure": 38.9,
+   "trades": 18,
+   "turnover": 36.0,
+   "sub": {
+    "I": 2.592,
+    "II": 1.106,
+    "III": 2.14,
+    "IV": 1.603
+   }
+  },
+  "55": {
+   "sortino": 1.72,
+   "cagr": 37.5,
+   "maxdd": -39.8,
+   "final": 10.56,
+   "exposure": 40.1,
+   "trades": 19,
+   "turnover": 38.0,
+   "sub": {
+    "I": 2.592,
+    "II": 1.106,
+    "III": 1.692,
+    "IV": 1.603
+   }
+  }
+ },
+ "walk_forward": {
+  "3y/1y": {
+   "folds": [
+    {
+     "train": [
+      "2019-03-09",
+      "2022-03-09"
+     ],
+     "test": [
+      "2022-03-10",
+      "2023-03-09"
+     ],
+     "pick": 40,
+     "train_sortino_pick": 2.274,
+     "train_sortino_off": 1.736
+    },
+    {
+     "train": [
+      "2020-03-09",
+      "2023-03-09"
+     ],
+     "test": [
+      "2023-03-10",
+      "2024-03-09"
+     ],
+     "pick": 12,
+     "train_sortino_pick": 1.94,
+     "train_sortino_off": 1.56
+    },
+    {
+     "train": [
+      "2021-03-09",
+      "2024-03-09"
+     ],
+     "test": [
+      "2024-03-10",
+      "2025-03-09"
+     ],
+     "pick": 10,
+     "train_sortino_pick": 1.358,
+     "train_sortino_off": 1.02
+    },
+    {
+     "train": [
+      "2022-03-09",
+      "2025-03-09"
+     ],
+     "test": [
+      "2025-03-10",
+      "2026-03-09"
+     ],
+     "pick": 12,
+     "train_sortino_pick": 2.541,
+     "train_sortino_off": 1.666
+    }
+   ],
+   "picks": [
+    40,
+    12,
+    10,
+    12
+   ],
+   "distinct_picks": 3,
+   "results": {
+    "refit": {
+     "sortino": 1.575,
+     "cagr": 22.8,
+     "maxdd": -23.6,
+     "final": 2.28,
+     "exposure": 34.6,
+     "trades": 8,
+     "turnover": 16.0
+    },
+    "off": {
+     "sortino": 1.43,
+     "cagr": 23.9,
+     "maxdd": -23.6,
+     "final": 2.36,
+     "exposure": 42.0,
+     "trades": 10,
+     "turnover": 20.0
+    },
+    "fiksna 20": {
+     "sortino": 2.074,
+     "cagr": 30.3,
+     "maxdd": -23.6,
+     "final": 2.88,
+     "exposure": 33.6,
+     "trades": 7,
+     "turnover": 14.0
+    }
+   }
+  },
+  "2y/1y": {
+   "folds": [
+    {
+     "train": [
+      "2019-03-09",
+      "2021-03-09"
+     ],
+     "test": [
+      "2021-03-10",
+      "2022-03-09"
+     ],
+     "pick": 40,
+     "train_sortino_pick": 3.688,
+     "train_sortino_off": 2.531
+    },
+    {
+     "train": [
+      "2020-03-09",
+      "2022-03-09"
+     ],
+     "test": [
+      "2022-03-10",
+      "2023-03-09"
+     ],
+     "pick": 12,
+     "train_sortino_pick": 2.52,
+     "train_sortino_off": 2.305
+    },
+    {
+     "train": [
+      "2021-03-09",
+      "2023-03-09"
+     ],
+     "test": [
+      "2023-03-10",
+      "2024-03-09"
+     ],
+     "pick": 10,
+     "train_sortino_pick": 0.234,
+     "train_sortino_off": 0.024
+    },
+    {
+     "train": [
+      "2022-03-09",
+      "2024-03-09"
+     ],
+     "test": [
+      "2024-03-10",
+      "2025-03-09"
+     ],
+     "pick": 10,
+     "train_sortino_pick": 2.681,
+     "train_sortino_off": 1.537
+    },
+    {
+     "train": [
+      "2023-03-09",
+      "2025-03-09"
+     ],
+     "test": [
+      "2025-03-10",
+      "2026-03-09"
+     ],
+     "pick": 25,
+     "train_sortino_pick": 3.328,
+     "train_sortino_off": 2.534
+    }
+   ],
+   "picks": [
+    40,
+    12,
+    10,
+    10,
+    25
+   ],
+   "distinct_picks": 4,
+   "results": {
+    "refit": {
+     "sortino": 1.232,
+     "cagr": 21.9,
+     "maxdd": -29.0,
+     "final": 2.69,
+     "exposure": 36.3,
+     "trades": 9,
+     "turnover": 18.0
+    },
+    "off": {
+     "sortino": 1.051,
+     "cagr": 19.3,
+     "maxdd": -39.8,
+     "final": 2.41,
+     "exposure": 43.5,
+     "trades": 11,
+     "turnover": 23.0
+    },
+    "fiksna 20": {
+     "sortino": 1.269,
+     "cagr": 22.8,
+     "maxdd": -29.0,
+     "final": 2.79,
+     "exposure": 36.7,
+     "trades": 9,
+     "turnover": 18.0
+    }
+   }
+  }
+ },
+ "position_effect": {
+  "baseline": 3.27,
+  "Donchian nas drži ZUNAJ": {
+   "n": 244,
+   "mean_fwd20": 5.15
+  },
+  "Donchian nas drži NOTRI": {
+   "n": 1,
+   "mean_fwd20": -15.25
+  }
+ },
+ "exposure_matched": {
+  "10": {
+   "exposure": 32.6,
+   "sortino_d": 1.747,
+   "sortino_off_scaled": 1.505,
+   "maxdd_d": -33.1,
+   "maxdd_off_scaled": -36.8,
+   "exposure_off_scaled": 32.6
+  },
+  "12": {
+   "exposure": 33.7,
+   "sortino_d": 1.897,
+   "sortino_off_scaled": 1.505,
+   "maxdd_d": -30.2,
+   "maxdd_off_scaled": -37.8,
+   "exposure_off_scaled": 33.7
+  },
+  "15": {
+   "exposure": 32.9,
+   "sortino_d": 1.821,
+   "sortino_off_scaled": 1.505,
+   "maxdd_d": -33.1,
+   "maxdd_off_scaled": -37.1,
+   "exposure_off_scaled": 32.9
+  },
+  "20": {
+   "exposure": 32.9,
+   "sortino_d": 1.821,
+   "sortino_off_scaled": 1.505,
+   "maxdd_d": -33.1,
+   "maxdd_off_scaled": -37.1,
+   "exposure_off_scaled": 32.9
+  },
+  "25": {
+   "exposure": 36.8,
+   "sortino_d": 1.744,
+   "sortino_off_scaled": 1.505,
+   "maxdd_d": -39.8,
+   "maxdd_off_scaled": -40.7,
+   "exposure_off_scaled": 36.8
+  },
+  "30": {
+   "exposure": 37.0,
+   "sortino_d": 1.604,
+   "sortino_off_scaled": 1.505,
+   "maxdd_d": -39.8,
+   "maxdd_off_scaled": -40.9,
+   "exposure_off_scaled": 37.0
+  },
+  "40": {
+   "exposure": 38.9,
+   "sortino_d": 1.809,
+   "sortino_off_scaled": 1.505,
+   "maxdd_d": -39.8,
+   "maxdd_off_scaled": -42.6,
+   "exposure_off_scaled": 38.9
+  },
+  "55": {
+   "exposure": 40.1,
+   "sortino_d": 1.72,
+   "sortino_off_scaled": 1.505,
+   "maxdd_d": -39.8,
+   "maxdd_off_scaled": -43.6,
+   "exposure_off_scaled": 40.1
+  }
+ }
+}

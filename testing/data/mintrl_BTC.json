@@ -1,0 +1,52 @@
+{
+ "confidence": 0.95,
+ "fee_per_side_pct": 0.3,
+ "windows": {
+  "zadnjih 5 let": {
+   "from": "2021-07-01",
+   "to": "2026-06-30",
+   "n": 1826,
+   "sharpe_annual": 0.783,
+   "sharpe_bh_annual": 0.459,
+   "skew": 0.71,
+   "kurtosis": 13.9,
+   "targets": {
+    "proti nič": {
+     "days": 1574,
+     "years": 4.3,
+     "enough": true,
+     "missing_years": 0.0
+    },
+    "proti kupi-in-drži": {
+     "days": 9193,
+     "years": 25.2,
+     "enough": false,
+     "missing_years": 20.2
+    }
+   }
+  },
+  "celotno": {
+   "from": "2019-03-09",
+   "to": "2026-07-29",
+   "n": 2700,
+   "sharpe_annual": 0.974,
+   "sharpe_bh_annual": 0.927,
+   "skew": 0.6,
+   "kurtosis": 16.3,
+   "targets": {
+    "proti nič": {
+     "days": 1021,
+     "years": 2.8,
+     "enough": true,
+     "missing_years": 0.0
+    },
+    "proti kupi-in-drži": {
+     "days": 438621,
+     "years": 1201.7,
+     "enough": false,
+     "missing_years": 1194.3
+    }
+   }
+  }
+ }
+}

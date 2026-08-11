@@ -2,11 +2,16 @@
 
 Lean is the stripped-down variant of Diversitas Pro v3:
   - Kijun trackline (direction)
-  - 50 MA (trend MA — price must be above)
   - 200 MA (regime MA — hard block when below + falling)
-  - Blow-off + vol shock exits
+  - Blow-off exit
   - Range filter via trackline slope over N bars
   - One state machine (BULL / BEAR) — no conviction score, no separate display
+
+The 50 MA entry gate, the entry-distance gate and the vol-shock exit were removed
+on 2026-08-03 after each was shown to leave the position series bit-identical.
+The 50 MA and the annualised vol are still COMPUTED — the dashboard plots both —
+they simply no longer decide anything. See `config.py` for the evidence and for
+the four parameter values at which vol_shock happened to be inert.
 """
 from __future__ import annotations
 from dataclasses import dataclass
@@ -19,6 +24,14 @@ import pandas as pd
 from shared import indicators as ind
 from .config import LeanConfig, DEFAULT_CONFIG
 
+
+# Display-only lengths. These used to be config fields (`ma_med_len`,
+# `vol_lookback`). They are constants now because nothing reads them on the
+# signal path any more — making them tunable would invite someone to sweep a
+# knob that cannot change a single trade. Both stay well under `ma_long_len`, so
+# `required_history` is unaffected (still 220).
+MA_MED_LEN = 50
+VOL_LOOKBACK = 20
 
 # State codes
 S_BULL = 1
@@ -50,7 +63,9 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
     df["dist_pct"] = (close - df["trackline"]) / df["trackline"] * 100.0
 
     # --- Moving averages ---
-    ma_med = ind.sma(close, cfg.ma_med_len)
+    # ma_med / above_ma_med are display-only: drawn on the chart, not part of
+    # bull_condition.
+    ma_med = ind.sma(close, MA_MED_LEN)
     ma_long = ind.sma(close, cfg.ma_long_len)
     df["ma_med"] = ma_med
     df["ma_long"] = ma_long
@@ -64,10 +79,10 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
     # --- RSI (only used by blow-off detector) ---
     df["rsi"] = ind.rsi(close, cfg.rsi_len)
 
-    # --- Volatility ---
+    # --- Volatility (display + position sizing; no longer gates anything) ---
     log_ret = np.log(close / close.shift(1))
     df["log_ret"] = log_ret
-    daily_std = ind.stdev_pop(log_ret, cfg.vol_lookback)
+    daily_std = ind.stdev_pop(log_ret, VOL_LOOKBACK)
     df["annual_vol"] = daily_std * math.sqrt(cfg.trading_days) * 100.0
     vol_avg50 = ind.sma(df["annual_vol"], 50)
     df["vol_avg50"] = vol_avg50
@@ -84,9 +99,6 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
         df["btc_filter_ok"] = True
 
     # --- Entry / exit conditions ---
-    # Entry distance: must be > buf + extra
-    df["dist_entry_ok"] = df["dist_pct"] >= (cfg.track_buf_pct + cfg.min_dist_entry_pct)
-
     # Donchian breakout confirmation (optional; default OFF → factor is all-True).
     if getattr(cfg, "use_donchian", False):
         dc_hi = ind.highest(high, cfg.donchian_period)
@@ -96,19 +108,38 @@ def compute_features(daily: pd.DataFrame, btc_daily: Optional[pd.DataFrame],
     else:
         df["donchian_ok"] = True
 
-    df["bull_condition"] = (
-        df["above_tl"]
-        & df["above_ma_med"]
-        & df["track_rising_window"]
-        & df["dist_entry_ok"]
-        & df["regime_ok"]
-        & df["btc_filter_ok"]
-        & df["donchian_ok"]
-    ).fillna(False)
-
     df["trend_break"] = df["below_tl"]
     df["blowoff"] = (df["dist_pct"] > cfg.blowoff_dist_pct) & (df["rsi"] > 80)
-    df["vol_shock"] = (df["annual_vol"] > (vol_avg50 * cfg.vol_shock_mul)) & df["below_tl"]
+
+    # `above_ma_med` and `dist_entry_ok` used to sit in here; both were implied by
+    # the terms that remain, so dropping them changed nothing.
+    #
+    # `~blowoff` is the opposite case and is here on purpose. Blow-off is an EXIT
+    # rule, and the state machine only consults exits while already long — so
+    # without this term the same bar can be a valid buy and a screaming sell at
+    # once. That is not a corner case: blow-off needs dist_pct > 25 % while entry
+    # needs only > 3 %, so EVERY blow-off bar clears the entry hurdle. 30 of the 31
+    # blow-off bars in the history satisfy every other entry condition too.
+    #
+    # It changes nothing today: reentry_hold blocks re-entry for 15 bars after the
+    # blow-off exit, and blow-off runs are shorter than that, so the frozen
+    # reference is reproduced bit for bit. It is not inert by construction, only by
+    # coincidence of a parameter that later steps are about to touch — with the
+    # pause removed, 12 of 32 entries land on a blow-off bar. Guarded by
+    # `test_no_entry_while_an_exit_rule_is_firing`, which removes the pause so the
+    # test can actually fail.
+    # ENTRY GATE CHANGED 2026-08-10. `above_tl` used to sit here; the gate is now
+    # `donchian_ok`. The trackline has NOT gone away — it still drives the exit
+    # (`below_tl`), the slope condition and the blow-off distance — so `above_tl`
+    # stays computed for the display state and the dashboard. It simply no longer
+    # decides entry. See config.py for the evidence and for the limits on it.
+    df["bull_condition"] = (
+        df["donchian_ok"]
+        & df["track_rising_window"]
+        & df["regime_ok"]
+        & df["btc_filter_ok"]
+        & ~df["blowoff"]
+    ).fillna(False)
 
     # --- Convenience for dashboard ---
     df["green_dot"] = df["bull_condition"]
@@ -146,7 +177,6 @@ def run_state_machine(df: pd.DataFrame, cfg: LeanConfig) -> pd.DataFrame:
     above_arr = df["above_tl"].fillna(False).to_numpy()
     bull_arr = df["bull_condition"].fillna(False).to_numpy()
     blowoff_arr = df["blowoff"].fillna(False).to_numpy()
-    vol_shock_arr = df["vol_shock"].fillna(False).to_numpy()
     annual_vol_arr = df["annual_vol"].fillna(0.0).to_numpy()
 
     for i in range(n):
@@ -169,9 +199,6 @@ def run_state_machine(df: pd.DataFrame, cfg: LeanConfig) -> pd.DataFrame:
                 cur_sig = S_BEAR
                 bars_since_sig = 0
             elif blowoff_arr[i]:
-                cur_sig = S_BEAR
-                bars_since_sig = 0
-            elif vol_shock_arr[i]:
                 cur_sig = S_BEAR
                 bars_since_sig = 0
         elif cur_sig == S_BEAR:
@@ -252,7 +279,6 @@ def build_summary(df: pd.DataFrame) -> dict:
         "annual_vol": float(last["annual_vol"]),
         "target_alloc": float(last["target_alloc"]),
         "blowoff": bool(last["blowoff"]),
-        "vol_shock": bool(last["vol_shock"]),
         "btc_bull": bool(last["btc_bull"]),
         "rsi": float(last["rsi"]) if pd.notna(last["rsi"]) else float("nan"),
     }
