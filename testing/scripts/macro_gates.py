@@ -33,7 +33,7 @@ from testing.scripts.macro_data import load as load_macro
 
 np.seterr(all="ignore")
 
-FEE, PPY = 0.003, 365
+FEE, PPY = 0.30, 365      # PERCENT per side — net_returns divides by 100
 START = "2021-01-01"
 MA = 200                      # the strategy's own regime length, not tuned here
 S_BLOCKS, PURGE = 12, 21

@@ -16,12 +16,16 @@
 # What it costs, measured on BTC 2020-07-14 to 2026-08-11 at 0.30 % per side
 # (testing/scripts/source_impact.py):
 #
-#     binance    Sortino 0.949   CAGR 30.2 %   MaxDD -30.1 %   11 trades
-#     coinbase           0.908        28.5 %         -30.2 %   11 trades
+#     binance    Sortino 0.917   CAGR 28.7 %   MaxDD -30.5 %   11 trades
+#     coinbase           0.876        27.0 %         -30.6 %   11 trades
 #
 # The same eleven trades, entry dates moving by about a day, 0.054 % of average
-# price difference. Yahoo is NOT an equivalent substitute — 7.6 points of CAGR
-# and nine of drawdown — which is why it is not in the crypto chain at all.
+# price difference. Yahoo is NOT an equivalent substitute — 7.8 points of CAGR
+# and ten of drawdown — which is why it is not in the crypto chain at all.
+#
+# (These figures were first recorded from a run whose fee constant was wrong by
+# a factor of 100 — 0.003 % per side instead of 0.30 %. Corrected 2026-08-12;
+# the ranking never changed, the levels did.)
 #
 # Reports and the frozen reference are unaffected: they run off the Binance
 # snapshot in testing/data/sources/, which needs no network.

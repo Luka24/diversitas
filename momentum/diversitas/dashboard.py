@@ -65,7 +65,7 @@ def _set_theme(dark: bool) -> None:
 # ── caching ───────────────────────────────────────────────────────────────────
 
 # Yahoo left the crypto chain on 2026-08-11 — see the Lean dashboard for the
-# measurement. Short version: against Binance it costs 7.6 points of CAGR and
+# measurement. Short version: against Binance it costs 7.8 points of CAGR and
 # nine of drawdown on BTC, where Coinbase costs 1.7 and takes the same trades.
 # A Coinbase fallback is the same strategy on slightly different prices; a Yahoo
 # fallback is a different one. Equities keep it as their only venue.
@@ -112,7 +112,7 @@ def _load_candles(symbol: str, bars: int) -> pd.DataFrame:
     can actually trade at; Yahoo is a scraped composite and sits last. It matters
     which one you get — entry is a threshold, so ~0.1 % of price difference moves
     whole trades. Measured on BTC 2020-07-14 to 2026-08-11 at 0.30 %/side:
-    Coinbase costs 1.7 points of CAGR against Binance, Yahoo costs 7.6 and nine
+    Coinbase costs 1.7 points of CAGR against Binance, Yahoo costs 7.8 and ten
     points of drawdown (`testing/scripts/source_impact.py`). A fallback is
     therefore allowed, but never silent: the caller marks it and the banner
     shows it.
@@ -2106,7 +2106,7 @@ def main() -> None:
             f"prikazani podatki so z vira `{daily.attrs.get('source', '?')}`.**  \n"
             f"Številke na tej strani **niso primerljive** s poročili, računanimi "
             f"na `{daily.attrs['fell_back_from']}`. Izmerjeno na BTC: Coinbase "
-            f"stane 1,7 odstotne točke CAGR, Yahoo 7,6 in devet odstotnih točk "
+            f"stane 1,7 odstotne točke CAGR, Yahoo 7,8 in deset odstotnih točk "
             f"večji padec — vstopni pogoj je prag, zato že desetinka odstotka "
             f"premakne cel posel."
         )

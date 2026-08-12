@@ -131,8 +131,8 @@ def test_position_survives_the_trim_boundary(frozen):
 def test_price_source_chain_is_ordered_and_never_falls_back_silently():
     """Entry is a threshold, so ~0.1 % of price moves whole trades. Measured on
     BTC 2020-07-14 to 2026-08-11 at 0.30 %/side, Coinbase costs 1.7 points of
-    CAGR against Binance and takes the same eleven trades; Yahoo costs 7.6 and
-    nine points of drawdown, and takes thirteen. Coinbase is the same strategy
+    CAGR against Binance and takes the same eleven trades; Yahoo costs 7.8 and
+    ten points of drawdown, and takes thirteen. Coinbase is the same strategy
     on slightly different prices, Yahoo is a different one — so Yahoo left the
     crypto chain on 2026-08-11 and stays only where it is the sole venue."""
     import inspect

@@ -79,7 +79,7 @@ def _set_theme(dark: bool) -> None:
 
 # Yahoo left the crypto chain on 2026-08-11. It is a scraped composite, not an
 # exchange, and it is not a near-substitute: on BTC 2020-07-14 to 2026-08-11 at
-# 0.30 %/side it costs 7.6 points of CAGR and nine points of drawdown against
+# 0.30 %/side it costs 7.8 points of CAGR and ten points of drawdown against
 # Binance, with two extra trades. Coinbase costs 1.7 points and takes the same
 # eleven trades (testing/scripts/source_impact.py). Falling back to Coinbase
 # shows the same strategy on slightly different prices; falling back to Yahoo

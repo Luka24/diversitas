@@ -27,7 +27,7 @@ from shared.warmup import trim_warmup, required_history
 from diversitas.config import DEFAULT_CONFIG, LeanConfig
 from diversitas.strategy import run_strategy, S_BULL
 
-FEE, PPY = 0.003, 365
+FEE, PPY = 0.30, 365      # PERCENT per side
 VENUES = ("binance", "coinbase", "yahoo")
 
 

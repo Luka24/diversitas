@@ -50,7 +50,7 @@ from testing.scripts.macro_data import load as load_macro
 
 np.seterr(all="ignore")
 
-FEE, PPY, MA = 0.003, 365, 200
+FEE, PPY, MA = 0.30, 365, 200   # FEE is a PERCENT per side
 START = "2020-01-01"
 HORIZONS = (1, 5, 20)
 NBOOT, BLOCK, N_SHIFT = 4000, 20, 300
