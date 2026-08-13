@@ -23,8 +23,9 @@ overlay built on it can work, and that is worth knowing before reading any
 Sortino.
 
 Honest note on multiplicity: these signals were chosen after seeing the first
-pass fail. That is a second look at the same data, and the PBO below spans both
-rounds rather than pretending this one stands alone.
+pass fail, which is a second look at the same data. This file does NOT compute
+PBO — an earlier version of this paragraph claimed it did, which was false. The
+figure spanning both rounds is in macro_audit.py, and it is 0.767 on BTC.
 
     python testing/scripts/macro_v2.py
 """
