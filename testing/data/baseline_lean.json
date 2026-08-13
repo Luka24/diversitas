@@ -1,0 +1,420 @@
+{
+ "provizija_na_stran_pct": 0.3,
+ "vir": "zamrznjen posnetek Binance",
+ "config": {
+  "track_period": 75,
+  "track_buf_pct": 3.0,
+  "ma_long_len": 200,
+  "ma_slope": 5,
+  "blowoff_dist_pct": 25.0,
+  "rsi_len": 14,
+  "track_slope_bars": 10,
+  "confirm_bars": 3,
+  "reentry_hold": 15,
+  "exit_grace_bars": 3,
+  "use_vol_sizing": true,
+  "target_vol_pct": 50.0,
+  "use_donchian": true,
+  "donchian_period": 20,
+  "donchian_top_frac": 0.75,
+  "use_btc_filter": false,
+  "trading_days": 365
+ },
+ "sredstva": {
+  "BTC": {
+   "od": "2019-03-09",
+   "do": "2026-07-29",
+   "metrike": {
+    "dni": 2700,
+    "sortino": 1.120621,
+    "cagr_pct": 40.1148,
+    "maxdd_pct": -30.4946,
+    "koncni_mnozitelj": 12.122138,
+    "izpostavljenost_pct": 35.3704,
+    "poslov": 19,
+    "promet": 38.0
+   },
+   "posli": [
+    {
+     "st": 1,
+     "vstop": "2019-04-07",
+     "izstop": "2019-05-10",
+     "dni": 33,
+     "cena_vstop": 5170.27,
+     "cena_izstop": 6373.33,
+     "bruto_pct": 23.27,
+     "neto_pct": 22.53,
+     "razlog": "pregretje"
+    },
+    {
+     "st": 2,
+     "vstop": "2019-05-25",
+     "izstop": "2019-06-24",
+     "dni": 30,
+     "cena_vstop": 8025.41,
+     "cena_izstop": 11056.59,
+     "bruto_pct": 37.77,
+     "neto_pct": 36.94,
+     "razlog": "pregretje"
+    },
+    {
+     "st": 3,
+     "vstop": "2019-08-05",
+     "izstop": "2019-08-16",
+     "dni": 11,
+     "cena_vstop": 11828.8,
+     "cena_izstop": 10331.54,
+     "bruto_pct": -12.66,
+     "neto_pct": -13.18,
+     "razlog": "prelom trenda"
+    },
+    {
+     "st": 4,
+     "vstop": "2019-09-05",
+     "izstop": "2019-09-06",
+     "dni": 1,
+     "cena_vstop": 10564.49,
+     "cena_izstop": 10298.73,
+     "bruto_pct": -2.52,
+     "neto_pct": -3.1,
+     "razlog": "prelom trenda"
+    },
+    {
+     "st": 5,
+     "vstop": "2020-01-31",
+     "izstop": "2020-03-10",
+     "dni": 39,
+     "cena_vstop": 9352.89,
+     "cena_izstop": 7894.56,
+     "bruto_pct": -15.59,
+     "neto_pct": -16.1,
+     "razlog": "prelom trenda"
+    },
+    {
+     "st": 6,
+     "vstop": "2020-07-26",
+     "izstop": "2020-09-10",
+     "dni": 46,
+     "cena_vstop": 9931.54,
+     "cena_izstop": 10336.87,
+     "bruto_pct": 4.08,
+     "neto_pct": 3.46,
+     "razlog": "prelom trenda"
+    },
+    {
+     "st": 7,
+     "vstop": "2020-10-10",
+     "izstop": "2020-11-18",
+     "dni": 39,
+     "cena_vstop": 11293.22,
+     "cena_izstop": 17776.12,
+     "bruto_pct": 57.41,
+     "neto_pct": 56.46,
+     "razlog": "pregretje"
+    },
+    {
+     "st": 8,
+     "vstop": "2020-12-07",
+     "izstop": "2020-12-30",
+     "dni": 23,
+     "cena_vstop": 19166.9,
+     "cena_izstop": 28875.54,
+     "bruto_pct": 50.65,
+     "neto_pct": 49.75,
+     "razlog": "pregretje"
+    },
+    {
+     "st": 9,
+     "vstop": "2021-02-05",
+     "izstop": "2021-02-21",
+     "dni": 16,
+     "cena_vstop": 38290.24,
+     "cena_izstop": 57408.57,
+     "bruto_pct": 49.93,
+     "neto_pct": 49.03,
+     "razlog": "pregretje"
+    },
+    {
+     "st": 10,
+     "vstop": "2021-03-11",
+     "izstop": "2021-05-14",
+     "dni": 64,
+     "cena_vstop": 57773.16,
+     "cena_izstop": 49841.45,
+     "bruto_pct": -13.73,
+     "neto_pct": -14.25,
+     "razlog": "prelom trenda"
+    },
+    {
+     "st": 11,
+     "vstop": "2021-08-12",
+     "izstop": "2021-12-06",
+     "dni": 116,
+     "cena_vstop": 44399.0,
+     "cena_izstop": 50441.92,
+     "bruto_pct": 13.61,
+     "neto_pct": 12.93,
+     "razlog": "prelom trenda"
+    },
+    {
+     "st": 12,
+     "vstop": "2023-01-19",
+     "izstop": "2023-06-02",
+     "dni": 134,
+     "cena_vstop": 21071.59,
+     "cena_izstop": 27242.59,
+     "bruto_pct": 29.29,
+     "neto_pct": 28.51,
+     "razlog": "prelom trenda"
+    },
+    {
+     "st": 13,
+     "vstop": "2023-06-26",
+     "izstop": "2023-08-19",
+     "dni": 54,
+     "cena_vstop": 30267.99,
+     "cena_izstop": 26100.01,
+     "bruto_pct": -13.77,
+     "neto_pct": -14.29,
+     "razlog": "prelom trenda"
+    },
+    {
+     "st": 14,
+     "vstop": "2023-10-23",
+     "izstop": "2023-12-05",
+     "dni": 43,
+     "cena_vstop": 33069.99,
+     "cena_izstop": 44073.32,
+     "bruto_pct": 33.27,
+     "neto_pct": 32.47,
+     "razlog": "pregretje"
+    },
+    {
+     "st": 15,
+     "vstop": "2024-02-03",
+     "izstop": "2024-03-04",
+     "dni": 30,
+     "cena_vstop": 43011.09,
+     "cena_izstop": 68245.71,
+     "bruto_pct": 58.67,
+     "neto_pct": 57.72,
+     "razlog": "pregretje"
+    },
+    {
+     "st": 16,
+     "vstop": "2024-05-17",
+     "izstop": "2024-06-26",
+     "dni": 40,
+     "cena_vstop": 67024.0,
+     "cena_izstop": 60864.99,
+     "bruto_pct": -9.19,
+     "neto_pct": -9.73,
+     "razlog": "prelom trenda"
+    },
+    {
+     "st": 17,
+     "vstop": "2024-10-21",
+     "izstop": "2024-11-21",
+     "dni": 31,
+     "cena_vstop": 67377.5,
+     "cena_izstop": 98317.12,
+     "bruto_pct": 45.92,
+     "neto_pct": 45.05,
+     "razlog": "pregretje"
+    },
+    {
+     "st": 18,
+     "vstop": "2024-12-15",
+     "izstop": "2025-02-18",
+     "dni": 65,
+     "cena_vstop": 104463.99,
+     "cena_izstop": 95671.74,
+     "bruto_pct": -8.42,
+     "neto_pct": -8.97,
+     "razlog": "prelom trenda"
+    },
+    {
+     "st": 19,
+     "vstop": "2025-05-10",
+     "izstop": "2025-09-27",
+     "dni": 140,
+     "cena_vstop": 104809.53,
+     "cena_izstop": 109635.85,
+     "bruto_pct": 4.6,
+     "neto_pct": 3.98,
+     "razlog": "prelom trenda"
+    }
+   ]
+  },
+  "ETH": {
+   "od": "2020-01-01",
+   "do": "2026-07-27",
+   "metrike": {
+    "dni": 2400,
+    "sortino": 0.918765,
+    "cagr_pct": 43.5608,
+    "maxdd_pct": -42.5928,
+    "koncni_mnozitelj": 10.778673,
+    "izpostavljenost_pct": 32.9583,
+    "poslov": 14,
+    "promet": 28.0
+   },
+   "posli": [
+    {
+     "st": 1,
+     "vstop": "2020-02-04",
+     "izstop": "2020-02-07",
+     "dni": 3,
+     "cena_vstop": 188.91,
+     "cena_izstop": 223.33,
+     "bruto_pct": 18.22,
+     "neto_pct": 17.51,
+     "razlog": "pregretje"
+    },
+    {
+     "st": 2,
+     "vstop": "2020-06-05",
+     "izstop": "2020-07-30",
+     "dni": 55,
+     "cena_vstop": 240.03,
+     "cena_izstop": 334.87,
+     "bruto_pct": 39.51,
+     "neto_pct": 38.68,
+     "razlog": "pregretje"
+    },
+    {
+     "st": 3,
+     "vstop": "2020-08-14",
+     "izstop": "2020-09-23",
+     "dni": 40,
+     "cena_vstop": 438.11,
+     "cena_izstop": 320.72,
+     "bruto_pct": -26.79,
+     "neto_pct": -27.23,
+     "razlog": "prelom trenda"
+    },
+    {
+     "st": 4,
+     "vstop": "2020-10-12",
+     "izstop": "2020-10-13",
+     "dni": 1,
+     "cena_vstop": 386.51,
+     "cena_izstop": 381.04,
+     "bruto_pct": -1.42,
+     "neto_pct": -2.01,
+     "razlog": "prelom trenda"
+    },
+    {
+     "st": 5,
+     "vstop": "2020-11-20",
+     "izstop": "2020-11-23",
+     "dni": 3,
+     "cena_vstop": 510.12,
+     "cena_izstop": 608.58,
+     "bruto_pct": 19.3,
+     "neto_pct": 18.59,
+     "razlog": "pregretje"
+    },
+    {
+     "st": 6,
+     "vstop": "2020-12-18",
+     "izstop": "2021-01-03",
+     "dni": 16,
+     "cena_vstop": 653.85,
+     "cena_izstop": 978.28,
+     "bruto_pct": 49.62,
+     "neto_pct": 48.72,
+     "razlog": "pregretje"
+    },
+    {
+     "st": 7,
+     "vstop": "2021-01-18",
+     "izstop": "2021-05-03",
+     "dni": 105,
+     "cena_vstop": 1258.45,
+     "cena_izstop": 3431.04,
+     "bruto_pct": 172.64,
+     "neto_pct": 171.01,
+     "razlog": "pregretje"
+    },
+    {
+     "st": 8,
+     "vstop": "2021-08-14",
+     "izstop": "2021-12-19",
+     "dni": 127,
+     "cena_vstop": 3263.16,
+     "cena_izstop": 3924.14,
+     "bruto_pct": 20.26,
+     "neto_pct": 19.54,
+     "razlog": "prelom trenda"
+    },
+    {
+     "st": 9,
+     "vstop": "2022-04-03",
+     "izstop": "2022-05-01",
+     "dni": 28,
+     "cena_vstop": 3521.91,
+     "cena_izstop": 2824.81,
+     "bruto_pct": -19.79,
+     "neto_pct": -20.27,
+     "razlog": "prelom trenda"
+    },
+    {
+     "st": 10,
+     "vstop": "2023-01-27",
+     "izstop": "2023-06-09",
+     "dni": 133,
+     "cena_vstop": 1597.62,
+     "cena_izstop": 1840.37,
+     "bruto_pct": 15.19,
+     "neto_pct": 14.5,
+     "razlog": "prelom trenda"
+    },
+    {
+     "st": 11,
+     "vstop": "2023-11-04",
+     "izstop": "2024-03-04",
+     "dni": 121,
+     "cena_vstop": 1855.54,
+     "cena_izstop": 3627.76,
+     "bruto_pct": 95.51,
+     "neto_pct": 94.34,
+     "razlog": "pregretje"
+    },
+    {
+     "st": 12,
+     "vstop": "2024-11-10",
+     "izstop": "2025-01-22",
+     "dni": 73,
+     "cena_vstop": 3183.21,
+     "cena_izstop": 3242.6,
+     "bruto_pct": 1.87,
+     "neto_pct": 1.26,
+     "razlog": "prelom trenda"
+    },
+    {
+     "st": 13,
+     "vstop": "2025-07-08",
+     "izstop": "2025-07-16",
+     "dni": 8,
+     "cena_vstop": 2615.25,
+     "cena_izstop": 3371.35,
+     "bruto_pct": 28.91,
+     "neto_pct": 28.14,
+     "razlog": "pregretje"
+    },
+    {
+     "st": 14,
+     "vstop": "2025-07-31",
+     "izstop": "2025-10-17",
+     "dni": 78,
+     "cena_vstop": 3698.39,
+     "cena_izstop": 3831.57,
+     "bruto_pct": 3.6,
+     "neto_pct": 2.98,
+     "razlog": "prelom trenda"
+    }
+   ]
+  }
+ }
+}
