@@ -283,9 +283,6 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
     avg_d = sum(t["duration_days"] for t in closed) / n if n else None
     best = max(closed, key=lambda t: t["pnl_pct"])["pnl_pct"] if closed else None
     worst = min(closed, key=lambda t: t["pnl_pct"])["pnl_pct"] if closed else None
-    gross_profit = sum(t["pnl_pct"] for t in closed if t["pnl_pct"] > 0)
-    gross_loss = abs(sum(t["pnl_pct"] for t in closed if t["pnl_pct"] < 0))
-    pf = gross_profit / gross_loss if gross_loss > 1e-9 else None
 
     def _delta(sv, bv, is_pct: bool = True, positive_good: bool = True):
         """Returns (text, color) for strategy-vs-B&H delta badge."""
@@ -414,10 +411,6 @@ def _render_kpi_cards(metrics: dict, trades: list[dict], exposure: float,
               tip="Winning trades / total trades"),
     ]
     row2 = [
-        _card("Profit Factor",
-              _fmt_ratio(pf) if pf is not None else "—",
-              _val_col(pf) if pf is not None else COL_TEXT,
-              tip="Gross profit / gross loss"),
         _card("Trades", str(n) if n else "—", COL_TEXT,
               tip="Completed round-trip trades"),
         _card("Avg P&L",
