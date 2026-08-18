@@ -295,7 +295,11 @@ def _held_and_traded(src: pd.DataFrame, idx: pd.Index, bear_alloc_pct: float):
     return held, traded
 
 
-def _compute_metrics(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
+# Defaults come from the config, not from a literal. They used to be 0.0 while
+# LeanConfig said 5.0, so the live page was right (the slider is initialised from
+# the config) but anyone calling these directly got a floorless number without
+# being told. Two defaults for one setting is a way to be quietly wrong.
+def _compute_metrics(df: pd.DataFrame, bear_alloc_pct: float = DEFAULT_CONFIG.bear_alloc_pct,
                      td: int = TRADING_DAYS,
                      df_full: "pd.DataFrame | None" = None,
                      fee_per_side_pct: float = 0.0) -> dict:
@@ -322,7 +326,7 @@ def _compute_metrics(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
 
 def _compute_portfolio_metrics(df_a: pd.DataFrame, df_b: pd.DataFrame,
                                 w_a: int, w_b: int,
-                                bear_alloc_pct: float = 0.0,
+                                bear_alloc_pct: float = DEFAULT_CONFIG.bear_alloc_pct,
                                 td_a: int = TRADING_DAYS,
                                 td_b: int = TRADING_DAYS,
                                 df_a_full: "pd.DataFrame | None" = None,
@@ -948,7 +952,7 @@ def _status_bar(s: dict, symbol: str, cfg: LeanConfig) -> str:
 # ── price chart ───────────────────────────────────────────────────────────────
 
 def _build_price_chart(df: pd.DataFrame, symbol: str,
-                       bear_alloc_pct: float = 0.0) -> go.Figure:
+                       bear_alloc_pct: float = DEFAULT_CONFIG.bear_alloc_pct) -> go.Figure:
     fig = make_subplots(
         rows=2, cols=1, shared_xaxes=True,
         row_heights=[0.80, 0.20], vertical_spacing=0.03,
@@ -1250,7 +1254,7 @@ def _build_equity_chart_portfolio(sym_a: str, sym_b: str,
 
 # ── analytics charts ──────────────────────────────────────────────────────────
 
-def _build_monthly_heatmap(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
+def _build_monthly_heatmap(df: pd.DataFrame, bear_alloc_pct: float = DEFAULT_CONFIG.bear_alloc_pct,
                             port_ret: "pd.Series | None" = None,
                             title: str = "Monthly returns · strategy (%)") -> go.Figure:
     if port_ret is not None:
@@ -1359,7 +1363,7 @@ def _build_signal_timeline_dual(df_a: pd.DataFrame, df_b: pd.DataFrame,
     return fig
 
 
-def _build_rolling_sharpe(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
+def _build_rolling_sharpe(df: pd.DataFrame, bear_alloc_pct: float = DEFAULT_CONFIG.bear_alloc_pct,
                            port_ret: "pd.Series | None" = None,
                            title: str = "Rolling 90-day Sharpe ratio",
                            td: int = TRADING_DAYS) -> go.Figure:

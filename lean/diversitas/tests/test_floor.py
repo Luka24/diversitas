@@ -251,3 +251,25 @@ def test_allocation_line_shows_the_drift_not_the_instruction(df):
         "whole-percent hover rounds 3.5 % to 4 % and hides the drift")
     assert line.line.shape != "hv", (
         "a step line draws drift as if it were a sequence of trades")
+
+
+def test_the_floor_has_one_default_everywhere():
+    """LeanConfig says 5 %. Nothing may quietly say something else.
+
+    The dashboard helpers used to default to 0.0 while the config said 5.0. The
+    live page was right, because the slider is initialised from the config, but
+    anyone calling those helpers directly got a floorless number and no warning.
+    One setting with two defaults is a way to be quietly wrong.
+    """
+    import inspect
+    import diversitas.dashboard as D
+
+    assert "bear_alloc_pct: float = 0.0" not in inspect.getsource(D)
+
+
+def test_a_caller_who_passes_no_config_still_gets_the_floor(df):
+    """The path a colleague takes first: import, call, look at the number."""
+    pos = position(df)                     # no config argument at all
+    flat = pos[pos < 1]
+    assert flat.max() > 0, "position() without a config lost the floor"
+    assert DEFAULT_CONFIG.bear_alloc_pct == 5.0
