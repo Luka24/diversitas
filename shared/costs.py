@@ -25,13 +25,21 @@ def turnover(pos: pd.Series) -> pd.Series:
     return pos.diff().abs().fillna(0.0)
 
 
-def net_returns(pos: pd.Series, ret: pd.Series, fee_per_side_pct: float = 0.0) -> pd.Series:
+def net_returns(pos: pd.Series, ret: pd.Series, fee_per_side_pct: float = 0.0,
+                traded: "pd.Series | None" = None) -> pd.Series:
     """Position-scaled returns minus trading cost.
 
     `fee_per_side_pct` covers fee + slippage for one side; a round trip pays it
     twice because turnover registers on both the entry and the exit bar.
+
+    `traded` says how much was actually bought or sold. It defaults to the change
+    in `pos`, which is right for a position that only moves when you trade it.
+    It is NOT right once a floor is in play, because the leftover holding drifts
+    with the price and that is not a transaction. Pass `traded_fraction(df, cfg)`
+    in that case.
     """
     sr = pos * ret.reindex(pos.index).fillna(0.0)
     if fee_per_side_pct:
-        sr = sr - turnover(pos) * (fee_per_side_pct / 100.0)
+        t = turnover(pos) if traded is None else traded.reindex(pos.index).fillna(0.0)
+        sr = sr - t * (fee_per_side_pct / 100.0)
     return sr

@@ -309,24 +309,73 @@ def run_strategy(daily: pd.DataFrame,
     return StrategyResult(df=df, summary=build_summary(df))
 
 
-def position(df: pd.DataFrame, config: LeanConfig = DEFAULT_CONFIG) -> pd.Series:
-    """Fraction of capital held, one number per bar.
+def _sleeve_path(df: pd.DataFrame, config: LeanConfig):
+    """Walk the two sleeves bar by bar and return (held, traded).
 
-    Two things are folded in here, and both used to be spelled out separately by
-    every consumer, which is how they drifted apart.
+    The holding is NOT rebalanced. An exit sells down to the floor once and the
+    remainder is then left alone, so its share of the portfolio moves with the
+    price: it grows when the asset rises and shrinks when it falls. On BTC it has
+    ranged from 1.6 % to 6.9 % while flat.
+
+    `traded` is therefore not the change in `held`. Drift changes the share
+    without a trade, and charging for it would price a transaction that never
+    happens. Only the two rebalances at a signal switch cost anything.
+    """
+    # `prev_signal_state` is materialised by trim_warmup, so a caller handing in
+    # an untrimmed frame does not have it. Shift here rather than raise: the
+    # dashboard passes the untrimmed frame so that the first bar of the window
+    # has a real return, and it should not have to care which columns that frame
+    # happens to carry.
+    if "prev_signal_state" in df.columns:
+        prev = df["prev_signal_state"]
+    else:
+        prev = df["signal_state"].shift(1)
+    bull = (prev == S_BULL).to_numpy()
+    floor = float(config.bear_alloc_pct) / 100.0
+    ret = df["close"].pct_change().fillna(0.0).to_numpy(float)
+    n = len(bull)
+    held = np.empty(n)
+    traded = np.zeros(n)
+
+    v_asset = 1.0 if bull[0] else floor
+    v_cash = 0.0 if bull[0] else 1.0 - floor
+    prev = bull[0]
+    for i in range(n):
+        if bull[i] != prev:
+            total = v_asset + v_cash
+            target = total if bull[i] else floor * total
+            traded[i] = abs(target - v_asset) / total
+            v_asset, v_cash = target, total - target
+            prev = bull[i]
+        total = v_asset + v_cash
+        held[i] = v_asset / total
+        v_asset *= (1.0 + ret[i])       # only the asset sleeve moves
+    return held, traded
+
+
+def position(df: pd.DataFrame, config: LeanConfig = DEFAULT_CONFIG) -> pd.Series:
+    """Fraction of capital actually held in the asset, one number per bar.
 
     Position is YESTERDAY's signal. The strategy decides at a close and the
     earliest that decision can be held is the next bar, so `prev_signal_state`
     is the right column. Reading `signal_state` claims the move into the very
     close that produced the signal.
 
-    The floor then lifts the flat state off zero:
-
-        position = floor + (1 - floor) * signal
-
-    At the default 5 %, an exit sells 95 % and keeps the rest. See config.py for
-    what that costs and why it is there anyway.
+    With a floor above zero the series drifts rather than sitting at a constant,
+    because the leftover holding is never rebalanced. See config.py for what the
+    floor costs and why it is there.
     """
-    bull = (df["prev_signal_state"] == S_BULL).astype(float)
-    floor = float(config.bear_alloc_pct) / 100.0
-    return floor + (1.0 - floor) * bull
+    return pd.Series(_sleeve_path(df, config)[0], index=df.index)
+
+
+def traded_fraction(df: pd.DataFrame,
+                    config: LeanConfig = DEFAULT_CONFIG) -> pd.Series:
+    """Fraction of capital bought or sold on each bar.
+
+    Pass this to `net_returns`. Using `turnover(position(...))` instead would
+    bill every day of drift as a trade, which at a 5 % floor is a charge on
+    something nobody does.
+    """
+    return pd.Series(_sleeve_path(df, config)[1], index=df.index)
+
+

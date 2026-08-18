@@ -34,7 +34,8 @@ except ImportError:
 from shared.warmup import trim_warmup, warmup_bars, required_history
 from shared.costs import turnover as shared_turnover
 from diversitas.config import LeanConfig, DEFAULT_CONFIG
-from diversitas.strategy import run_strategy, build_summary, S_BULL, S_NEUTRAL, S_BEAR
+from diversitas.strategy import (run_strategy, build_summary, position,
+                                 traded_fraction, S_BULL, S_NEUTRAL, S_BEAR)
 
 
 TRADING_DAYS = 365  # crypto default
@@ -273,6 +274,27 @@ def _prev_state(df: pd.DataFrame) -> pd.Series:
 _turnover = shared_turnover
 
 
+def _held_and_traded(src: pd.DataFrame, idx: pd.Index, bear_alloc_pct: float):
+    """The held share and what was traded, aligned to `idx`.
+
+    Every consumer on this page has to answer the same two questions, and each
+    one used to answer them itself, picking the full position when long and the
+    bare floor otherwise. That is correct only while the floor is rebalanced
+    daily. Once it drifts, six hand-written copies means six different pictures
+    of the same portfolio, and a page that disagrees with itself is worse than a
+    page that is wrong in one place.
+
+    `trim_warmup` is applied because during warm-up the regime filter is
+    silently permissive, so those bars carry signals the strategy would never
+    have acted on and the drift path would start from the wrong place.
+    """
+    cfg = LeanConfig(bear_alloc_pct=bear_alloc_pct)
+    base = trim_warmup(src)
+    held = position(base, cfg).reindex(idx)
+    traded = traded_fraction(base, cfg).reindex(idx).fillna(0.0)
+    return held, traded
+
+
 def _compute_metrics(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
                      td: int = TRADING_DAYS,
                      df_full: "pd.DataFrame | None" = None,
@@ -286,14 +308,15 @@ def _compute_metrics(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
     ret          = ret_full.reindex(df.index).fillna(0.0)
     is_bull      = ib_full.reindex(df.index).fillna(0.0)
     sig_ch       = sig_ch_full.reindex(df.index).fillna(False)
-    pos          = pd.Series(np.where(is_bull, 1.0, bear_alloc_pct / 100.0),
-                             index=ret.index)
+    pos, traded  = _held_and_traded(src, df.index, bear_alloc_pct)
     strat_ret    = pos * ret
     if fee_per_side_pct > 0:
         # Charge on the bar the position actually moves, not on the bar the signal
         # flips — trading happens the day after the signal. `signal_changed` is one
         # bar early, which made the dashboard disagree with the reports.
-        strat_ret = strat_ret - _turnover(pos) * (fee_per_side_pct / 100.0)
+        # `traded`, not the change in `pos`. Drift moves the share without a
+        # transaction, and billing it would charge for something nobody does.
+        strat_ret = strat_ret - traded * (fee_per_side_pct / 100.0)
     return {"strategy": _stats(strat_ret, td), "bh": _stats(ret, td)}
 
 
@@ -321,19 +344,19 @@ def _compute_portfolio_metrics(df_a: pd.DataFrame, df_b: pd.DataFrame,
     r_a      = r_a_full.reindex(idx).fillna(0.0)
     ib_a     = pos_a_full.reindex(idx).fillna(0.0)
     sig_ch_a = sig_ch_a_full.reindex(idx).fillna(False)
-    pos_a    = pd.Series(np.where(ib_a, 1.0, bear_alloc_pct / 100.0), index=idx)
+    pos_a, trd_a = _held_and_traded(src_a, idx, bear_alloc_pct)
     sr_a     = pos_a * r_a
 
     r_b      = r_b_full.reindex(idx).fillna(0.0)
     ib_b     = pos_b_full.reindex(idx).fillna(0.0)
     sig_ch_b = sig_ch_b_full.reindex(idx).fillna(False)
-    pos_b    = pd.Series(np.where(ib_b, 1.0, bear_alloc_pct / 100.0), index=idx)
+    pos_b, trd_b = _held_and_traded(src_b, idx, bear_alloc_pct)
     sr_b     = pos_b * r_b
 
     if fee_per_side_pct > 0:
         fee   = fee_per_side_pct / 100.0
-        sr_a  = sr_a - _turnover(pos_a) * fee
-        sr_b  = sr_b - _turnover(pos_b) * fee
+        sr_a  = sr_a - trd_a * fee
+        sr_b  = sr_b - trd_b * fee
 
     wa, wb     = w_a / 100.0, w_b / 100.0
     port_strat = wa * sr_a + wb * sr_b
@@ -436,12 +459,10 @@ def _compute_worst_window(symbol: str, bars: int, use_btc_filter: bool,
     result = run_strategy(daily, btc_daily=btc, config=cfg)
     df     = trim_warmup(result.df)
     ret    = df["close"].pct_change().fillna(0.0)
-    pos    = pd.Series(np.where(
-        (_prev_state(df) == S_BULL), 1.0, bear_alloc_pct / 100.0
-    ), index=ret.index)
+    pos, traded = _held_and_traded(df, df.index, bear_alloc_pct)
     sr = pos * ret
     if fee_per_side_pct > 0:
-        sr = sr - _turnover(pos) * (fee_per_side_pct / 100.0)
+        sr = sr - traded * (fee_per_side_pct / 100.0)
     return _worst_windows_from_sr(sr, td, window)
 
 
@@ -1026,12 +1047,16 @@ def _build_price_chart(df: pd.DataFrame, symbol: str,
         ), row=1, col=1)
 
     # Allocation subplot (step line)
-    alloc = np.where(df["signal_state"] == S_BULL, 100.0, bear_alloc_pct)
+    # The REAL held share, bar by bar, not the instruction. While flat the
+    # holding is a fixed number of coins, so its share slides with the price.
+    alloc = (position(trim_warmup(df),
+                      LeanConfig(bear_alloc_pct=bear_alloc_pct))
+             .reindex(df.index).to_numpy() * 100.0)
     fig.add_trace(go.Scatter(
         x=df.index, y=alloc, mode="lines",
-        line=dict(color=COL_BLUE, width=1.8, shape="hv"),
+        line=dict(color=COL_BLUE, width=1.8),
         fill="tozeroy", fillcolor="rgba(41,98,255,0.12)",
-        name="Allocation %", hovertemplate="Alloc %{y:.0f}%<extra></extra>",
+        name="Allocation %", hovertemplate="Alloc %{y:.2f}%<extra></extra>",
     ), row=2, col=1)
 
     _chart_layout(fig, height=820)
@@ -1232,9 +1257,8 @@ def _build_monthly_heatmap(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
         strat_ret = port_ret
     else:
         ret = df["close"].pct_change().fillna(0.0)
-        is_bull = (_prev_state(df) == S_BULL).astype(float)
-        pos = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
-        strat_ret = pd.Series(ret.values * pos, index=ret.index)
+        pos, _ = _held_and_traded(df, df.index, bear_alloc_pct)
+        strat_ret = pd.Series(ret.values * pos.to_numpy(), index=ret.index)
     monthly = strat_ret.resample("ME").apply(lambda x: (1 + x).prod() - 1) * 100
     years = sorted(monthly.index.year.unique())
     mlabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -1343,9 +1367,8 @@ def _build_rolling_sharpe(df: pd.DataFrame, bear_alloc_pct: float = 0.0,
         strat_ret = port_ret
     else:
         ret = df["close"].pct_change().fillna(0.0)
-        is_bull = (_prev_state(df) == S_BULL).astype(float)
-        pos = np.where(is_bull, 1.0, bear_alloc_pct / 100.0)
-        strat_ret = pd.Series(ret.values * pos, index=ret.index)
+        pos, _ = _held_and_traded(df, df.index, bear_alloc_pct)
+        strat_ret = pd.Series(ret.values * pos.to_numpy(), index=ret.index)
     bh_ret = df["close"].pct_change().fillna(0.0)
     window = 90
 

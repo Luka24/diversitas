@@ -87,6 +87,11 @@ def trim_warmup(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     for col, prev in (("target_alloc", "prev_target_alloc"),
                       ("signal_state", "prev_signal_state")):
-        if col in out.columns:
+        # Only if it is not already there. Calling this twice used to overwrite
+        # the materialised column with a fresh shift, and on a frame that had
+        # already been sliced that turns the first bar's inherited state into
+        # NaN. Which is precisely the loss this function exists to prevent, so
+        # it was idempotent in length and not in content.
+        if col in out.columns and prev not in out.columns:
             out[prev] = out[col].shift(1)
     return out.iloc[warmup_bars(out):]
