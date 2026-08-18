@@ -39,6 +39,28 @@ class LeanConfig:
     use_vol_sizing: bool = True
     target_vol_pct: float = 50.0
 
+    # Permanent BTC floor. When the signal says out, this much stays invested,
+    # so an exit sells 95 % rather than 100 %:
+    #
+    #     position = floor + (1 - floor) * signal
+    #
+    # A linear blend of buy-and-hold and the 0/100 strategy, not a new rule.
+    # Set to 5 % on 2026-08-18.
+    #
+    # The measurement goes the other way, which is worth having findable. On BTC
+    # from 2021 at 0.30 %/side, 0 % gave Sortino 1.4758 and 27.8 % a year at
+    # -28.6 % drawdown; 5 % gave 1.4727 and 27.9 % at -30.9 %. There is no level
+    # where a floor wins, because it is held through every crash as well as
+    # every rally. The full-window numbers do favour it, but that comes from
+    # 2019 and 2020, when the drift was large enough that any permanent exposure
+    # paid.
+    #
+    # It is a deliberate choice rather than a measured improvement: insurance
+    # against the signal degrading. Blending the real signal with a random one
+    # of the same frequency puts the break-even between 75 % and 100 % signal
+    # quality. At 5 % both the cost and the cover are small.
+    bear_alloc_pct: float = 5.0
+
     # NOTE: the Kaufman Efficiency Ratio gate (`use_er`, `er_len`, `er_thresh`) was
     # removed on 2026-07-27. It was a Python-only addition that Pine never had, and
     # it could not be shown to do anything: its threshold sat on the median of the ER

@@ -210,6 +210,12 @@ def _run(symbol: str, bars: int, use_btc_filter: bool):
     daily = _load_candles(symbol, bars)
     btc   = _load_btc(bars) if use_btc_filter else None
     res   = run_strategy(daily, btc_daily=btc, config=cfg)
+    # Keep the untrimmed frame. The first bar AFTER trimming needs the bar before
+    # it to have a return at all, and that bar only exists here. Passing the
+    # trimmed frame as `df_full` covers the user's date filter but not the
+    # warm-up boundary, which silently zeroed a real day. Invisible while the
+    # position on that bar was 0; the 5 % floor makes it never 0.
+    res.untrimmed = res.df
     # Drop the bars on which the 200-day MA does not exist yet. Without this the
     # regime block is silently disabled there (see shared/warmup.py) and the
     # dashboard reports trades the strategy would never have taken.
@@ -2025,9 +2031,12 @@ def main() -> None:
                      "Reduces false entries during broad crypto downturns. OFF by default in Lean.",
             )
             bear_alloc = st.slider(
-                "Min BEAR allocation %", min_value=0, max_value=50, value=0, step=5,
-                help="Minimum % of capital held during BEAR signal. "
-                     "0% = fully out (default). E.g. 20% = always keep 20% invested even in BEAR.",
+                "Min BEAR allocation %", min_value=0, max_value=50,
+                value=int(DEFAULT_CONFIG.bear_alloc_pct), step=5,
+                help="Percent of capital kept invested while the signal says out. "
+                     "The strategy default is 5 %, so an exit sells 95 %. Set to 0 "
+                     "to be fully out, which scored better on every metric from "
+                     "2021 onward; see config.py for the numbers.",
             )
             fee_per_side = st.slider(
                 "Fee & slippage per side %", min_value=0.0, max_value=1.0, value=0.3, step=0.05,
@@ -2198,8 +2207,10 @@ def main() -> None:
                     "`python testing/scripts/check_data_sources.py`."
                 )
 
-    df_full = result.df
-    df = df_full
+    # `df_full` is what returns are differenced on, so it must reach back before
+    # the warm-up cut, not merely before the user's date filter.
+    df_full = getattr(result, "untrimmed", result.df)
+    df = result.df
     if date_from is not None:
         df = df.loc[str(date_from):]
     if date_to is not None:

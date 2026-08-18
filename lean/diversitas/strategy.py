@@ -307,3 +307,26 @@ def run_strategy(daily: pd.DataFrame,
     df = compute_features(daily, btc_daily, config)
     df = run_state_machine(df, config)
     return StrategyResult(df=df, summary=build_summary(df))
+
+
+def position(df: pd.DataFrame, config: LeanConfig = DEFAULT_CONFIG) -> pd.Series:
+    """Fraction of capital held, one number per bar.
+
+    Two things are folded in here, and both used to be spelled out separately by
+    every consumer, which is how they drifted apart.
+
+    Position is YESTERDAY's signal. The strategy decides at a close and the
+    earliest that decision can be held is the next bar, so `prev_signal_state`
+    is the right column. Reading `signal_state` claims the move into the very
+    close that produced the signal.
+
+    The floor then lifts the flat state off zero:
+
+        position = floor + (1 - floor) * signal
+
+    At the default 5 %, an exit sells 95 % and keeps the rest. See config.py for
+    what that costs and why it is there anyway.
+    """
+    bull = (df["prev_signal_state"] == S_BULL).astype(float)
+    floor = float(config.bear_alloc_pct) / 100.0
+    return floor + (1.0 - floor) * bull
