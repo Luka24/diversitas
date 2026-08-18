@@ -253,6 +253,44 @@ def test_allocation_line_shows_the_drift_not_the_instruction(df):
         "a step line draws drift as if it were a sequence of trades")
 
 
+def test_the_sleeve_grows_on_the_first_bar_too():
+    """The drift path and the P&L must be driven by the same returns.
+
+    On a trimmed frame the first bar's predecessor has been sliced off, so
+    `close.pct_change()` is NaN there and filling it with zero froze the sleeve
+    for a day the portfolio was nevertheless credited for. One quantity computed
+    two ways inside the same codebase.
+
+    It hid well: MaxDD matched to the last decimal while the final multiple was
+    off by 0.03 %, because a single boundary bar shifts the whole curve by a
+    constant factor and leaves its shape alone. `trim_warmup` now carries
+    `prev_close` so the first bar knows what it moved from.
+    """
+    raw = _synth()
+    df = trim_warmup(run_strategy(raw, config=LeanConfig()).df)
+    assert "prev_close" in df.columns
+    assert pd.notna(df["prev_close"].iloc[0])
+
+    cfg = LeanConfig()
+    # a hand walk sharing no code with _sleeve_path, on the TRUE returns
+    bull = (df["prev_signal_state"] == S_BULL).to_numpy()
+    ret = raw["close"].pct_change().reindex(df.index).fillna(0.0).to_numpy()
+    floor = cfg.bear_alloc_pct / 100.0
+    va, vc = (1.0, 0.0) if bull[0] else (floor, 1 - floor)
+    want, prev = [], bull[0]
+    for i in range(len(bull)):
+        if bull[i] != prev:
+            tot = va + vc
+            va = tot if bull[i] else floor * tot
+            vc = tot - va
+            prev = bull[i]
+        tot = va + vc
+        want.append(va / tot)
+        va *= 1 + ret[i]
+
+    assert np.allclose(position(df, cfg).to_numpy(), want, rtol=0, atol=1e-15)
+
+
 def test_the_floor_has_one_default_everywhere():
     """LeanConfig says 5 %. Nothing may quietly say something else.
 

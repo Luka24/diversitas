@@ -64,9 +64,12 @@ def hrp_weights(returns: pd.DataFrame) -> pd.Series:
     if r.shape[1] < 2:
         return pd.Series(1.0, index=r.columns)
     cov = r.cov(); corr = r.corr().fillna(0.0)
-    dist = np.sqrt(((1 - corr) / 2).clip(0, 1))
-    np.fill_diagonal(dist.values, 0.0)
-    link = linkage(squareform(dist.values, checks=False), "single")
+    # An owned array, not `.values`. Newer pandas hands back a read-only view
+    # here, and fill_diagonal writes in place, so this raised rather than
+    # zeroing the diagonal.
+    dist = np.sqrt(((1 - corr) / 2).clip(0, 1)).to_numpy(dtype=float, copy=True)
+    np.fill_diagonal(dist, 0.0)
+    link = linkage(squareform(dist, checks=False), "single")
     sort_ix = _quasi_diag(link)
     sort_ix = [corr.index[i] for i in sort_ix]
     w = _rec_bisect(cov, sort_ix)

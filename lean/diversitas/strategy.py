@@ -332,7 +332,18 @@ def _sleeve_path(df: pd.DataFrame, config: LeanConfig):
         prev = df["signal_state"].shift(1)
     bull = (prev == S_BULL).to_numpy()
     floor = float(config.bear_alloc_pct) / 100.0
-    ret = df["close"].pct_change().fillna(0.0).to_numpy(float)
+    # The same returns the P&L is computed from, including on the first bar.
+    # `pct_change` alone gives that bar a NaN, because on a trimmed frame its
+    # predecessor was sliced off, and filling it with zero means the sleeve does
+    # not grow on a day the portfolio is nevertheless credited for. One quantity,
+    # two series: it read as a 0.03 % gap against a hand recomputation, with
+    # MaxDD matching to the last decimal, which is the signature of a boundary
+    # bar rather than a modelling difference. `trim_warmup` materialises
+    # `prev_close` so that bar keeps the price it actually moved from.
+    r = df["close"].pct_change()
+    if "prev_close" in df.columns and pd.notna(df["prev_close"].iloc[0]):
+        r.iloc[0] = df["close"].iloc[0] / df["prev_close"].iloc[0] - 1.0
+    ret = r.fillna(0.0).to_numpy(float)
     n = len(bull)
     held = np.empty(n)
     traded = np.zeros(n)

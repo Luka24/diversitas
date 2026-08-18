@@ -86,7 +86,13 @@ def trim_warmup(df: pd.DataFrame) -> pd.DataFrame:
     """
     out = df.copy()
     for col, prev in (("target_alloc", "prev_target_alloc"),
-                      ("signal_state", "prev_signal_state")):
+                      ("signal_state", "prev_signal_state"),
+                      # `close` for the same reason as the state columns, but for
+                      # the sleeve path rather than the signal. Without it the
+                      # first bar of a trimmed frame has no return to grow the
+                      # floor by, so the drift starts one day late while the P&L
+                      # for that day is charged in full. See `_sleeve_path`.
+                      ("close", "prev_close")):
         # Only if it is not already there. Calling this twice used to overwrite
         # the materialised column with a fresh shift, and on a frame that had
         # already been sliced that turns the first bar's inherited state into

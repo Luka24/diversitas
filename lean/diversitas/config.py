@@ -48,9 +48,13 @@ class LeanConfig:
     # Set to 5 % on 2026-08-18.
     #
     # The measurement goes the other way, which is worth having findable. On BTC
-    # from 2021 at 0.30 %/side, 0 % gave Sortino 1.4758 and 27.8 % a year at
-    # -28.6 % drawdown; 5 % gave 1.4727 and 27.9 % at -30.9 %. There is no level
-    # where a floor wins, because it is held through every crash as well as
+    # from 2021-01-01 at 0.30 %/side, 2036 bars of the frozen Coinbase snapshot:
+    #
+    #      0 %   Sortino 1.476   27.8 % a year   28.6 % drawdown
+    #      5 %           1.469   27.7 %          30.7 %
+    #     10 %           1.456   27.6 %          32.8 %
+    #
+    # There is no level where a floor wins, because it is held through every
     # every rally. The full-window numbers do favour it, but that comes from
     # 2019 and 2020, when the drift was large enough that any permanent exposure
     # paid.

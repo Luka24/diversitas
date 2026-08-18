@@ -1,14 +1,31 @@
 """Zamrzne trenutno vedenje Lean strategije za BTC in ETH.
 
-To je slika stanja PRED prepakiranjem za produkcijo. Po njem se pozene se enkrat
-in oba izpisa se morata ujemati do zadnje decimalke. Ce se ne, je prepakiranje
-nekaj spremenilo in vemo tocno kaj.
-
 Racuna se iz zamrznjenih posnetkov v testing/data/sources/, ne iz omrezja, zato
 je izid vedno enak ne glede na to, kdaj se pozene in ali je Binance dosegljiv.
 
     python testing/scripts/baseline_snapshot.py            zapisi
     python testing/scripts/baseline_snapshot.py --preveri  primerjaj z zapisanim
+
+Nastalo je kot slika stanja pred prepakiranjem za produkcijo, kar je ta skripta
+tudi dokazala. Potem je zaostala za modelom in dobila tri napake naenkrat:
+
+  merila je `signal_state` namesto `prev_signal_state`, torej je pozicijo drzala
+  ze na zakljucku, ki jo je sele sprozil, kar je enodnevni pogled naprej;
+
+  Sortino je delila s `neg.std()`, standardnim odklonom samo negativnih dni.
+  Strategija je zunaj trga vec kot polovico casa in ti dnevi iz tiste podmnozice
+  izpadejo, zato je stevilka merila, koliko casa smo zunaj, ne kako hude so
+  izgube. Pravilna je koren povprecja kvadratov min(r, 0) cez VSE dni;
+
+  praga 5 % ni poznala, ker ga takrat se ni bilo.
+
+Poleg tega je javljala RAZLIKA in pod tem ni izpisala nicesar, ker je primerjalna
+zanka hodila samo po `metrike` in `posli`, polje `config` pa je preskocila. Prav
+tam je razlika tudi bila. Preverjanje, ki pove, da se je nekaj spremenilo, ne
+zna pa povedati kaj, je slabse od nobenega.
+
+Zdaj racuna po istih funkcijah kot lean/, torej position() in traded_fraction(),
+da se glavni repozitorij in predajni ne moreta razhajati.
 """
 from __future__ import annotations
 
@@ -24,10 +41,11 @@ for p in (ROOT, ROOT / "lean"):
 import numpy as np
 import pandas as pd
 
-from shared.costs import net_returns, turnover
+from shared.costs import net_returns
 from shared.warmup import trim_warmup
 from diversitas.config import LeanConfig
-from diversitas.strategy import run_strategy, S_BULL
+from diversitas.strategy import (S_BULL, position, run_strategy,
+                                 traded_fraction)
 
 FEE, PPY = 0.30, 365          # odstotek na stran
 OUT_JSON = ROOT / "testing" / "data" / "baseline_lean.json"
@@ -65,20 +83,26 @@ def trades(df: pd.DataFrame, pos: pd.Series, close: pd.Series) -> list:
     return out
 
 
-def metrics(pos: pd.Series, ret: pd.Series) -> dict:
-    r = net_returns(pos, ret, FEE).to_numpy(float)
+def metrics(pos: pd.Series, ret: pd.Series, traded: pd.Series,
+            bull: pd.Series) -> dict:
+    # `traded`, ne sprememba `pos`: s pragom ostanek plava s ceno, plavanje pa
+    # ni transakcija in se zanj ne placa provizije.
+    r = net_returns(pos, ret, FEE, traded=traded).to_numpy(float)
     eq = np.cumprod(1 + r)
     dd = eq / np.maximum.accumulate(eq) - 1
-    neg = r[r < 0]
+    down_dev = np.sqrt(np.mean(np.minimum(r, 0.0) ** 2)) * np.sqrt(PPY)
     return {
         "dni": int(len(r)),
-        "sortino": round(float(r.mean() / neg.std() * np.sqrt(PPY)), 6),
+        "sortino": round(float(r.mean() * PPY / down_dev), 6),
         "cagr_pct": round(float((eq[-1] ** (PPY / len(r)) - 1) * 100), 4),
         "maxdd_pct": round(float(dd.min() * 100), 4),
         "koncni_mnozitelj": round(float(eq[-1]), 6),
         "izpostavljenost_pct": round(float(pos.mean() * 100), 4),
-        "poslov": int((np.diff(pos.to_numpy(), prepend=pos.iloc[0]) > 0).sum()),
-        "promet": round(float(turnover(pos).sum()), 6),
+        # Vstope steje SIGNAL. Steti dvige v `pos` je delovalo, dokler se je
+        # pozicija premikala samo ob poslu; s pragom se dvigne tudi vsak dan, ko
+        # ostanek pridobi, kar ni vstop.
+        "poslov": int((bull.diff().fillna(bull.iloc[0]) > 0).sum()),
+        "promet": round(float(traded.sum()), 6),
     }
 
 
@@ -90,13 +114,23 @@ def build() -> dict:
     for sym, fname in ASSETS:
         raw = pd.read_parquet(ROOT / "testing" / "data" / "sources" / fname)
         df = trim_warmup(run_strategy(raw, config=cfg).df)
-        pos = (df["signal_state"] == S_BULL).astype(float)
+        # Dva razlicna niza, namenoma. Seznam poslov tece po SIGNALU, ker
+        # strategija odloci na zakljucku in po tej ceni tudi trguje. Niz donosov
+        # tece po VCERAJSNJEM signalu, ker kupljeno na zakljucku dneva T zasluzi
+        # sele od T+1 naprej. position() poskrbi za oboje, zamik in prag.
+        sig = (df["signal_state"] == S_BULL).astype(float)
+        pos = position(df, cfg)
+        trd = traded_fraction(df, cfg)
         close = raw["close"].reindex(df.index)
-        ret = close.pct_change().fillna(0.0)
+        # Donosi na CELI zgodovini, sele nato rezani na okno. Ce se reindeksira
+        # prej in odvaja potem, prvi bar okna dobi NaN, ki postane nic, in en
+        # resnicen dan donosa odpade.
+        ret = raw["close"].pct_change().reindex(df.index).fillna(0.0)
         snap["sredstva"][sym] = {
             "od": str(df.index[0].date()), "do": str(df.index[-1].date()),
-            "metrike": metrics(pos, ret),
-            "posli": trades(df, pos, close),
+            "metrike": metrics(pos, ret, trd,
+                               (df["prev_signal_state"] == S_BULL).astype(float)),
+            "posli": trades(df, sig, close),
         }
     return snap
 
@@ -140,7 +174,17 @@ def main() -> int:
                 print(f"  {sym}: Sortino {m['sortino']:.6f}, {m['poslov']} poslov, "
                       f"koncni mnozitelj {m['koncni_mnozitelj']:.6f}x")
             return 0
-        print("RAZLIKA. Prepakiranje je nekaj spremenilo:")
+        print("RAZLIKA. Nekaj se je spremenilo:")
+        # Tudi nastavitve, ne samo metrike. Ko je bil dodan `bear_alloc_pct`, se
+        # je razlikovalo prav to polje, izpis pa je ostal prazen in skripta je
+        # javljala razliko, ki je ni znala pokazati.
+        for k in ("provizija_na_stran_pct", "vir"):
+            if old.get(k) != snap.get(k):
+                print(f"  {k}: bilo {old.get(k)}  zdaj {snap.get(k)}")
+        for k in sorted(set(old.get("config", {})) | set(snap["config"])):
+            a, b = old.get("config", {}).get(k, "<ni ga bilo>"), snap["config"].get(k, "<odstranjeno>")
+            if a != b:
+                print(f"  config.{k}: bilo {a}  zdaj {b}")
         for sym in snap["sredstva"]:
             a = old["sredstva"].get(sym, {}).get("metrike", {})
             b = snap["sredstva"][sym]["metrike"]

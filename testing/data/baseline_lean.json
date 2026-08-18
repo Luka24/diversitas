@@ -14,6 +14,7 @@
   "exit_grace_bars": 3,
   "use_vol_sizing": true,
   "target_vol_pct": 50.0,
+  "bear_alloc_pct": 5.0,
   "use_donchian": true,
   "donchian_period": 20,
   "donchian_top_frac": 0.75,
@@ -26,13 +27,13 @@
    "do": "2026-07-29",
    "metrike": {
     "dni": 2700,
-    "sortino": 1.120621,
-    "cagr_pct": 40.1148,
-    "maxdd_pct": -30.4946,
-    "koncni_mnozitelj": 12.122138,
-    "izpostavljenost_pct": 35.3704,
+    "sortino": 1.962217,
+    "cagr_pct": 40.5449,
+    "maxdd_pct": -31.7702,
+    "koncni_mnozitelj": 12.400147,
+    "izpostavljenost_pct": 38.0756,
     "poslov": 19,
-    "promet": 38.0
+    "promet": 36.041763
    },
    "posli": [
     {
@@ -251,13 +252,13 @@
    "do": "2026-07-27",
    "metrike": {
     "dni": 2400,
-    "sortino": 0.918765,
-    "cagr_pct": 43.5608,
-    "maxdd_pct": -42.5928,
-    "koncni_mnozitelj": 10.778673,
-    "izpostavljenost_pct": 32.9583,
+    "sortino": 1.869153,
+    "cagr_pct": 52.6738,
+    "maxdd_pct": -43.767,
+    "koncni_mnozitelj": 16.155262,
+    "izpostavljenost_pct": 35.5674,
     "poslov": 14,
-    "promet": 28.0
+    "promet": 26.55664
    },
    "posli": [
     {

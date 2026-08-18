@@ -4,8 +4,8 @@ provizija 0.3 % na stran, zamrznjen posnetek Binance
 ==============================================================================
 BTC   2019-03-09 do 2026-07-29   2700 dni
 ==============================================================================
-  Sortino 1.120621    CAGR 40.1148 %    MaxDD -30.4946 %
-  koncni mnozitelj 12.122138x    v trgu 35.3704 %    poslov 19
+  Sortino 1.962217    CAGR 40.5449 %    MaxDD -31.7702 %
+  koncni mnozitelj 12.400147x    v trgu 38.0756 %    poslov 19
 
    st  vstop      izstop       dni  cena vstop  cena izstop    bruto     neto  razlog
     1  2019-04-07 2019-05-10    33    5,170.27     6,373.33   23.27%   22.53%  pregretje
@@ -31,8 +31,8 @@ BTC   2019-03-09 do 2026-07-29   2700 dni
 ==============================================================================
 ETH   2020-01-01 do 2026-07-27   2400 dni
 ==============================================================================
-  Sortino 0.918765    CAGR 43.5608 %    MaxDD -42.5928 %
-  koncni mnozitelj 10.778673x    v trgu 32.9583 %    poslov 14
+  Sortino 1.869153    CAGR 52.6738 %    MaxDD -43.7670 %
+  koncni mnozitelj 16.155262x    v trgu 35.5674 %    poslov 14
 
    st  vstop      izstop       dni  cena vstop  cena izstop    bruto     neto  razlog
     1  2020-02-04 2020-02-07     3      188.91       223.33   18.22%   17.51%  pregretje
