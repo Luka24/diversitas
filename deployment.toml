@@ -13,19 +13,29 @@
 # render and telling the reader to wait for something that will never arrive.
 # Pinning turns it into a decision that is written down.
 #
-# What it costs, measured on BTC 2020-07-14 to 2026-08-11 at 0.30 % per side
-# (testing/scripts/source_impact.py):
+# What it costs. Remeasured 2026-08-21 on BTC over the whole window both venues
+# cover, 2018-06-05 to 2026-08-21, at 0.30 % per side with the 5 % floor:
 #
-#     binance    Sortino 0.917   CAGR 28.7 %   MaxDD -30.5 %   11 trades
-#     coinbase           0.876        27.0 %         -30.6 %   11 trades
+#   Lean rules            Sortino    CAGR      MaxDD     trades
+#     binance               1.928    38.9 %    -31.8 %     19
+#     coinbase              1.882    39.5 %    -30.7 %     18
 #
-# The same eleven trades, entry dates moving by about a day, 0.054 % of average
-# price difference. Yahoo is NOT an equivalent substitute — 7.8 points of CAGR
-# and ten of drawdown — which is why it is not in the crypto chain at all.
+#   Momentum rules
+#     binance               1.811    39.4 %    -50.9 %     42
+#     coinbase              1.837    40.4 %    -50.9 %     44
 #
-# (These figures were first recorded from a run whose fee constant was wrong by
-# a factor of 100 — 0.003 % per side instead of 0.30 %. Corrected 2026-08-12;
-# the ranking never changed, the levels did.)
+# Neither venue is reliably better. Coinbase gives up 0.05 Sortino on Lean and
+# gains 0.03 on Momentum, with a trade or two moving by a day. That is the same
+# strategy on slightly different prices, which is the point: the choice is made
+# on reachability, not on which backtest looks nicer.
+#
+# Yahoo is NOT an equivalent substitute, 8 points of annual return and fifteen
+# of drawdown, which is why it is not in the crypto chain at all.
+#
+# The figures this replaces were wrong twice over: recorded from a run whose fee
+# constant was 0.003 % per side instead of 0.30 %, and with a Sortino that
+# divided by the standard deviation of the negative days only. That second bug
+# is why they read 0.917 and 0.876 where the correct formula reads about 1.9.
 #
 # Reports and the frozen reference are unaffected: they run off the Binance
 # snapshot in testing/data/sources/, which needs no network.

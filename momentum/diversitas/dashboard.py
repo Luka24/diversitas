@@ -69,7 +69,11 @@ def _set_theme(dark: bool) -> None:
 # nine of drawdown on BTC, where Coinbase costs 1.7 and takes the same trades.
 # A Coinbase fallback is the same strategy on slightly different prices; a Yahoo
 # fallback is a different one. Equities keep it as their only venue.
-CRYPTO_SOURCE_CHAIN = ("binance", "coinbase")
+# One venue per asset class, matching the Lean dashboard since 2026-08-21:
+# crypto is Coinbase, equities are Yahoo, and there is no second link to fall
+# through to. If the venue does not answer, the page says so rather than drawing
+# somebody else's prices that happen to render identically.
+CRYPTO_SOURCE_CHAIN = ("coinbase",)
 STOCK_SOURCE_CHAIN = ("yahoo",)
 
 

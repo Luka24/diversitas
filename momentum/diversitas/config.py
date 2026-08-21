@@ -58,14 +58,25 @@ class MomentumConfig:
 
     # Symbol → per-source identifier
     symbol_map: Dict[str, Dict[str, str]] = field(default_factory=lambda: {
-        "BTC":  {"binance": "BTCUSDT", "yahoo": "BTC-USD", "coingecko": "bitcoin"},
-        "ETH":  {"binance": "ETHUSDT", "yahoo": "ETH-USD", "coingecko": "ethereum"},
-        "SOL":  {"binance": "SOLUSDT", "yahoo": "SOL-USD", "coingecko": "solana"},
-        "BNB":  {"binance": "BNBUSDT", "yahoo": "BNB-USD", "coingecko": "binancecoin"},
-        "XRP":  {"binance": "XRPUSDT", "yahoo": "XRP-USD", "coingecko": "ripple"},
-        "ADA":  {"binance": "ADAUSDT", "yahoo": "ADA-USD", "coingecko": "cardano"},
-        "AVAX": {"binance": "AVAXUSDT", "yahoo": "AVAX-USD", "coingecko": "avalanche-2"},
-        "LINK": {"binance": "LINKUSDT", "yahoo": "LINK-USD", "coingecko": "chainlink"},
+        # `coinbase` added 2026-08-21. Every crypto key here was missing one,
+        # while deployment.toml pinned price_source to coinbase, so the live
+        # chain asked for a venue this map could not resolve. It failed with
+        # "No Coinbase product for BTC" on every render and fell through to
+        # Binance. That looked like an outage and was not one; the entry simply
+        # did not exist. On Streamlit Cloud, where Binance answers HTTP 451 to
+        # datacenter IPs, both links failed and the page would not load at all.
+        # All eight products verified online on Coinbase on 2026-08-21.
+        "BTC":  {"coinbase": "BTC-USD", "binance": "BTCUSDT", "yahoo": "BTC-USD", "coingecko": "bitcoin"},
+        "ETH":  {"coinbase": "ETH-USD", "binance": "ETHUSDT", "yahoo": "ETH-USD", "coingecko": "ethereum"},
+        "SOL":  {"coinbase": "SOL-USD", "binance": "SOLUSDT", "yahoo": "SOL-USD", "coingecko": "solana"},
+        # Coinbase listed BNB on 2025-10-22, so its history there is short.
+        # Lean's config still carries a comment saying BNB is not on Coinbase;
+        # that was true when it was written and is not any more.
+        "BNB":  {"coinbase": "BNB-USD", "binance": "BNBUSDT", "yahoo": "BNB-USD", "coingecko": "binancecoin"},
+        "XRP":  {"coinbase": "XRP-USD", "binance": "XRPUSDT", "yahoo": "XRP-USD", "coingecko": "ripple"},
+        "ADA":  {"coinbase": "ADA-USD", "binance": "ADAUSDT", "yahoo": "ADA-USD", "coingecko": "cardano"},
+        "AVAX": {"coinbase": "AVAX-USD", "binance": "AVAXUSDT", "yahoo": "AVAX-USD", "coingecko": "avalanche-2"},
+        "LINK": {"coinbase": "LINK-USD", "binance": "LINKUSDT", "yahoo": "LINK-USD", "coingecko": "chainlink"},
         "SPY":  {"yahoo": "SPY"},
         "QQQ":  {"yahoo": "QQQ"},
         "GLD":  {"yahoo": "GLD"},
