@@ -110,18 +110,15 @@ def _load_candles(symbol: str, bars: int) -> pd.DataFrame:
 
     Order is deliberate: Binance and Coinbase are real exchanges whose prices you
     can actually trade at; Yahoo is a scraped composite and sits last. It matters
-    which one you get — entry is a threshold, so ~0.1 % of price difference moves
-    whole trades. Measured on BTC 2020-07-14 to 2026-08-11 at 0.30 %/side:
-    Coinbase costs 1.7 points of CAGR against Binance, Yahoo costs 7.8 and ten
-    points of drawdown (`testing/scripts/source_impact.py`). A fallback is
-    therefore allowed, but never silent: the caller marks it and the banner
-    shows it.
+    which one you get: entry is a threshold, so ~0.1 % of price difference moves
+    whole trades. Measured on BTC 2020-07-14 to 2026-08-11 at 0.30 %/side,
+    Coinbase costs 1.7 points of CAGR against Binance and Yahoo costs 7.8 plus
+    ten points of drawdown (`testing/scripts/source_impact.py`).
 
-    Same fix as the Lean dashboard, 2026-08-11. Only `type(e).__name__` used to
-    be kept, so every failure read "DataSourceError" with no status code, and
-    the string it went into was never rendered anywhere — a fallback that had
-    run for weeks was indistinguishable from a blip. Binance answering HTTP 451
-    to a whole jurisdiction looked the same as a timeout.
+    `fell_back_from` and `source_errors` are still recorded on the frame, but
+    nothing renders them any more. The banner that read them was removed on
+    2026-08-21 at Luka's request, so a fallback is now silent again by choice.
+    If you want to know which venue answered, read `df.attrs["source"]`.
     """
     errors = []
     chain = _source_chain(symbol)
@@ -375,153 +372,6 @@ def _val_col(v, positive_good: bool = True) -> str:
         return COL_TEXT
     good = v > 0 if positive_good else v < 0
     return COL_BULL if good else COL_BEAR
-
-
-# ── market-regime breakdown ────────────────────────────────────────────────────
-
-def _detect_regimes(bh_eq: pd.Series, bear_dd: float = 0.55,
-                    bull_rally: float = 0.50, chop_net: float = 0.15,
-                    chop_days: int = 150) -> list[dict]:
-    """Segment the B&H equity curve into market regimes via a drawdown state-machine.
-
-    A BEAR (crypto winter) starts at a peak once price falls >= bear_dd below it, and
-    ends at the trough once price rallies >= bull_rally off that low. The 55% depth
-    keeps real winters (2018 -84%, 2022 -77%) while leaving shallower corrections
-    (e.g. a -53% dip inside a bull) classified as BULL. A flat, long BULL leg
-    (|net| < chop_net over >= chop_days) becomes CHOP. Returns ordered segments
-    {type, s, e} where s/e are positional indices.
-    """
-    eq  = bh_eq.values.astype(float)
-    idx = bh_eq.index
-    n   = len(eq)
-    if n < 30:
-        return []
-
-    segs: list[dict] = []
-    state = "bull"
-    seg_start = 0
-    peak_i,   peak_v   = 0, eq[0]
-    trough_i, trough_v = 0, eq[0]
-
-    for i in range(1, n):
-        v = eq[i]
-        if state == "bull":
-            if v > peak_v:
-                peak_i, peak_v = i, v
-            if v <= peak_v * (1.0 - bear_dd):          # deep decline → winter began at peak
-                segs.append({"type": "bull", "s": seg_start, "e": peak_i})
-                state, seg_start = "bear", peak_i
-                trough_i, trough_v = i, v
-        else:  # bear
-            if v < trough_v:
-                trough_i, trough_v = i, v
-            if v >= trough_v * (1.0 + bull_rally):      # rally off low → new bull at trough
-                segs.append({"type": "bear", "s": seg_start, "e": trough_i})
-                state, seg_start = "bull", trough_i
-                peak_i, peak_v = i, v
-    segs.append({"type": state, "s": seg_start, "e": n - 1})
-
-    # reclassify flat, long bull legs as chop
-    for seg in segs:
-        if seg["type"] != "bull":
-            continue
-        net  = eq[seg["e"]] / eq[seg["s"]] - 1.0
-        days = (idx[seg["e"]] - idx[seg["s"]]).days
-        if abs(net) < chop_net and days >= chop_days:
-            seg["type"] = "chop"
-
-    return [s for s in segs if s["e"] > s["s"]]
-
-
-def _render_regime_table(strat_eq: pd.Series, bh_eq: pd.Series) -> str:
-    """HTML table: strategy vs B&H per detected market regime, with capture ratios."""
-    segs = _detect_regimes(bh_eq)
-    if not segs:
-        return ""
-
-    idx   = bh_eq.index
-    meta  = {"bull": ("🟢 Bull", COL_BULL),
-             "bear": ("🔴 Zima", COL_BEAR),
-             "chop": ("⚪ Chop", COL_DIM)}
-
-    def _seg_ret(eq: pd.Series, s: int, e: int) -> float:
-        return float(eq.iloc[e] / eq.iloc[s] - 1.0)
-
-    rows, up_caps, down_caps = [], [], []
-    for seg in segs:
-        s, e = seg["s"], seg["e"]
-        label, col = meta.get(seg["type"], ("• ?", COL_TEXT))
-        bh_r    = _seg_ret(bh_eq, s, e)
-        st_r    = _seg_ret(strat_eq, s, e)
-        period  = f'{idx[s].strftime("%Y-%m")} → {idx[e].strftime("%Y-%m")}'
-
-        cap_txt, cap_col = "—", COL_DIM
-        if abs(bh_r) > 0.05:
-            cap = st_r / bh_r
-            if seg["type"] == "bear":
-                down_caps.append(cap)
-                arrow   = " ↓" if cap < 0.30 else ""
-                cap_col = COL_BULL if cap < 0.30 else COL_NEUTRAL
-                cap_txt = f"{cap * 100:.0f}%{arrow}"
-            else:
-                up_caps.append(cap)
-                cap_col = COL_TEXT
-                cap_txt = f"{cap * 100:.0f}%"
-
-        rows.append(
-            f'<tr>'
-            f'<td style="padding:7px 14px;border-bottom:1px solid {COL_BORDER};'
-            f'color:{col};font-weight:600;white-space:nowrap">{label}</td>'
-            f'<td style="padding:7px 14px;border-bottom:1px solid {COL_BORDER};'
-            f'color:{COL_DIM};font-family:monospace;white-space:nowrap">{period}</td>'
-            f'<td style="padding:7px 14px;border-bottom:1px solid {COL_BORDER};'
-            f'text-align:right;font-family:monospace;color:{_val_col(bh_r)}">{bh_r * 100:+.0f}%</td>'
-            f'<td style="padding:7px 14px;border-bottom:1px solid {COL_BORDER};'
-            f'text-align:right;font-family:monospace;font-weight:600;color:{_val_col(st_r)}">{st_r * 100:+.0f}%</td>'
-            f'<td style="padding:7px 14px;border-bottom:1px solid {COL_BORDER};'
-            f'text-align:right;font-family:monospace;color:{cap_col}">{cap_txt}</td>'
-            f'</tr>'
-        )
-
-    avg_up   = float(np.mean(up_caps))   if up_caps   else None
-    avg_down = float(np.mean(down_caps)) if down_caps else None
-    if avg_up is not None and avg_down is not None:
-        summary = (f'V bikih ujame <b style="color:{COL_TEXT}">~{avg_up * 100:.0f}%</b> rasti, '
-                   f'v zimah poje le <b style="color:{COL_BULL}">~{avg_down * 100:.0f}%</b> padca.')
-    elif avg_up is not None:
-        summary = (f'V bikih ujame <b style="color:{COL_TEXT}">~{avg_up * 100:.0f}%</b> rasti. '
-                   f'<span style="color:{COL_NEUTRAL}">⚠ Ni medvedjega trga v tem obdobju — '
-                   f'izberi daljše okno (All time) za test zaščite.</span>')
-    else:
-        summary = (f'<span style="color:{COL_NEUTRAL}">⚠ Premalo podatkov za razčlenitev po režimih.</span>')
-
-    header = (
-        f'<tr>'
-        f'<th style="padding:8px 14px;text-align:left;color:{COL_DIM};'
-        f'font-size:10px;letter-spacing:.5px;border-bottom:2px solid {COL_BORDER}">REŽIM</th>'
-        f'<th style="padding:8px 14px;text-align:left;color:{COL_DIM};'
-        f'font-size:10px;letter-spacing:.5px;border-bottom:2px solid {COL_BORDER}">OBDOBJE</th>'
-        f'<th style="padding:8px 14px;text-align:right;color:{COL_DIM};'
-        f'font-size:10px;letter-spacing:.5px;border-bottom:2px solid {COL_BORDER}">B&amp;H</th>'
-        f'<th style="padding:8px 14px;text-align:right;color:{COL_DIM};'
-        f'font-size:10px;letter-spacing:.5px;border-bottom:2px solid {COL_BORDER}">STRATEGIJA</th>'
-        f'<th style="padding:8px 14px;text-align:right;color:{COL_DIM};'
-        f'font-size:10px;letter-spacing:.5px;border-bottom:2px solid {COL_BORDER}">CAPTURE</th>'
-        f'</tr>'
-    )
-
-    return (
-        f'<div style="margin:6px 0 16px 0;background:{COL_BG};border:1px solid {COL_BORDER};'
-        f'border-radius:6px;overflow:hidden">'
-        f'<div style="padding:9px 14px;color:{COL_DIM};font-size:11px;font-weight:600;'
-        f'letter-spacing:.5px;border-bottom:1px solid {COL_BORDER}">'
-        f'USPEŠNOST PO TRŽNIH REŽIMIH</div>'
-        f'<table style="width:100%;border-collapse:collapse;font-size:12px">'
-        f'<thead>{header}</thead><tbody>{"".join(rows)}</tbody></table>'
-        f'<div style="padding:9px 14px;color:{COL_DIM};font-size:11px;'
-        f'border-top:1px solid {COL_BORDER}">{summary}</div>'
-        f'</div>'
-    )
 
 
 # ── KPI cards ─────────────────────────────────────────────────────────────────
@@ -2097,28 +1947,6 @@ def main() -> None:
         st.error(f"Data load failed for {symbol}: {e}")
         st.stop()
 
-    # Until 2026-08-11 this page fell back to another venue with no indication at
-    # all — `fell_back_from` was set and never read, so the numbers quietly came
-    # from Coinbase or Yahoo and looked exactly like Binance ones.
-    if daily.attrs.get("fell_back_from"):
-        st.error(
-            f"⚠️ **{daily.attrs['fell_back_from'].upper()} ni bil dosegljiv — "
-            f"prikazani podatki so z vira `{daily.attrs.get('source', '?')}`.**  \n"
-            f"Številke na tej strani **niso primerljive** s poročili, računanimi "
-            f"na `{daily.attrs['fell_back_from']}`. Izmerjeno na BTC: Coinbase "
-            f"stane 1,7 odstotne točke CAGR, Yahoo 7,8 in deset odstotnih točk "
-            f"večji padec — vstopni pogoj je prag, zato že desetinka odstotka "
-            f"premakne cel posel."
-        )
-        err = daily.attrs.get("source_errors")
-        if err:
-            st.caption(f"Razlog: `{err}`")
-            if "451" in err or "403" in err:
-                st.caption(
-                    "HTTP 451/403 je geo-blokada, ne izpad. Poženi "
-                    "`python testing/scripts/check_data_sources.py`."
-                )
-
     df_full = result.df
     df = df_full
     if date_from is not None:
@@ -2208,14 +2036,10 @@ def main() -> None:
                                         worst_w_a=worst_w, worst_w_b=worst_w_b),
             unsafe_allow_html=True,
         )
-        _regime_html = _render_regime_table(m_port["strategy"]["eq"], m_port["bh"]["eq"])
     else:
         st.markdown(_render_kpi_cards(metrics, trades, exposure,
                                       spx_m=spx_m, worst_w=worst_w),
                     unsafe_allow_html=True)
-        _regime_html = _render_regime_table(metrics["strategy"]["eq"], metrics["bh"]["eq"])
-    if _regime_html:
-        st.markdown(_regime_html, unsafe_allow_html=True)
 
     _n_bars   = len(df)
     _first    = df.index[0].strftime("%Y-%m-%d")
