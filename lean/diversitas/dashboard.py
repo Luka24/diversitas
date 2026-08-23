@@ -90,6 +90,8 @@ def _set_theme(dark: bool) -> None:
 # Equities keep it because it is the only venue that has them at all.
 CRYPTO_SOURCE_CHAIN = ("binance", "coinbase")
 STOCK_SOURCE_CHAIN = ("yahoo",)
+# Assets that live on one venue only, because no other carries usable history.
+VENUE_ONLY = {"HYPE": ("hyperliquid",)}
 VENUES = ("binance", "coinbase", "yahoo")
 
 
@@ -144,6 +146,8 @@ def _deployment_setting(key: str):
 
 
 def _source_chain(symbol: str) -> tuple[str, ...]:
+    if symbol in VENUE_ONLY:
+        return VENUE_ONLY[symbol]
     default = STOCK_SOURCE_CHAIN if symbol in STOCK_SYMBOLS else CRYPTO_SOURCE_CHAIN
     pin = _pinned_source()
     if pin is None or symbol in STOCK_SYMBOLS:

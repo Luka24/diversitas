@@ -152,8 +152,16 @@ class LeanConfig:
         "BTC": {"binance": "BTCUSDT", "coinbase": "BTC-USD", "yahoo": "BTC-USD", "coingecko": "bitcoin"},
         "ETH": {"binance": "ETHUSDT", "coinbase": "ETH-USD", "yahoo": "ETH-USD", "coingecko": "ethereum"},
         "SOL": {"binance": "SOLUSDT", "coinbase": "SOL-USD", "yahoo": "SOL-USD", "coingecko": "solana"},
-        # BNB is not listed on Coinbase — key intentionally absent.
-        "BNB": {"binance": "BNBUSDT", "yahoo": "BNB-USD", "coingecko": "binancecoin"},
+        # Coinbase listed BNB on 2025-10-22, so it resolves now, but that is
+        # only ~300 bars against the 220 the strategy needs before its first
+        # signal. Short usable history, not a comparable one.
+        "BNB": {"coinbase": "BNB-USD", "binance": "BNBUSDT", "yahoo": "BNB-USD", "coingecko": "binancecoin"},
+        # HYPE lives on Hyperliquid's own venue. Not on Binance at all; Coinbase
+        # and Kraken listed it in early 2026 and give under 210 bars where 220
+        # are needed. Hyperliquid's API carries it from 2024-12-05, 627 bars.
+        # No `yahoo` key ON PURPOSE: Yahoo's HYPE-USD is a different, dead token
+        # from 2021 that ends at 0.0000.
+        "HYPE": {"hyperliquid": "HYPE"},
         "XRP": {"binance": "XRPUSDT", "coinbase": "XRP-USD", "yahoo": "XRP-USD", "coingecko": "ripple"},
         "ADA": {"binance": "ADAUSDT", "coinbase": "ADA-USD", "yahoo": "ADA-USD", "coingecko": "cardano"},
         "AVAX": {"binance": "AVAXUSDT", "coinbase": "AVAX-USD", "yahoo": "AVAX-USD", "coingecko": "avalanche-2"},

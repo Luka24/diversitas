@@ -380,6 +380,67 @@ def _yf_fetch(symbol_yf: str, interval: str, bars: int) -> pd.DataFrame:
     return df.tail(bars)
 
 
+def _hyperliquid_fetch(coin: str, interval: str, bars: int) -> pd.DataFrame:
+    """Fetch daily candles from Hyperliquid's own API.
+
+    Here for one reason: HYPE. Hyperliquid is a DEX and its token does not trade
+    on Binance at all, while Coinbase and Kraken only listed it in early 2026.
+    Both give under 210 daily bars, and the strategy needs 220 before it can
+    produce a single signal, so the asset was not merely thin, it was
+    uncomputable. Hyperliquid's own endpoint carries it from 2024-12-05, which
+    is 627 bars and 407 usable ones.
+
+    Checked against the 200 days Coinbase does have: mean price difference
+    0.052 %, worst 0.24 %. Same asset, not the dead Yahoo token of the same
+    ticker that ends at zero.
+
+    POST /info with type=candleSnapshot. Returns oldest-first dicts with string
+    numbers: t (open ms), o, h, l, c, v.
+    """
+    if interval != "1d":
+        raise DataSourceError(
+            f"Hyperliquid fetcher only implements '1d', not {interval!r}")
+
+    out: dict[int, dict] = {}
+    start = 1_700_000_000_000          # comfortably before the token existed
+    for _ in range(20):                # bounded, so a bad reply cannot spin
+        try:
+            r = requests.post(
+                "https://api.hyperliquid.xyz/info", timeout=15,
+                json={"type": "candleSnapshot",
+                      "req": {"coin": coin, "interval": "1d",
+                              "startTime": start, "endTime": 4_000_000_000_000}},
+            )
+            r.raise_for_status()
+            page = r.json()
+        except Exception as e:  # noqa: BLE001
+            raise DataSourceError(f"Hyperliquid request failed for {coin}: {e}") from e
+        if not page:
+            break
+        for k in page:
+            out[int(k["t"])] = k
+        nxt = int(page[-1]["t"]) + 86_400_000
+        if nxt <= start or len(page) < 2:
+            break
+        start = nxt
+
+    if not out:
+        raise DataSourceError(f"Hyperliquid returned no candles for {coin}")
+
+    rows = [out[k] for k in sorted(out)]
+    df = pd.DataFrame(
+        {"open":   [float(x["o"]) for x in rows],
+         "high":   [float(x["h"]) for x in rows],
+         "low":    [float(x["l"]) for x in rows],
+         "close":  [float(x["c"]) for x in rows],
+         "volume": [float(x["v"]) for x in rows]},
+        index=pd.to_datetime([int(x["t"]) for x in rows], unit="ms", utc=True),
+    )
+    df.index.name = "time"
+    df = df[~df.index.duplicated(keep="last")].sort_index()
+    return df.tail(bars)
+
+
 def fetch_candles(
     symbol: str,
     interval: str = "1d",
@@ -425,7 +486,11 @@ def fetch_candles(
     # Source ordering: primary first, then fallbacks. `prefer` can override
     # the primary; we always try Coinbase before yfinance because Coinbase is
     # a real exchange (Yahoo is a scraper).
-    if prefer == "yahoo":
+    if prefer == "hyperliquid":
+        # Single-asset venue with no sensible partner: an asset that lives here
+        # lives only here, so it never shares a chain and never falls through.
+        sources = ["hyperliquid"]
+    elif prefer == "yahoo":
         sources = ["yahoo", "binance", "coinbase"]
     elif prefer == "coinbase":
         sources = ["coinbase", "binance", "yahoo"]
@@ -444,6 +509,10 @@ def fetch_candles(
             if "coinbase" not in symbol_map[symbol]:
                 raise DataSourceError(f"No Coinbase product for {symbol}")
             return _coinbase_fetch(symbol_map[symbol]["coinbase"], interval, bars)
+        if src == "hyperliquid":
+            if "hyperliquid" not in symbol_map[symbol]:
+                raise DataSourceError(f"No Hyperliquid coin for {symbol}")
+            return _hyperliquid_fetch(symbol_map[symbol]["hyperliquid"], interval, bars)
         if src == "yahoo":
             if "yahoo" not in symbol_map[symbol]:
                 raise DataSourceError(f"No Yahoo ticker for {symbol}")
