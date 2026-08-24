@@ -85,3 +85,40 @@ Ponovitev modela na BTC se sicer z njihovo tabelo ujema: Combo pri meni
 Sharpe 1,65 in padec −16 %, v članku 1,58 in −19 %.
 
 Članek: https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5209907
+
+---
+
+## Naša strategija na istih zadnjih treh letih
+
+Obdobje 25. 8. 2023 do 24. 8. 2026, stroški 0,30 % na stran. Uteži postavljene
+na začetku in nato nikoli uravnavane, vsako sredstvo trguje samo zase, noter in
+ven po svojem signalu.
+
+| | skupaj | letno | vol | Sharpe | Sortino | MaxDD |
+|---|---|---|---|---|---|---|
+| samo BTC | 156 % | 37 % | 26 % | **1,32** | **2,30** | −16 % |
+| samo ETH | 127 % | 31 % | 34 % | 0,98 | 1,61 | −25 % |
+| sestava 50/10/10/10/10/10 | 132 % | 32 % | 23 % | **1,32** | 2,09 | **−15 %** |
+
+Sestava se z BTC izenači po Sharpu in ga za las prekaša po padcu, zaostane pa
+po donosu in po Sortinu. ETH sam je najslabši od treh.
+
+Kako so se rokavi razlezli v treh letih, ker se ne uravnavajo:
+
+```
+BTC    50,0 %  ->  55,1 %
+BNB    10,0 %  ->  12,0 %
+ETH    10,0 %  ->   9,8 %
+SOL    10,0 %  ->   9,3 %
+LINK   10,0 %  ->   7,4 %
+HYPE   10,0 %  ->   6,4 %
+```
+
+HYPE je izgubil delež, ker je njegov rokav večino obdobja čakal v gotovini.
+Podatki zanj se začnejo decembra 2024, prvi signal pa je mogoč šele po 220
+barih ogrevanja, torej sredi 2025.
+
+Opomba glede okna: teh zadnjih treh let se začne po zlomu 2022, zato so
+številke lepše od tistih na petletnem oknu od junija 2021, kjer je sestava dala
+Sharpe 0,90 in padec −28 %, sam BTC pa 0,87 in −31 %. Na obeh oknih velja isto:
+sestava je približno enaka samemu BTC, ne bistveno boljša.
