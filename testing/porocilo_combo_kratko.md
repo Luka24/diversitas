@@ -118,7 +118,81 @@ HYPE je izgubil delež, ker je njegov rokav večino obdobja čakal v gotovini.
 Podatki zanj se začnejo decembra 2024, prvi signal pa je mogoč šele po 220
 barih ogrevanja, torej sredi 2025.
 
-Opomba glede okna: teh zadnjih treh let se začne po zlomu 2022, zato so
-številke lepše od tistih na petletnem oknu od junija 2021, kjer je sestava dala
-Sharpe 0,90 in padec −28 %, sam BTC pa 0,87 in −31 %. Na obeh oknih velja isto:
-sestava je približno enaka samemu BTC, ne bistveno boljša.
+### Isto na petih letih
+
+Zadnja tri leta se začnejo po zlomu 2022 in so zato prijazno okno. Na petih
+letih, torej od avgusta 2021, ista sestava in ista pravila:
+
+| | letno | vol | Sharpe | Sortino | MaxDD |
+|---|---|---|---|---|---|
+| sestava 50/10/10/10/10/10 | 18 % | 24 % | 0,81 | 1,22 | −30 % |
+| brez LINK, ostali alti na 12,5 % | 19 % | 24 % | 0,86 | 1,32 | −29 % |
+| brez LINK, njegovih 10 % na BTC | 20 % | 25 % | **0,87** | **1,34** | −29 % |
+
+Na obeh oknih velja isto: sestava je približno enaka samemu BTC, ne bistveno
+boljša. Razlika med oknoma je velika, 1,32 proti 0,81, in je odvisna zgolj od
+tega, ali je medvedji trg 2022 znotraj okna ali ne. To je treba povedati ob
+vsaki predstavljeni številki.
+
+### Vsako sredstvo posebej na petih letih
+
+| | letno | vol | Sharpe | Sortino | MaxDD | v trgu |
+|---|---|---|---|---|---|---|
+| BTC | 23 % | 30 % | 0,85 | 1,35 | −31 % | 38 % |
+| HYPE | 40 % | 62 % | 0,85 | 1,34 | −36 % | 50 % |
+| ETH | 19 % | 37 % | 0,65 | 0,99 | −45 % | 30 % |
+| BNB | 16 % | 35 % | 0,61 | 0,92 | −53 % | 36 % |
+| SOL | 14 % | 30 % | 0,59 | 0,94 | −38 % | 12 % |
+| **LINK** | **−5 %** | 46 % | **0,11** | **0,17** | **−62 %** | 20 % |
+
+HYPE ima le eno leto zgodovine, zato njegovih 40 % ni primerljivih z ostalimi.
+
+---
+
+## Zakaj LINK ven
+
+LINK sam, z našo strategijo, na treh oknih:
+
+| okno | od | letno | Sharpe | Sortino | MaxDD |
+|---|---|---|---|---|---|
+| 3 leta | 2023-08 | 20 % | 0,60 | 0,98 | −38 % |
+| 5 let | 2021-08 | **−5 %** | 0,11 | 0,17 | −62 % |
+| vse | 2020-01 | 1 % | 0,33 | 0,47 | −78 % |
+
+Na petih letih **izgublja denar**. Sharpe 0,11 je proti naslednjemu najslabšemu,
+SOL z 0,59, drug razred.
+
+Najbolj zgovorna pa je cela zgodovina, od januarja 2020 do danes:
+
+```
+poslov               18
+dni v trgu           22 %
+kupi in drzi LINK    +425 %
+strategija na LINK   +9 %
+```
+
+Strategija je od gibanja +425 % ujela **+9 %**. Ne gre za to, da bi LINK padal,
+gre za to, da ga naša pravila na njem premetavajo.
+
+Donos po letih, štiri od sedmih let negativna:
+
+```
+2020   +6,9 %
+2021   -0,8 %
+2022   -2,5 %
+2023  -20,1 %
+2024  +15,5 %
+2025   -6,6 %
+2026  +22,3 %
+```
+
+Kaj se zgodi s knjigo, če ga odstranimo:
+
+| | 3 leta | 5 let |
+|---|---|---|
+| z LINK | 1,34 | 0,81 |
+| brez LINK, ostali alti na 12,5 % | 1,38 | 0,86 |
+| brez LINK, njegovih 10 % na BTC | **1,39** | **0,87** |
+
+Izboljšanje na obeh oknih, v obeh različicah. Boljša je tista, kjer njegovih
+10 % pripade BTC.
