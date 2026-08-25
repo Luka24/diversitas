@@ -101,7 +101,7 @@ def _metrike(r: np.ndarray) -> dict:
     }
 
 
-def _knjiga(idx, CENE, SIG, utezi, bps, uravnavaj, sesto_od):
+def _knjiga(idx, CENE, SIG, utezi, bps, uravnavaj, sesto_od, vsak_n_mesecev=1):
     """Rokavi kot zneski. Vrne pot vrednosti in razclenjene provizije."""
     E = {k: 100.0 * w for k, w in utezi.items()}
     zgod = [sum(E.values())]
@@ -111,7 +111,8 @@ def _knjiga(idx, CENE, SIG, utezi, bps, uravnavaj, sesto_od):
     if ima_sesto:
         prej6 = "HYPE" if (sesto_od is not None and idx[0] >= sesto_od) else "XRP"
     _s = pd.Series(idx, index=idx)
-    konci = set(_s.groupby([idx.year, idx.month]).last())
+    _mes = sorted(_s.groupby([idx.year, idx.month]).last())
+    konci = set(_mes[vsak_n_mesecev - 1::vsak_n_mesecev])
     P = {s: (SIG[s][0].reindex(idx), SIG[s][1].reindex(idx).fillna(0.0)) for s in SIG}
     RT = {s: CENE[s]["close"].pct_change().reindex(idx).fillna(0.0) for s in CENE}
 
@@ -174,7 +175,15 @@ def main() -> None:
         st.divider()
         bps = st.slider("Provizija in zdrs, bazičnih točk na stran", 0, 60, 30, 5,
                         help="30 = 0,30 % na stran, torej 0,60 % na cel obrat")
-        uravnavaj = st.checkbox("Mesečno uravnavanje nazaj na ciljne uteži", value=True)
+        # Prej je tu stal gumb za vklop uravnavanja, ki ni delal nicesar: obe
+        # vrstici sta se racunali s trdo vpisanima True in False. Zdaj izbira
+        # POGOSTOST, ki dejansko doloca prvo vrstico, druga pa je vedno "nikoli".
+        POGOSTOST = {"mesečno": 1, "četrtletno": 3, "polletno": 6, "letno": 12}
+        pog_ime = st.selectbox("Kako pogosto uravnavati nazaj na ciljne uteži",
+                               list(POGOSTOST), index=0,
+                               help="Druga vrstica v tabeli je vedno različica "
+                                    "brez uravnavanja, da imaš primerjavo.")
+        pog = POGOSTOST[pog_ime]
 
         st.divider()
         st.caption("Uteži v odstotkih, skupaj naj bo 100")
@@ -203,9 +212,10 @@ def main() -> None:
         st.stop()
 
     sesto_od = SIG["HYPE"][0].index[0]
-    r_ura, prov_ura, konc_ura, pot_ura = _knjiga(idx, CENE, SIG, utezi, bps, True, sesto_od)
+    r_ura, prov_ura, konc_ura, pot_ura = _knjiga(idx, CENE, SIG, utezi, bps, True, sesto_od, pog)
     r_pus, prov_pus, konc_pus, pot_pus = _knjiga(idx, CENE, SIG, utezi, bps, False, sesto_od)
     r_btc, prov_btc, konc_btc, pot_btc = _knjiga(idx, CENE, SIG, {"BTC": 1.0}, bps, False, None)
+    IME_URA = f"sestava, uravnavana {pog_ime}"
 
     st.subheader(f"{idx[0].date()} do {idx[-1].date()}, {len(idx)} dni")
     if idx[-1].date() >= pd.Timestamp.now(tz="UTC").date():
@@ -216,18 +226,20 @@ def main() -> None:
 
     tab = pd.DataFrame(
         [_metrike(r_ura), _metrike(r_pus), _metrike(r_btc)],
-        index=["sestava, uravnavana", "sestava, puščena", "sam BTC"],
+        index=[IME_URA, "sestava, puščena", "sam BTC"],
     )
     st.dataframe(
         tab.style.format({"skupaj": "{:.0f} %", "letno": "{:.1f} %", "vol": "{:.0f} %",
                           "sharpe": "{:.2f}", "sortino": "{:.2f}", "maxdd": "{:.0f} %"})
+           # Svetlo zelena s temno pisavo. Prej temno zelena, na kateri se
+           # stevilk ni dalo prebrati.
            .highlight_max(subset=["skupaj", "letno", "sharpe", "sortino", "maxdd"],
-                          color="#0e4429"),
+                          props="background-color:#c6f6d5; color:#111; font-weight:700"),
         use_container_width=True,
     )
 
     fig = go.Figure()
-    for ime, pot, barva in (("sestava, uravnavana", pot_ura, "#2962ff"),
+    for ime, pot, barva in ((IME_URA, pot_ura, "#2962ff"),
                             ("sestava, puščena", pot_pus, "#ffb74d"),
                             ("sam BTC", pot_btc, "#089981")):
         fig.add_trace(go.Scatter(x=[idx[0] - pd.Timedelta(days=1)] + list(idx), y=pot,
@@ -243,7 +255,7 @@ def main() -> None:
         "večji od posla iz 2021."
     )
     vrst = []
-    for ime, prov, konc in (("sestava, uravnavana", prov_ura, konc_ura),
+    for ime, prov, konc in ((IME_URA, prov_ura, konc_ura),
                             ("sestava, puščena", prov_pus, konc_pus),
                             ("sam BTC", prov_btc, konc_btc)):
         sk = sum(prov.values())
@@ -251,7 +263,7 @@ def main() -> None:
                      "zamenjava": prov["zamenjava"], "skupaj": sk,
                      "končna vrednost": konc, "delež končne": sk / konc * 100})
     st.dataframe(
-        pd.DataFrame(vrst, index=["sestava, uravnavana", "sestava, puščena", "sam BTC"])
+        pd.DataFrame(vrst, index=[IME_URA, "sestava, puščena", "sam BTC"])
           .style.format({"signali": "{:.1f}", "uravnavanje": "{:.1f}", "zamenjava": "{:.1f}",
                          "skupaj": "{:.1f}", "končna vrednost": "{:.0f}", "delež končne": "{:.1f} %"}),
         use_container_width=True,
@@ -274,13 +286,24 @@ def main() -> None:
     st.subheader("Kaj so rokavi počeli")
     zad = {}
     for k in utezi:
-        s = "HYPE" if (k == "SESTO" and idx[-1] >= sesto_od) else ("XRP" if k == "SESTO" else k)
-        p = SIG[s][0].reindex(idx)
-        zad[k if k != "SESTO" else f"SESTO ({s})"] = {
-            "sredstvo": s,
+        if k == "SESTO":
+            # Rokav je drzal XRP do prvega HYPE signala in HYPE po njem, zato se
+            # "dni v trgu" sesteje cez oba. Prej je vrstica kazala samo HYPE cez
+            # celo okno, kar je izgledalo, kot da rokav vecino casa nima signala.
+            p = pd.concat([SIG["XRP"][0].reindex(idx[idx < sesto_od]),
+                           SIG["HYPE"][0].reindex(idx[idx >= sesto_od])])
+            ime = "6. mesto (XRP, nato HYPE)" if idx[0] < sesto_od <= idx[-1] else (
+                  "6. mesto (HYPE)" if idx[0] >= sesto_od else "6. mesto (XRP)")
+            sred = ("XRP do %s, nato HYPE" % sesto_od.date()
+                    if idx[0] < sesto_od <= idx[-1]
+                    else ("HYPE" if idx[0] >= sesto_od else "XRP"))
+        else:
+            p = SIG[k][0].reindex(idx); ime = k; sred = k
+        v_trgu = float((p > 0.5).mean() * 100)
+        zad[ime] = {
+            "sredstvo": sred,
             "ciljna utež": f"{utezi[k]*100:.0f} %",
-            "dni v trgu": f"{float((p > 0.5).mean()*100):.0f} %",
-            "dni brez signala": f"{float(p.isna().mean()*100):.0f} %",
+            "dni v trgu": f"{v_trgu:.0f} %",
             "stanje danes": "V TRGU" if (not pd.isna(p.iloc[-1]) and p.iloc[-1] > 0.5) else "zunaj",
         }
     st.dataframe(pd.DataFrame(zad).T, use_container_width=True)
