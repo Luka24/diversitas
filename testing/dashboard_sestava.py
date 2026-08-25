@@ -2,11 +2,11 @@
 
     streamlit run testing/dashboard_sestava.py
 
-Racun vodi DENAR po rokavih, ne donosov. Vsak rokav je znesek, ki se veca in
+Racun vodi DENAR po nalozbah, ne donosov. Vsaka nalozba je znesek, ki raste in
 manjsa, provizije se odbijejo od zneska, metrike pa se izracunajo sele iz poti
 skupne vrednosti. To je ista koda, s katero je bila tabela v porocilu
 preverjena, in ne tista, ki je strosek uravnavanja odstela od donosa, ne pa
-tudi od rokavov.
+tudi od nalozb.
 """
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ def _cene(simboli: tuple[str, ...]) -> dict:
         if s in BINANCE:
             out[s] = _binance(BINANCE[s])
         else:
-            vir = "hyperliquid" if s == "HYPE" else "coinbase"
+            vir = "hyperliquid" if s == "HYPE" else ("yahoo" if s == "SPY" else "coinbase")
             out[s] = fetch_candles(s, "1d", bars=5000, config=cfg, prefer=vir, strict=True)
     return out
 
@@ -81,6 +81,8 @@ def _signali(simboli: tuple[str, ...], _cene_d: dict) -> dict:
     cfg = replace(LeanConfig(), symbol_map=sm)
     out = {}
     for s in simboli:
+        if s == "SPY":
+            continue                # samo primerjava, strategija ga ne trguje
         df = trim_warmup(run_strategy(_cene_d[s], config=cfg).df)
         out[s] = (position(df, cfg), traded_fraction(df, cfg).fillna(0.0))
     return out
@@ -102,7 +104,7 @@ def _metrike(r: np.ndarray) -> dict:
 
 
 def _knjiga(idx, CENE, SIG, utezi, bps, uravnavaj, sesto_od, vsak_n_mesecev=1):
-    """Rokavi kot zneski. Vrne pot vrednosti in razclenjene provizije."""
+    """Vsaka nalozba je znesek. Vrne pot vrednosti in razclenjene provizije."""
     E = {k: 100.0 * w for k, w in utezi.items()}
     zgod = [sum(E.values())]
     prov = {"signali": 0.0, "uravnavanje": 0.0, "zamenjava": 0.0}
@@ -129,7 +131,7 @@ def _knjiga(idx, CENE, SIG, utezi, bps, uravnavaj, sesto_od, vsak_n_mesecev=1):
             s = s6 if k == "SESTO" else k
             p = P[s][0].iloc[i]
             if pd.isna(p):
-                continue                       # sredstvo se nima signala, rokav caka
+                continue                       # sredstvo se nima signala, nalozba caka
             # Provizija je odsteta ZNOTRAJ dnevnega faktorja, ne pred njim, torej
             # E x (1 + p*r - t*f) in ne (E - E*t*f) x (1 + p*r). Razlika je le
             # krizni clen t*f*p*r, a to je oblika, ki jo uporablja shared/costs.py
@@ -150,20 +152,66 @@ def _knjiga(idx, CENE, SIG, utezi, bps, uravnavaj, sesto_od, vsak_n_mesecev=1):
     return v[1:] / v[:-1] - 1, prov, v[-1], v
 
 
+def _kupi_drzi(idx, CENE, utezi, sesto_od):
+    """Kupis na dan vstopa in se nikoli ne dotaknes. Brez trgovanja, brez
+    uravnavanja, brez provizij po zacetnem nakupu. Sredstvo, ki na dan vstopa
+    se ne obstaja, pocaka v gotovini in se kupi na svoj prvi dan."""
+    E, zac_cena = {}, {}
+    for k, w in utezi.items():
+        s = ("HYPE" if (sesto_od is not None and idx[0] >= sesto_od) else "XRP") if k == "SESTO" else k
+        E[k] = 100.0 * w
+        zac_cena[k] = (s, None)
+    zgod = [sum(E.values())]
+    for i, t in enumerate(idx):
+        for k in list(E):
+            s, kupljeno_po = zac_cena[k]
+            if k == "SESTO" and sesto_od is not None and t >= sesto_od and s == "XRP":
+                s = "HYPE"                      # sesto mesto preide na HYPE
+                zac_cena[k] = (s, None)
+                kupljeno_po = None
+            c = CENE[s]["close"]
+            if t not in c.index or pd.isna(c.loc[t]):
+                continue                        # se ne obstaja, ceka v gotovini
+            if kupljeno_po is None:
+                zac_cena[k] = (s, float(c.loc[t]))
+                continue                        # kupimo na zakljucek, rast sele jutri
+            E[k] = 100.0 * utezi[k] * float(c.loc[t]) / kupljeno_po
+        zgod.append(sum(E.values()))
+    v = np.array(zgod)
+    return v[1:] / v[:-1] - 1, v
+
+
+def _eno_kupi_drzi(idx, cene):
+    """Kupi in drzi eno samo sredstvo, poravnano na kripto koledar.
+
+    Delnice se ne trgujejo ob vikendih in praznikih, zato se cena za te dni
+    prenese z zadnjega trgovalnega dne. Polnjenje mora teci CEZ zdruzeni indeks,
+    sicer ostane prvi dan prazen, kadar je vstop na dan, ko borza ni delala.
+    Prvi januar 2021 je bil tak dan in cela krivulja je bila NaN.
+    """
+    c = cene["close"]
+    c = c.reindex(c.index.union(idx)).ffill().reindex(idx)
+    if pd.isna(c.iloc[0]):
+        return np.zeros(len(idx)), np.full(len(idx) + 1, 100.0)
+    c = c / c.iloc[0] * 100.0
+    v = np.concatenate([[100.0], c.to_numpy(float)])
+    return v[1:] / v[:-1] - 1, v
+
+
 def main() -> None:
     st.title("Sestava proti samemu BTC")
     st.caption(
         "Uteži se postavijo na dan vstopa. Vsako sredstvo nato trguje po svojem "
         "signalu, neodvisno od ostalih. Provizije se obračunajo po dejanski "
-        "vrednosti rokava tistega dne, ne po številu poslov."
+        "vrednosti naložbe tistega dne, ne po številu poslov."
     )
 
     with st.sidebar:
         st.header("Nastavitve")
-        vsi = ["BTC", "ETH", "SOL", "LINK", "BNB", "HYPE", "XRP"]
+        vsi = ["BTC", "ETH", "SOL", "LINK", "BNB", "HYPE", "XRP", "SPY"]
         CENE = _cene(tuple(vsi))
         SIG = _signali(tuple(vsi), CENE)
-        kon_max = min(d.index[-1] for d in CENE.values()).date()
+        kon_max = min(d.index[-1] for k, d in CENE.items() if k != "SPY").date()
         zac_min = SIG["BTC"][0].index[0].date()
 
         c1, c2 = st.columns(2)
@@ -216,6 +264,9 @@ def main() -> None:
     r_pus, prov_pus, konc_pus, pot_pus = _knjiga(idx, CENE, SIG, utezi, bps, False, sesto_od)
     r_btc, prov_btc, konc_btc, pot_btc = _knjiga(idx, CENE, SIG, {"BTC": 1.0}, bps, False, None)
     IME_URA = f"sestava, uravnavana {pog_ime}"
+    r_kd, pot_kd = _kupi_drzi(idx, CENE, utezi, sesto_od)
+    r_bh, pot_bh = _eno_kupi_drzi(idx, CENE["BTC"])
+    r_spy, pot_spy = _eno_kupi_drzi(idx, CENE["SPY"])
 
     st.subheader(f"{idx[0].date()} do {idx[-1].date()}, {len(idx)} dni")
     if idx[-1].date() >= pd.Timestamp.now(tz="UTC").date():
@@ -225,8 +276,10 @@ def main() -> None:
         )
 
     tab = pd.DataFrame(
-        [_metrike(r_ura), _metrike(r_pus), _metrike(r_btc)],
-        index=[IME_URA, "sestava, puščena", "sam BTC"],
+        [_metrike(r_ura), _metrike(r_pus), _metrike(r_btc),
+         _metrike(r_kd), _metrike(r_bh), _metrike(r_spy)],
+        index=[IME_URA, "sestava, puščena", "sam BTC, strategija",
+               "sestava, kupi in drži", "sam BTC, kupi in drži", "S&P 500, kupi in drži"],
     )
     st.dataframe(
         tab.style.format({"skupaj": "{:.0f} %", "letno": "{:.1f} %", "vol": "{:.0f} %",
@@ -239,11 +292,18 @@ def main() -> None:
     )
 
     fig = go.Figure()
-    for ime, pot, barva in ((IME_URA, pot_ura, "#2962ff"),
-                            ("sestava, puščena", pot_pus, "#ffb74d"),
-                            ("sam BTC", pot_btc, "#089981")):
-        fig.add_trace(go.Scatter(x=[idx[0] - pd.Timedelta(days=1)] + list(idx), y=pot,
-                                 name=ime, line=dict(color=barva, width=2)))
+    x = [idx[0] - pd.Timedelta(days=1)] + list(idx)
+    KRIVULJE = [
+        (IME_URA, pot_ura, "#2962ff", "solid", 2.4),
+        ("sestava, puščena", pot_pus, "#ffb74d", "solid", 2.0),
+        ("sam BTC, strategija", pot_btc, "#089981", "solid", 2.0),
+        ("sestava, kupi in drži", pot_kd, "#9575cd", "dash", 1.6),
+        ("sam BTC, kupi in drži", pot_bh, "#4db6ac", "dash", 1.6),
+        ("S&P 500, kupi in drži", pot_spy, "#b0bec5", "dot", 1.6),
+    ]
+    for ime, pot, barva, crta, sirina in KRIVULJE:
+        fig.add_trace(go.Scatter(x=x, y=pot, name=ime,
+                                 line=dict(color=barva, width=sirina, dash=crta)))
     fig.update_layout(height=420, template="plotly_dark", yaxis_title="vrednost 100 vloženih",
                       margin=dict(l=0, r=0, t=10, b=0), legend=dict(orientation="h", y=1.08))
     st.plotly_chart(fig, use_container_width=True)
@@ -257,13 +317,13 @@ def main() -> None:
     vrst = []
     for ime, prov, konc in ((IME_URA, prov_ura, konc_ura),
                             ("sestava, puščena", prov_pus, konc_pus),
-                            ("sam BTC", prov_btc, konc_btc)):
+                            ("sam BTC, strategija", prov_btc, konc_btc)):
         sk = sum(prov.values())
         vrst.append({"signali": prov["signali"], "uravnavanje": prov["uravnavanje"],
                      "zamenjava": prov["zamenjava"], "skupaj": sk,
                      "končna vrednost": konc, "delež končne": sk / konc * 100})
     st.dataframe(
-        pd.DataFrame(vrst, index=[IME_URA, "sestava, puščena", "sam BTC"])
+        pd.DataFrame(vrst, index=[IME_URA, "sestava, puščena", "sam BTC, strategija"])
           .style.format({"signali": "{:.1f}", "uravnavanje": "{:.1f}", "zamenjava": "{:.1f}",
                          "skupaj": "{:.1f}", "končna vrednost": "{:.0f}", "delež končne": "{:.1f} %"}),
         use_container_width=True,
@@ -283,13 +343,13 @@ def main() -> None:
             "provizija ne raste več s portfeljem."
         )
 
-    st.subheader("Kaj so rokavi počeli")
+    st.subheader("Kaj je počela vsaka naložba")
     zad = {}
     for k in utezi:
         if k == "SESTO":
-            # Rokav je drzal XRP do prvega HYPE signala in HYPE po njem, zato se
+            # Nalozba je drzala XRP do prvega HYPE signala in HYPE po njem, zato se
             # "dni v trgu" sesteje cez oba. Prej je vrstica kazala samo HYPE cez
-            # celo okno, kar je izgledalo, kot da rokav vecino casa nima signala.
+            # celo okno, kar je izgledalo, kot da nalozba vecino casa nima signala.
             p = pd.concat([SIG["XRP"][0].reindex(idx[idx < sesto_od]),
                            SIG["HYPE"][0].reindex(idx[idx >= sesto_od])])
             ime = "6. mesto (XRP, nato HYPE)" if idx[0] < sesto_od <= idx[-1] else (
