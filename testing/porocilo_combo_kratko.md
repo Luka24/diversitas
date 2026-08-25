@@ -118,6 +118,25 @@ HYPE je izgubil delež, ker je njegov rokav večino obdobja čakal v gotovini.
 Podatki zanj se začnejo decembra 2024, prvi signal pa je mogoč šele po 220
 barih ogrevanja, torej sredi 2025.
 
+### Kaj če ta rokav ne čaka v gotovini
+
+Preizkušeno: dokler sredstvo ni izračunljivo, njegov delež prevzame **naša BTC
+strategija**, ne pasivni BTC. Ko BTC signal reče ven, gre tudi ta delež v
+gotovino.
+
+| | letno | Sharpe | Sortino | MaxDD |
+|---|---|---|---|---|
+| 3 leta, čaka v gotovini | 33 % | 1,33 | 2,12 | −15 % |
+| 3 leta, čaka v BTC | 37 % | 1,37 | 2,19 | −16 % |
+| 5 let, čaka v gotovini | 18 % | 0,81 | 1,22 | −30 % |
+| 5 let, čaka v BTC | 21 % | **0,81** | 1,23 | **−34 %** |
+
+Na treh letih pomaga, na petih pa se Sharpe **ne premakne**, padec pa se
+poslabša za štiri točke. To ni izboljšava strategije, je odločitev o velikosti
+BTC: ker je BTC že polovica knjige, ta poteg poveča koncentracijo na 60 % in
+prinese tisto, kar večji delež BTC prinese, torej več donosa in več padca pri
+istem razmerju.
+
 ### Isto na petih letih
 
 Zadnja tri leta se začnejo po zlomu 2022 in so zato prijazno okno. Na petih
@@ -151,16 +170,26 @@ HYPE ima le eno leto zgodovine, zato njegovih 40 % ni primerljivih z ostalimi.
 
 ## Zakaj LINK ven
 
-LINK sam, z našo strategijo, na treh oknih:
+LINK sam, z našo strategijo, po osmih različnih začetkih, vsi do danes, ob
+njem BTC za primerjavo:
 
-| okno | od | letno | Sharpe | Sortino | MaxDD |
-|---|---|---|---|---|---|
-| 3 leta | 2023-08 | 20 % | 0,60 | 0,98 | −38 % |
-| 5 let | 2021-08 | **−5 %** | 0,11 | 0,17 | −62 % |
-| vse | 2020-01 | 1 % | 0,33 | 0,47 | −78 % |
+| začetek | LINK letno | LINK Sharpe | BTC letno | BTC Sharpe |
+|---|---|---|---|---|
+| 2020-01 | 1 % | 0,33 | 38 % | 1,12 |
+| 2020-08 | 4 % | 0,36 | 43 % | 1,21 |
+| 2021-01 | 0 % | 0,30 | 28 % | 0,92 |
+| 2021-08 | −5 % | 0,11 | 25 % | 0,90 |
+| 2022-01 | 1 % | 0,22 | 25 % | 0,98 |
+| 2023-01 | 1 % | 0,26 | 34 % | 1,14 |
+| 2023-08 | 12 % | 0,46 | 31 % | 1,16 |
+| 2024-01 | 11 % | 0,45 | 26 % | 1,04 |
 
-Na petih letih **izgublja denar**. Sharpe 0,11 je proti naslednjemu najslabšemu,
-SOL z 0,59, drug razred.
+Številke se z oknom močno premikajo, Sharpe od 0,11 do 0,46. Navesti eno samo
+najslabšo bi bilo izbiranje, zato so tu vse.
+
+Sklep pa se ne premakne: LINK v **nobenem** od osmih oken ne pride blizu BTC.
+Njegov najboljši rezultat, 0,46, je slabši od najslabšega BTC, 0,90. Razmerje
+je med dva- in osemkratnim. To je argument, ki ne visi na izbiri obdobja.
 
 Najbolj zgovorna pa je cela zgodovina, od januarja 2020 do danes:
 
