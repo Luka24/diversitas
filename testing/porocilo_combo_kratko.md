@@ -60,21 +60,15 @@ Moja ponovitev na istih pravilih, obdobje 26. 8. 2023 do 25. 8. 2026. Nabor
 kandidatov je vseh 386 USD parov na Coinbase, od tega 273 z dovolj podatki.
 Stolpec zapolnjenost pove, kolikšen del mest je pravilo dejansko zasedlo.
 
+Ista širina kot v njihovi objavljeni številki, torej top 20:
+
 | | letno | vol | Sharpe | Sortino | MaxDD | zapolnjenost |
 |---|---|---|---|---|---|---|
-| top 5, stroški 10 bp | 12 % | 9 % | **1,20** | 1,86 | −11 % | 100 % |
-| top 10, stroški 10 bp | 8 % | 8 % | 1,03 | 1,59 | −10 % | 100 % |
 | top 20, stroški 10 bp | 7 % | 7 % | 1,06 | 1,62 | −10 % | 97 % |
-| top 5, stroški 30 bp | 10 % | 9 % | **1,06** | 1,62 | −12 % | 100 % |
-| top 10, stroški 30 bp | 6 % | 8 % | 0,85 | 1,29 | −11 % | 100 % |
 | top 20, stroški 30 bp | 6 % | 7 % | 0,86 | 1,30 | −11 % | 97 % |
 
-Zadnja tri leta so slabša od objavljenega obdobja: letno z 18 % na 10 do 12 %,
-Sharpe s 1,57 na 1,06 do 1,20. Padec ostaja majhen, okoli 10 %.
-
-Pri širini se razhajava s člankom. Pri njih je top 20 najboljši in top 5
-najslabši. Pri meni je obratno, top 5 je najboljši, top 10 in top 20 pa sta
-praktično enaka med sabo.
+Zadnja tri leta so slabša od objavljenega obdobja: letno z 18 % na 6 do 7 %,
+Sharpe s 1,57 na 0,86 do 1,06. Padec ostaja majhen, okoli 10 %.
 
 Upravičenih sredstev je 14 do 48 na mesec, odvisno od obdobja. Avgusta 2023,
 sredi medvedjega trga, jih je bilo 14, februarja 2025 pa 48. Isti prag dveh
@@ -110,10 +104,37 @@ ven po svojem signalu.
 |---|---|---|---|---|---|---|
 | samo BTC | 156 % | 37 % | 26 % | **1,32** | **2,30** | −16 % |
 | samo ETH | 127 % | 31 % | 34 % | 0,98 | 1,61 | −25 % |
-| sestava 50/10/10/10/10/10 | 132 % | 32 % | 23 % | **1,32** | 2,09 | **−15 %** |
+| sestava 50/10/10/10/10/10 | 133 % | 32 % | 23 % | **1,32** | 2,09 | **−15 %** |
 
 Sestava se z BTC izenači po Sharpu in ga za las prekaša po padcu, zaostane pa
 po donosu in po Sortinu. ETH sam je najslabši od treh.
+
+### To okno je izjema, ne pravilo
+
+Isti izračun na petih različnih začetkih, vsi do danes:
+
+| okno | | letno | Sharpe | Sortino | MaxDD |
+|---|---|---|---|---|---|
+| od 2023-08 | sam BTC | 37 % | **1,32** | **2,30** | −16 % |
+| | sestava | 32 % | **1,32** | 2,09 | −15 % |
+| od 2022-08 | sam BTC | 30 % | **1,07** | **1,82** | −23 % |
+| | sestava | 23 % | 1,02 | 1,62 | −19 % |
+| od 2022-01 | sam BTC | 24 % | **0,97** | **1,65** | −23 % |
+| | sestava | 18 % | 0,90 | 1,43 | −19 % |
+| od 2021-08 | sam BTC | 23 % | **0,85** | **1,34** | −31 % |
+| | sestava | 18 % | 0,80 | 1,21 | −30 % |
+| od 2021-06 | sam BTC | 25 % | **0,89** | **1,41** | −31 % |
+| | sestava | 19 % | 0,84 | 1,28 | −30 % |
+
+Sestava zaostaja za samim BTC na **štirih od petih oken** in se izenači na enem,
+po Sortinu pa zaostaja na vseh petih. Kar dosledno prinese, je za odstotek ali
+dva manjši padec in nižja volatilnost.
+
+Opozorilo o načinu izračuna: zgornje številke veljajo za **rokave, ki se
+postavijo enkrat in nato tečejo**. Prejšnja različica tega poročila je za isto
+sestavo navajala 0,90 proti 0,87 za BTC, kar je izhajalo iz izračuna, ki je
+uteži vsak dan vračal na 50/10/10/10/10/10, in to brez stroška uravnavanja.
+Tako se ne da trgovati, zato tista številka ne velja.
 
 Kako so se rokavi razlezli v treh letih, ker se ne uravnavajo:
 
