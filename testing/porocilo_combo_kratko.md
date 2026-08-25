@@ -56,30 +56,42 @@ Objavljeno v članku, obdobje 1. 1. 2015 do 19. 3. 2025, stroški 10 bazičnih t
 |---|---|---|---|
 | top 20 sredstev | 18 % | 1,57 | −11 % |
 
-Moja ponovitev na istih pravilih, obdobje 25. 8. 2023 do 24. 8. 2026:
+Moja ponovitev na istih pravilih, obdobje 26. 8. 2023 do 25. 8. 2026. Nabor
+kandidatov je vseh 386 USD parov na Coinbase, od tega 273 z dovolj podatki.
+Stolpec zapolnjenost pove, kolikšen del mest je pravilo dejansko zasedlo.
 
-| | letno | vol | Sharpe | Sortino | MaxDD |
-|---|---|---|---|---|---|
-| top 5, stroški 10 bp | 10 % | 9 % | 1,14 | 1,74 | −9 % |
-| top 10, stroški 10 bp | 6 % | 7 % | 0,96 | 1,44 | −8 % |
-| top 5, stroški 30 bp | 9 % | 9 % | 0,99 | 1,50 | −10 % |
-| top 10, stroški 30 bp | 5 % | 7 % | 0,77 | 1,14 | −10 % |
+| | letno | vol | Sharpe | Sortino | MaxDD | zapolnjenost |
+|---|---|---|---|---|---|---|
+| top 5, stroški 10 bp | 12 % | 9 % | **1,20** | 1,86 | −11 % | 100 % |
+| top 10, stroški 10 bp | 8 % | 8 % | 1,03 | 1,59 | −10 % | 100 % |
+| top 20, stroški 10 bp | 7 % | 7 % | 1,06 | 1,62 | −10 % | 97 % |
+| top 5, stroški 30 bp | 10 % | 9 % | **1,06** | 1,62 | −12 % | 100 % |
+| top 10, stroški 30 bp | 6 % | 8 % | 0,85 | 1,29 | −11 % | 100 % |
+| top 20, stroški 30 bp | 6 % | 7 % | 0,86 | 1,30 | −11 % | 97 % |
 
-Zadnja tri leta so slabša od objavljenega obdobja: letno z 18 % na 9 do 10 %,
-Sharpe s 1,57 na okoli 1,0. Padec ostaja majhen, pod 10 %.
+Zadnja tri leta so slabša od objavljenega obdobja: letno z 18 % na 10 do 12 %,
+Sharpe s 1,57 na 1,06 do 1,20. Padec ostaja majhen, okoli 10 %.
 
-Za primerjavo, isto obdobje ni, a naša strategija od 2021: na Lukovi sestavi
-20 % letno pri Sharpu 0,89 in padcu −28 %, sam BTC 24 % pri 0,87 in −31 %.
+Pri širini se razhajava s člankom. Pri njih je top 20 najboljši in top 5
+najslabši. Pri meni je obratno, top 5 je najboljši, top 10 in top 20 pa sta
+praktično enaka med sabo.
+
+Upravičenih sredstev je 14 do 48 na mesec, odvisno od obdobja. Avgusta 2023,
+sredi medvedjega trga, jih je bilo 14, februarja 2025 pa 48. Isti prag dveh
+milijonov je v mirnem trgu veliko višja ovira.
 
 ## Dvoje, kar je treba vedeti ob teh številkah
 
 **Stroški.** Njihova osnovna predpostavka je 10 bazičnih točk na stran. Mi
 računamo 30. Tabela za BTC v članku, tista s Sharpom 1,58, je brez stroškov.
 
-**Moj filter prometa je strožji od njihovega.** Oni merijo promet sešteto čez
-vse borze prek CoinMarketCap, jaz samo na Coinbase. Zato filter prepusti le 6
-do 23 sredstev namesto več deset, in moj top 20 je nepopolnjen, kar ga potisne
-navzdol. Merodajni sta vrstici top 5 in top 10.
+**Moj filter prometa meri samo Coinbase**, oni pa sešteto čez vse borze prek
+CoinMarketCap. Moj prag je zato strožji in nabor manjši od njihovega. Ni pa to
+razlog za razliko pri širini, ker je top 20 zapolnjen 97 %.
+
+(Prejšnja različica tega poročila je navajala nižje številke in trdila, da je
+top 20 nepopolnjen. To je bila napaka: nabor kandidatov je bil odrezan na
+prvih 120 po abecedi namesto na najbolj likvidne. Popravljeno.)
 
 Ponovitev modela na BTC se sicer z njihovo tabelo ujema: Combo pri meni
 Sharpe 1,65 in padec −16 %, v članku 1,58 in −19 %.
