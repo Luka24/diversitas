@@ -129,10 +129,14 @@ def _knjiga(idx, CENE, SIG, utezi, bps, uravnavaj, sesto_od):
             p = P[s][0].iloc[i]
             if pd.isna(p):
                 continue                       # sredstvo se nima signala, rokav caka
-            c = E[k] * P[s][1].iloc[i] * bps / 10000
-            E[k] -= c
-            prov["signali"] += c
-            E[k] *= 1 + p * RT[s].iloc[i]
+            # Provizija je odsteta ZNOTRAJ dnevnega faktorja, ne pred njim, torej
+            # E x (1 + p*r - t*f) in ne (E - E*t*f) x (1 + p*r). Razlika je le
+            # krizni clen t*f*p*r, a to je oblika, ki jo uporablja shared/costs.py
+            # in z njo so izracunane vse dosedanje tabele. Kontrola "sam BTC prek
+            # knjige proti neposrednemu izracunu" je prej odstopala za 0,07 %.
+            tr = P[s][1].iloc[i]
+            prov["signali"] += E[k] * tr * bps / 10000
+            E[k] *= 1 + p * RT[s].iloc[i] - tr * bps / 10000
         if uravnavaj and (t in konci) and i < len(idx) - 1:
             sk = sum(E.values())
             c = sum(abs(E[k] - utezi[k] * sk) for k in utezi) * bps / 10000
@@ -282,4 +286,7 @@ def main() -> None:
     st.dataframe(pd.DataFrame(zad).T, use_container_width=True)
 
 
-main()
+# Streamlit poganja skripto kot __main__, zato se stran normalno izrise. Straza
+# je tu zato, da se modul da uvoziti in preizkusiti brez risanja.
+if __name__ == "__main__":
+    main()
