@@ -198,6 +198,132 @@ def _eno_kupi_drzi(idx, cene):
     return v[1:] / v[:-1] - 1, v
 
 
+# ── barve, iste kot na lean strani ────────────────────────────────────────────
+COL_BULL, COL_BEAR = "#089981", "#f23645"
+COL_BLUE, COL_ORANGE, COL_SPX = "#2962ff", "#ffb74d", "#f59e0b"
+COL_BG, COL_TEXT, COL_DIM = "#0e1117", "#e6e6e6", "#8b949e"
+# Ena barva na strategijo, ista na vseh grafih in v vseh tabelah.
+BARVA = {
+    "uravnavana": COL_BLUE, "puščena": COL_ORANGE, "BTC strategija": COL_BULL,
+    "sestava B&H": "#9575cd", "BTC B&H": "#4db6ac", "S&P 500": COL_SPX,
+}
+
+
+def _postavi(fig, visina=340, naslov=""):
+    fig.update_layout(
+        height=visina, template="plotly_dark", paper_bgcolor=COL_BG, plot_bgcolor=COL_BG,
+        margin=dict(l=0, r=0, t=46 if naslov else 10, b=0),
+        legend=dict(orientation="h", y=1.14, x=0, font=dict(size=11)),
+        font=dict(color=COL_TEXT),
+    )
+    if naslov:
+        fig.update_layout(title=dict(
+            text=f'<span style="color:{COL_TEXT};font-size:12px;text-transform:uppercase;'
+                 f'letter-spacing:1px">{naslov}</span>', x=0.01, y=0.97, yanchor="top"))
+    fig.update_xaxes(gridcolor="#1c2128", zeroline=False)
+    fig.update_yaxes(gridcolor="#1c2128", zeroline=False)
+    return fig
+
+
+def _podvodni(pot: np.ndarray) -> np.ndarray:
+    """Koliko odstotkov pod prejsnjim vrhom si vsak dan."""
+    return (pot / np.maximum.accumulate(pot) - 1) * 100
+
+
+def _najhujsi_padci(idx, pot: np.ndarray, n: int = 5) -> pd.DataFrame:
+    """Prvih n padcev, vsak z vrhom, dnom, okrevanjem in trajanjem.
+
+    Alokatorji berejo stolpec 'dni do okrevanja' bolj kot samo globino: padec
+    -29 %, iz katerega si okreval v treh mesecih, je nekaj drugega kot enak
+    padec, ki je trajal dve leti.
+    """
+    d = pd.Series(pot[1:], index=idx)
+    vrh = d.cummax()
+    pod = d < vrh
+    epizode, i = [], 0
+    a = pod.to_numpy()
+    while i < len(a):
+        if not a[i]:
+            i += 1
+            continue
+        j = i
+        while j < len(a) and a[j]:
+            j += 1
+        odsek = d.iloc[i:j]
+        vrh_v = float(vrh.iloc[i])
+        dno_i = int(odsek.values.argmin())
+        epizode.append({
+            "globina": (float(odsek.iloc[dno_i]) / vrh_v - 1) * 100,
+            "vrh": d.index[i - 1].date() if i else d.index[0].date(),
+            "dno": odsek.index[dno_i].date(),
+            "okrevanje": d.index[j].date() if j < len(a) else None,
+            "dni skupaj": (d.index[min(j, len(a) - 1)] - d.index[max(i - 1, 0)]).days,
+            "dni do okrevanja": ((d.index[j] - odsek.index[dno_i]).days
+                                 if j < len(a) else None),
+        })
+        i = j
+    if not epizode:
+        return pd.DataFrame()
+    t = pd.DataFrame(epizode).sort_values("globina").head(n).reset_index(drop=True)
+    t.index = [f"{i+1}." for i in range(len(t))]
+    t["okrevanje"] = t["okrevanje"].fillna("še traja")
+    t["dni do okrevanja"] = t["dni do okrevanja"].fillna(-1).astype(int).replace(-1, None)
+    return t
+
+
+def _beta_korelacija(r_strat: np.ndarray, r_ref: np.ndarray) -> tuple[float, float]:
+    """Beta in korelacija proti referenci. Odgovor na 'ali ni to samo BTC?'."""
+    if r_ref.std() == 0:
+        return float("nan"), float("nan")
+    beta = float(np.cov(r_strat, r_ref)[0, 1] / np.var(r_ref))
+    kor = float(np.corrcoef(r_strat, r_ref)[0, 1])
+    return beta, kor
+
+
+def _kotalec(r: np.ndarray, idx, okno: int = 365):
+    """Kotaleci se Sharpe in beta do BTC."""
+    s = pd.Series(r, index=idx)
+    m = s.rolling(okno).mean() * PPY
+    v = s.rolling(okno).std() * np.sqrt(PPY)
+    return (m / v).dropna()
+
+
+def _mesecna_karta(r: np.ndarray, idx) -> go.Figure:
+    s = pd.Series(r, index=idx)
+    mes = s.resample("ME").apply(lambda x: (1 + x).prod() - 1) * 100
+    leta = sorted(mes.index.year.unique())
+    oznake = ["jan", "feb", "mar", "apr", "maj", "jun",
+              "jul", "avg", "sep", "okt", "nov", "dec"]
+    z, txt, letno = [], [], []
+    for y in leta:
+        vr, vt = [], []
+        for m in range(1, 13):
+            v = mes[(mes.index.year == y) & (mes.index.month == m)]
+            if len(v):
+                vr.append(float(v.iloc[0])); vt.append(f"{float(v.iloc[0]):+.1f}")
+            else:
+                vr.append(None); vt.append("")
+        z.append(vr); txt.append(vt)
+        lr = s[s.index.year == y]
+        letno.append(((1 + lr).prod() - 1) * 100)
+    plosc = [v for vrsta in z for v in vrsta if v is not None]
+    zmax = max(abs(v) for v in plosc) if plosc else 10
+    for i, y in enumerate(leta):
+        z[i].append(letno[i]); txt[i].append(f"{letno[i]:+.0f}")
+    fig = go.Figure(go.Heatmap(
+        z=z, x=oznake + ["LETO"], y=[str(y) for y in leta], text=txt,
+        texttemplate="%{text}", textfont=dict(size=10, color=COL_TEXT),
+        colorscale=[[0, COL_BEAR], [0.5, COL_BG], [1, COL_BULL]],
+        zmin=-zmax, zmax=zmax, showscale=False,
+        hovertemplate="%{y} %{x}: %{text} %<extra></extra>"))
+    _postavi(fig, visina=max(190, len(leta) * 34 + 90),
+             naslov="Mesečni donosi sestave, v odstotkih")
+    fig.update_layout(yaxis=dict(autorange="reversed"))
+    fig.update_xaxes(side="top", tickfont=dict(color=COL_DIM, size=9))
+    fig.update_yaxes(tickfont=dict(color=COL_DIM, size=10))
+    return fig
+
+
 def main() -> None:
     st.title("Sestava proti samemu BTC")
     st.caption(
@@ -269,107 +395,236 @@ def main() -> None:
     r_spy, pot_spy = _eno_kupi_drzi(idx, CENE["SPY"])
 
     st.subheader(f"{idx[0].date()} do {idx[-1].date()}, {len(idx)} dni")
+    st.caption(f"Provizija in zdrs {bps/100:.2f} % na stran. Uravnavanje {pog_ime}. "
+               f"Vsako sredstvo trguje po svojem signalu.")
     if idx[-1].date() >= pd.Timestamp.now(tz="UTC").date():
-        st.caption(
-            "Zadnji dan je današnji in še ni zaključen, zato se te številke med "
-            "dnevom premikajo. Za stabilen izpis izberi izstop na včeraj."
-        )
+        st.caption("Zadnji dan je današnji in še ni zaključen, zato se te številke med "
+                   "dnevom premikajo. Za stabilen izpis izberi izstop na včeraj.")
 
-    tab = pd.DataFrame(
-        [_metrike(r_ura), _metrike(r_pus), _metrike(r_btc),
-         _metrike(r_kd), _metrike(r_bh), _metrike(r_spy)],
-        index=[IME_URA, "sestava, puščena", "sam BTC, strategija",
-               "sestava, kupi in drži", "sam BTC, kupi in drži", "S&P 500, kupi in drži"],
-    )
+    VRSTE = [(IME_URA, r_ura, pot_ura, "uravnavana"),
+             ("sestava, puščena", r_pus, pot_pus, "puščena"),
+             ("sam BTC, strategija", r_btc, pot_btc, "BTC strategija"),
+             ("sestava, kupi in drži", r_kd, pot_kd, "sestava B&H"),
+             ("sam BTC, kupi in drži", r_bh, pot_bh, "BTC B&H"),
+             ("S&P 500, kupi in drži", r_spy, pot_spy, "S&P 500")]
+
+    vrstice = []
+    for ime, r, pot, kljuc in VRSTE:
+        m = _metrike(r)
+        m["calmar"] = m["letno"] / abs(m["maxdd"]) if m["maxdd"] else float("nan")
+        m["pod vodo"] = float((_podvodni(pot) < -0.01).mean() * 100)
+        m["beta BTC"], m["kor. BTC"] = _beta_korelacija(r, r_bh)
+        vrstice.append(m)
+    tab = pd.DataFrame(vrstice, index=[v[0] for v in VRSTE])
     st.dataframe(
         tab.style.format({"skupaj": "{:.0f} %", "letno": "{:.1f} %", "vol": "{:.0f} %",
-                          "sharpe": "{:.2f}", "sortino": "{:.2f}", "maxdd": "{:.0f} %"})
-           # Svetlo zelena s temno pisavo. Prej temno zelena, na kateri se
-           # stevilk ni dalo prebrati.
-           .highlight_max(subset=["skupaj", "letno", "sharpe", "sortino", "maxdd"],
+                          "sharpe": "{:.2f}", "sortino": "{:.2f}", "maxdd": "{:.0f} %",
+                          "calmar": "{:.2f}", "pod vodo": "{:.0f} %",
+                          "beta BTC": "{:.2f}", "kor. BTC": "{:.2f}"})
+           .highlight_max(subset=["skupaj", "letno", "sharpe", "sortino", "maxdd", "calmar"],
                           props="background-color:#c6f6d5; color:#111; font-weight:700"),
-        use_container_width=True,
-    )
+        use_container_width=True)
+    st.caption("**calmar** je letni donos deljen z največjim padcem. **pod vodo** je delež "
+               "dni pod prejšnjim vrhom. **beta BTC** pove, koliko se strategija premakne, "
+               "ko se BTC premakne za odstotek: 1,0 pomeni isto gibanje, 0,5 polovično.")
 
-    fig = go.Figure()
-    x = [idx[0] - pd.Timedelta(days=1)] + list(idx)
-    KRIVULJE = [
-        (IME_URA, pot_ura, "#2962ff", "solid", 2.4),
-        ("sestava, puščena", pot_pus, "#ffb74d", "solid", 2.0),
-        ("sam BTC, strategija", pot_btc, "#089981", "solid", 2.0),
-        ("sestava, kupi in drži", pot_kd, "#9575cd", "dash", 1.6),
-        ("sam BTC, kupi in drži", pot_bh, "#4db6ac", "dash", 1.6),
-        ("S&P 500, kupi in drži", pot_spy, "#b0bec5", "dot", 1.6),
-    ]
-    for ime, pot, barva, crta, sirina in KRIVULJE:
-        fig.add_trace(go.Scatter(x=x, y=pot, name=ime,
-                                 line=dict(color=barva, width=sirina, dash=crta)))
-    fig.update_layout(height=420, template="plotly_dark", yaxis_title="vrednost 100 vloženih",
-                      margin=dict(l=0, r=0, t=10, b=0), legend=dict(orientation="h", y=1.08))
-    st.plotly_chart(fig, use_container_width=True)
+    t1, t2, t3, t4, t5 = st.tabs(
+        ["Krivulja in padci", "Skozi čas", "Sredstva", "Občutljivost na vstop", "Stroški"])
 
-    st.subheader("Kam gre 100 vloženih enot")
-    st.caption(
-        "Vsaka provizija je preštета v denarju tistega dne, ko je bila plačana. "
-        "Ker portfelj med potjo raste, je posel iz leta 2025 v absolutnem znesku "
-        "večji od posla iz 2021."
-    )
-    vrst = []
-    for ime, prov, konc in ((IME_URA, prov_ura, konc_ura),
-                            ("sestava, puščena", prov_pus, konc_pus),
-                            ("sam BTC, strategija", prov_btc, konc_btc)):
-        sk = sum(prov.values())
-        vrst.append({"signali": prov["signali"], "uravnavanje": prov["uravnavanje"],
-                     "zamenjava": prov["zamenjava"], "skupaj": sk,
-                     "končna vrednost": konc, "delež končne": sk / konc * 100})
-    st.dataframe(
-        pd.DataFrame(vrst, index=[IME_URA, "sestava, puščena", "sam BTC, strategija"])
-          .style.format({"signali": "{:.1f}", "uravnavanje": "{:.1f}", "zamenjava": "{:.1f}",
-                         "skupaj": "{:.1f}", "končna vrednost": "{:.0f}", "delež končne": "{:.1f} %"}),
-        use_container_width=True,
-    )
-    with st.expander("Kaj pomeni vsak stolpec"):
-        st.markdown(
-            "**signali** so provizije od vstopov in izstopov strategije po vsakem "
-            "sredstvu posebej. Ko signal reče kupi, plačaš od zneska, ki ga kupiš, "
-            "in enako ob prodaji.\n\n"
-            "**uravnavanje** so provizije od mesečnega vračanja na ciljne uteži. "
-            "Zaračuna se samo tisto, kar se dejansko premakne: če BTC zdrsne s 50 % "
-            "na 53 %, plačaš od tistih treh odstotnih točk, ne od celega portfelja.\n\n"
-            "**zamenjava** je enkratna menjava XRP v HYPE na dan, ko HYPE dobi prvi "
-            "signal. Prodaš ves XRP in kupiš HYPE.\n\n"
-            "**delež končne** pove, koliko odstotkov končne vrednosti so pojedle "
-            "provizije. Pravi ekonomski strošek je še večji, ker zgodaj plačana "
-            "provizija ne raste več s portfeljem."
-        )
+    with t1:
+        x = [idx[0] - pd.Timedelta(days=1)] + list(idx)
+        fig = go.Figure()
+        for ime, r, pot, kljuc in VRSTE:
+            trdna = kljuc in ("uravnavana", "puščena", "BTC strategija")
+            fig.add_trace(go.Scatter(
+                x=x, y=pot, name=ime,
+                line=dict(color=BARVA[kljuc], width=2.2 if trdna else 1.6,
+                          dash="solid" if trdna else "dash"),
+                hovertemplate=ime + ": %{y:.0f}<extra></extra>"))
+        _postavi(fig, 400, "Vrednost 100 vloženih enot")
+        st.plotly_chart(fig, use_container_width=True)
 
-    st.subheader("Kaj je počela vsaka naložba")
-    zad = {}
-    for k in utezi:
-        if k == "SESTO":
-            # Nalozba je drzala XRP do prvega HYPE signala in HYPE po njem, zato se
-            # "dni v trgu" sesteje cez oba. Prej je vrstica kazala samo HYPE cez
-            # celo okno, kar je izgledalo, kot da nalozba vecino casa nima signala.
-            p = pd.concat([SIG["XRP"][0].reindex(idx[idx < sesto_od]),
-                           SIG["HYPE"][0].reindex(idx[idx >= sesto_od])])
-            ime = "6. mesto (XRP, nato HYPE)" if idx[0] < sesto_od <= idx[-1] else (
-                  "6. mesto (HYPE)" if idx[0] >= sesto_od else "6. mesto (XRP)")
-            sred = ("XRP do %s, nato HYPE" % sesto_od.date()
-                    if idx[0] < sesto_od <= idx[-1]
-                    else ("HYPE" if idx[0] >= sesto_od else "XRP"))
+        fig2 = go.Figure()
+        for ime, r, pot, kljuc in VRSTE:
+            if kljuc in ("sestava B&H", "BTC B&H"):
+                continue                       # sicer je graf neberljiv
+            fig2.add_trace(go.Scatter(
+                x=x, y=_podvodni(pot), name=ime, showlegend=False, fill="tozeroy",
+                line=dict(color=BARVA[kljuc], width=1.4),
+                hovertemplate=ime + ": %{y:.1f} %<extra></extra>"))
+        _postavi(fig2, 250, "Koliko pod prejšnjim vrhom, v odstotkih")
+        fig2.update_xaxes(range=[x[0], x[-1]])
+        st.plotly_chart(fig2, use_container_width=True)
+        st.caption("Ista časovna os kot zgoraj, zato lahko potegneš navpičnico skozi oba "
+                   "grafa. Kupi in drži nista narisana, ker bi s padcema okoli 75 % stisnila "
+                   "vse ostalo.")
+
+        st.markdown("**Najhujši padci sestave**")
+        pad = _najhujsi_padci(idx, pot_ura)
+        if not pad.empty:
+            st.dataframe(pad.style.format({"globina": "{:.1f} %"}), use_container_width=True)
+            st.caption("Stolpec **dni do okrevanja** je tisti, ki ga institucionalni "
+                       "vlagatelji berejo najprej. Globina pove, kako hudo je bilo, ta pa "
+                       "kako dolgo.")
+
+    with t2:
+        st.plotly_chart(_mesecna_karta(r_ura, idx), use_container_width=True)
+
+        if len(idx) > 400:
+            fig = go.Figure()
+            for ime, r, pot, kljuc in VRSTE[:3]:
+                ks = _kotalec(r, idx)
+                fig.add_trace(go.Scatter(x=ks.index, y=ks.values, name=ime,
+                                         line=dict(color=BARVA[kljuc], width=1.8)))
+            fig.add_hline(y=0, line=dict(color=COL_DIM, width=1, dash="dot"))
+            _postavi(fig, 300, "Kotaleči se Sharpe, okno 12 mesecev")
+            st.plotly_chart(fig, use_container_width=True)
+
+            s_str = pd.Series(r_ura, index=idx)
+            s_btc = pd.Series(r_bh, index=idx)
+            bet = (s_str.rolling(365).cov(s_btc) / s_btc.rolling(365).var()).dropna()
+            fig = go.Figure(go.Scatter(x=bet.index, y=bet.values, name="beta",
+                                       line=dict(color=BARVA["uravnavana"], width=1.8)))
+            fig.add_hline(y=1, line=dict(color=COL_BEAR, width=1, dash="dot"))
+            _postavi(fig, 260, "Kotaleča se beta sestave do BTC, okno 12 mesecev")
+            st.plotly_chart(fig, use_container_width=True)
+            st.caption("Rdeča črta je beta 1,0, torej isto gibanje kot BTC. Nižje pomeni, "
+                       "da sestava ni le BTC v drugi obleki.")
         else:
-            p = SIG[k][0].reindex(idx); ime = k; sred = k
-        v_trgu = float((p > 0.5).mean() * 100)
-        zad[ime] = {
-            "sredstvo": sred,
-            "ciljna utež": f"{utezi[k]*100:.0f} %",
-            "dni v trgu": f"{v_trgu:.0f} %",
-            "stanje danes": "V TRGU" if (not pd.isna(p.iloc[-1]) and p.iloc[-1] > 0.5) else "zunaj",
-        }
-    st.dataframe(pd.DataFrame(zad).T, use_container_width=True)
+            st.info("Za kotaleče se mere rabiš vsaj 400 dni obdobja.")
+
+        fig = go.Figure(go.Histogram(x=r_ura * 100, nbinsx=80,
+                                     marker=dict(color=BARVA["uravnavana"])))
+        _postavi(fig, 260, "Porazdelitev dnevnih donosov sestave, v odstotkih")
+        st.plotly_chart(fig, use_container_width=True)
+
+    with t3:
+        st.markdown("**Kaj je počela vsaka naložba**")
+        zad = {}
+        for k in utezi:
+            if k == "SESTO":
+                p = pd.concat([SIG["XRP"][0].reindex(idx[idx < sesto_od]),
+                               SIG["HYPE"][0].reindex(idx[idx >= sesto_od])])
+                ime = "6. mesto"
+                sred = ("XRP do %s, nato HYPE" % sesto_od.date()
+                        if idx[0] < sesto_od <= idx[-1]
+                        else ("HYPE" if idx[0] >= sesto_od else "XRP"))
+            else:
+                p = SIG[k][0].reindex(idx)
+                ime, sred = k, k
+            zad[ime] = {
+                "sredstvo": sred,
+                "ciljna utež": f"{utezi[k]*100:.0f} %",
+                "dni v trgu": f"{float((p > 0.5).mean()*100):.0f} %",
+                "stanje danes": ("V TRGU" if (not pd.isna(p.iloc[-1]) and p.iloc[-1] > 0.5)
+                                 else "zunaj"),
+            }
+        st.dataframe(pd.DataFrame(zad).T, use_container_width=True)
+
+        st.markdown("**Kdo je zaslužil**")
+        prisp = {}
+        for k in utezi:
+            r1, _, k1, _ = _knjiga(idx, CENE, SIG, {k: 1.0}, bps, False,
+                                   sesto_od if k == "SESTO" else None)
+            ime = "6. mesto" if k == "SESTO" else k
+            prisp[ime] = {"sam, cel kapital": (k1 / 100 - 1) * 100,
+                          "utež v knjigi": utezi[k] * 100,
+                          "približen prispevek": (k1 / 100 - 1) * 100 * utezi[k]}
+        pr = pd.DataFrame(prisp).T.sort_values("približen prispevek", ascending=False)
+        st.dataframe(pr.style.format({"sam, cel kapital": "{:+.0f} %",
+                                      "utež v knjigi": "{:.0f} %",
+                                      "približen prispevek": "{:+.1f} točk"}),
+                     use_container_width=True)
+        st.caption("Prvi stolpec je donos sredstva, če bi vanj vložil ves kapital. Zadnji je "
+                   "ta donos, pomnožen z utežjo, torej groba ocena prispevka h knjigi. Ni "
+                   "natančna razgradnja, ker se uteži med potjo premikajo.")
+
+        st.markdown("**Izpostavljenost skozi čas**")
+        fig = go.Figure()
+        for k in utezi:
+            if k == "SESTO":
+                p = pd.concat([SIG["XRP"][0].reindex(idx[idx < sesto_od]),
+                               SIG["HYPE"][0].reindex(idx[idx >= sesto_od])])
+                ime = "6. mesto"
+            else:
+                p = SIG[k][0].reindex(idx)
+                ime = k
+            fig.add_trace(go.Scatter(x=idx, y=(p.fillna(0) * utezi[k] * 100), name=ime,
+                                     stackgroup="one", line=dict(width=0.5)))
+        _postavi(fig, 300, "Koliko odstotkov kapitala je bilo v trgu")
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("**Korelacije dnevnih donosov sredstev**")
+        RR = {}
+        for k in utezi:
+            s = ("HYPE" if idx[-1] >= sesto_od else "XRP") if k == "SESTO" else k
+            RR["6. mesto" if k == "SESTO" else k] = CENE[s]["close"].pct_change().reindex(idx)
+        km = pd.DataFrame(RR).dropna().corr()
+        st.dataframe(km.style.format("{:.2f}")
+                       .background_gradient(cmap="RdYlGn_r", vmin=0, vmax=1),
+                     use_container_width=True)
+
+    with t4:
+        st.markdown("**Kaj bi dobil pri drugem datumu vstopa**")
+        st.caption("Vsak možen vstop na 30 dni, vsi do istega izstopa. To vnaprej odgovori "
+                   "na očitek, da je bil izbran ugoden začetek.")
+        kand = [t for t in idx[::30] if (idx[-1] - t).days > 200]
+        vrs = []
+        for t0 in kand:
+            i2 = idx[idx >= t0]
+            rr, _, _, _ = _knjiga(i2, CENE, SIG, utezi, bps, True, sesto_od, pog)
+            rb, _, _, _ = _knjiga(i2, CENE, SIG, {"BTC": 1.0}, bps, False, None)
+            ms, mb = _metrike(rr), _metrike(rb)
+            vrs.append({"vstop": t0.date(), "sestava Sharpe": ms["sharpe"],
+                        "BTC Sharpe": mb["sharpe"], "sestava letno": ms["letno"],
+                        "sestava MaxDD": ms["maxdd"]})
+        ob = pd.DataFrame(vrs)
+        if len(ob):
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=ob["vstop"], y=ob["sestava Sharpe"], name="sestava",
+                                     line=dict(color=BARVA["uravnavana"], width=2)))
+            fig.add_trace(go.Scatter(x=ob["vstop"], y=ob["BTC Sharpe"], name="sam BTC",
+                                     line=dict(color=BARVA["BTC strategija"], width=2)))
+            _postavi(fig, 320, "Sharpe glede na datum vstopa")
+            st.plotly_chart(fig, use_container_width=True)
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("mediana sestave", f"{ob['sestava Sharpe'].median():.2f}")
+            c2.metric("najslabši vstop", f"{ob['sestava Sharpe'].min():.2f}")
+            c3.metric("najboljši vstop", f"{ob['sestava Sharpe'].max():.2f}")
+            c4.metric("prekaša BTC",
+                      f"{float((ob['sestava Sharpe'] > ob['BTC Sharpe']).mean()*100):.0f} % vstopov")
+            st.dataframe(ob.style.format({"sestava Sharpe": "{:.2f}", "BTC Sharpe": "{:.2f}",
+                                          "sestava letno": "{:.1f} %",
+                                          "sestava MaxDD": "{:.0f} %"}),
+                         use_container_width=True, height=280)
+
+    with t5:
+        st.markdown("**Kam gre 100 vloženih enot**")
+        vrst = []
+        for ime, prov, konc in ((IME_URA, prov_ura, konc_ura),
+                                ("sestava, puščena", prov_pus, konc_pus),
+                                ("sam BTC, strategija", prov_btc, konc_btc)):
+            sk = sum(prov.values())
+            vrst.append({"signali": prov["signali"], "uravnavanje": prov["uravnavanje"],
+                         "zamenjava": prov["zamenjava"], "skupaj": sk,
+                         "končna vrednost": konc, "delež končne": sk / konc * 100})
+        st.dataframe(
+            pd.DataFrame(vrst, index=[IME_URA, "sestava, puščena", "sam BTC, strategija"])
+              .style.format({"signali": "{:.1f}", "uravnavanje": "{:.1f}",
+                             "zamenjava": "{:.1f}", "skupaj": "{:.1f}",
+                             "končna vrednost": "{:.0f}", "delež končne": "{:.1f} %"}),
+            use_container_width=True)
+        st.markdown(
+            "**signali** so provizije od vstopov in izstopov strategije po vsakem sredstvu "
+            "posebej.\n\n"
+            "**uravnavanje** so provizije od vračanja na ciljne uteži. Zaračuna se samo "
+            "tisto, kar se dejansko premakne: če BTC zdrsne s 50 % na 53 %, plačaš od tistih "
+            "treh odstotnih točk, ne od celega portfelja.\n\n"
+            "**zamenjava** je enkratna menjava XRP v HYPE na dan, ko HYPE dobi prvi signal.\n\n"
+            "**delež končne** pove, koliko odstotkov končne vrednosti so pojedle provizije. "
+            "Pravi ekonomski strošek je večji, ker zgodaj plačana provizija ne raste več s "
+            "portfeljem.")
 
 
-# Streamlit poganja skripto kot __main__, zato se stran normalno izrise. Straza
-# je tu zato, da se modul da uvoziti in preizkusiti brez risanja.
 if __name__ == "__main__":
     main()
