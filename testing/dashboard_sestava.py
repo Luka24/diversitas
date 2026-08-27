@@ -198,30 +198,44 @@ def _eno_kupi_drzi(idx, cene):
     return v[1:] / v[:-1] - 1, v
 
 
-# ── barve, iste kot na lean strani ────────────────────────────────────────────
-COL_BULL, COL_BEAR = "#089981", "#f23645"
-COL_BLUE, COL_ORANGE, COL_SPX = "#2962ff", "#ffb74d", "#f59e0b"
-COL_BG, COL_TEXT, COL_DIM = "#0e1117", "#e6e6e6", "#8b949e"
+# ── barve ────────────────────────────────────────────────────────────────────
+# Grafi so na BELI podlagi, zato so odtenki temnejsi od tistih na lean strani,
+# ki riše na crno. Svetla oranzna in svetlo vijolicna sta na belem neberljivi.
+COL_BULL, COL_BEAR = "#0f8a6a", "#d92d3a"
+COL_BLUE, COL_ORANGE, COL_SPX = "#1e56d6", "#d97706", "#b45309"
+COL_BG, COL_TEXT, COL_DIM, COL_MREZA = "#ffffff", "#111827", "#6b7280", "#e5e7eb"
 # Ena barva na strategijo, ista na vseh grafih in v vseh tabelah.
 BARVA = {
     "uravnavana": COL_BLUE, "puščena": COL_ORANGE, "BTC strategija": COL_BULL,
-    "sestava B&H": "#9575cd", "BTC B&H": "#4db6ac", "S&P 500": COL_SPX,
+    "sestava B&H": "#7e57c2", "BTC B&H": "#00897b", "S&P 500": COL_SPX,
 }
+# Kupi in drzi so ob odprtju SKRITI, da so vidne tri trgovane krivulje. Kliknes
+# jih v legendi, kadar jih hoces.
+PRIVZETO_SKRITO = {"sestava B&H", "BTC B&H", "S&P 500"}
 
 
 def _postavi(fig, visina=340, naslov=""):
     fig.update_layout(
-        height=visina, template="plotly_dark", paper_bgcolor=COL_BG, plot_bgcolor=COL_BG,
-        margin=dict(l=0, r=0, t=46 if naslov else 10, b=0),
-        legend=dict(orientation="h", y=1.14, x=0, font=dict(size=11)),
-        font=dict(color=COL_TEXT),
+        height=visina, template="plotly_white", paper_bgcolor=COL_BG, plot_bgcolor=COL_BG,
+        margin=dict(l=0, r=0, t=60 if naslov else 16, b=0),
+        legend=dict(
+            orientation="h", y=1.16, x=0, xanchor="left", yanchor="bottom",
+            font=dict(size=12, color=COL_TEXT),
+            bgcolor="rgba(255,255,255,0.95)", bordercolor=COL_MREZA, borderwidth=1,
+            itemsizing="constant", itemwidth=42, tracegroupgap=6,
+        ),
+        font=dict(color=COL_TEXT, size=12),
+        hoverlabel=dict(bgcolor="#ffffff", font=dict(color=COL_TEXT, size=12),
+                        bordercolor=COL_MREZA),
     )
     if naslov:
         fig.update_layout(title=dict(
             text=f'<span style="color:{COL_TEXT};font-size:12px;text-transform:uppercase;'
                  f'letter-spacing:1px">{naslov}</span>', x=0.01, y=0.97, yanchor="top"))
-    fig.update_xaxes(gridcolor="#1c2128", zeroline=False)
-    fig.update_yaxes(gridcolor="#1c2128", zeroline=False)
+    fig.update_xaxes(gridcolor=COL_MREZA, zeroline=False, linecolor=COL_MREZA,
+                     tickfont=dict(color=COL_DIM))
+    fig.update_yaxes(gridcolor=COL_MREZA, zeroline=False, linecolor=COL_MREZA,
+                     tickfont=dict(color=COL_DIM))
     return fig
 
 
@@ -316,7 +330,7 @@ def _mesecna_karta(r: np.ndarray, idx) -> go.Figure:
     fig = go.Figure(go.Heatmap(
         z=z, x=oznake + ["LETO"], y=[str(y) for y in leta], text=txt,
         texttemplate="%{text}", textfont=dict(size=10, color=COL_TEXT),
-        colorscale=[[0, COL_BEAR], [0.5, COL_BG], [1, COL_BULL]],
+        colorscale=[[0, COL_BEAR], [0.5, "#ffffff"], [1, COL_BULL]],
         zmin=-zmax, zmax=zmax, showscale=False,
         hovertemplate="%{y} %{x}: %{text} %<extra></extra>"))
     _postavi(fig, visina=max(190, len(leta) * 34 + 90),
@@ -441,11 +455,14 @@ def main() -> None:
             trdna = kljuc in ("uravnavana", "puščena", "BTC strategija")
             fig.add_trace(go.Scatter(
                 x=x, y=pot, name=ime,
-                line=dict(color=BARVA[kljuc], width=2.2 if trdna else 1.6,
+                visible=("legendonly" if kljuc in PRIVZETO_SKRITO else True),
+                line=dict(color=BARVA[kljuc], width=2.4 if trdna else 1.8,
                           dash="solid" if trdna else "dash"),
                 hovertemplate=ime + ": %{y:.0f}<extra></extra>"))
-        _postavi(fig, 400, "Vrednost 100 vloženih enot")
+        _postavi(fig, 420, "Vrednost 100 vloženih enot")
         st.plotly_chart(fig, width="stretch")
+        st.caption("Kupi in drži so ob odprtju skriti. Klikni jih v legendi, da se "
+                   "prikažejo, ali klikni katero drugo, da jo skriješ.")
 
         fig2 = go.Figure()
         for ime, r, pot, kljuc in VRSTE:
@@ -569,7 +586,7 @@ def main() -> None:
             z=km.values, x=list(km.columns), y=list(km.index),
             text=[[f"{v:.2f}" for v in vrsta] for vrsta in km.values],
             texttemplate="%{text}", textfont=dict(size=11, color=COL_TEXT),
-            colorscale=[[0, COL_BG], [0.5, "#3b5b7a"], [1, COL_BEAR]],
+            colorscale=[[0, "#ffffff"], [0.5, "#f4a6a0"], [1, COL_BEAR]],
             zmin=0, zmax=1, showscale=False,
             hovertemplate="%{y} proti %{x}: %{text}<extra></extra>"))
         _postavi(fig, visina=max(200, len(km) * 42 + 60))
