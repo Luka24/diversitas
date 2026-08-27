@@ -266,8 +266,11 @@ def _najhujsi_padci(idx, pot: np.ndarray, n: int = 5) -> pd.DataFrame:
         return pd.DataFrame()
     t = pd.DataFrame(epizode).sort_values("globina").head(n).reset_index(drop=True)
     t.index = [f"{i+1}." for i in range(len(t))]
-    t["okrevanje"] = t["okrevanje"].fillna("še traja")
-    t["dni do okrevanja"] = t["dni do okrevanja"].fillna(-1).astype(int).replace(-1, None)
+    # Oba v niz. Mesani tipi, torej datum in beseda v istem stolpcu, sesujejo
+    # pretvorbo v Arrow, ki jo Streamlit uporablja za prikaz tabel.
+    t["okrevanje"] = [("še traja" if pd.isna(v) else str(v)) for v in t["okrevanje"]]
+    t["dni do okrevanja"] = [("še traja" if pd.isna(v) else "%d" % v)
+                              for v in t["dni do okrevanja"]]
     return t
 
 
@@ -423,7 +426,7 @@ def main() -> None:
                           "beta BTC": "{:.2f}", "kor. BTC": "{:.2f}"})
            .highlight_max(subset=["skupaj", "letno", "sharpe", "sortino", "maxdd", "calmar"],
                           props="background-color:#c6f6d5; color:#111; font-weight:700"),
-        use_container_width=True)
+        width="stretch")
     st.caption("**calmar** je letni donos deljen z največjim padcem. **pod vodo** je delež "
                "dni pod prejšnjim vrhom. **beta BTC** pove, koliko se strategija premakne, "
                "ko se BTC premakne za odstotek: 1,0 pomeni isto gibanje, 0,5 polovično.")
@@ -442,7 +445,7 @@ def main() -> None:
                           dash="solid" if trdna else "dash"),
                 hovertemplate=ime + ": %{y:.0f}<extra></extra>"))
         _postavi(fig, 400, "Vrednost 100 vloženih enot")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         fig2 = go.Figure()
         for ime, r, pot, kljuc in VRSTE:
@@ -454,7 +457,7 @@ def main() -> None:
                 hovertemplate=ime + ": %{y:.1f} %<extra></extra>"))
         _postavi(fig2, 250, "Koliko pod prejšnjim vrhom, v odstotkih")
         fig2.update_xaxes(range=[x[0], x[-1]])
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width="stretch")
         st.caption("Ista časovna os kot zgoraj, zato lahko potegneš navpičnico skozi oba "
                    "grafa. Kupi in drži nista narisana, ker bi s padcema okoli 75 % stisnila "
                    "vse ostalo.")
@@ -462,13 +465,13 @@ def main() -> None:
         st.markdown("**Najhujši padci sestave**")
         pad = _najhujsi_padci(idx, pot_ura)
         if not pad.empty:
-            st.dataframe(pad.style.format({"globina": "{:.1f} %"}), use_container_width=True)
+            st.dataframe(pad.style.format({"globina": "{:.1f} %"}), width="stretch")
             st.caption("Stolpec **dni do okrevanja** je tisti, ki ga institucionalni "
                        "vlagatelji berejo najprej. Globina pove, kako hudo je bilo, ta pa "
                        "kako dolgo.")
 
     with t2:
-        st.plotly_chart(_mesecna_karta(r_ura, idx), use_container_width=True)
+        st.plotly_chart(_mesecna_karta(r_ura, idx), width="stretch")
 
         if len(idx) > 400:
             fig = go.Figure()
@@ -478,7 +481,7 @@ def main() -> None:
                                          line=dict(color=BARVA[kljuc], width=1.8)))
             fig.add_hline(y=0, line=dict(color=COL_DIM, width=1, dash="dot"))
             _postavi(fig, 300, "Kotaleči se Sharpe, okno 12 mesecev")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
             s_str = pd.Series(r_ura, index=idx)
             s_btc = pd.Series(r_bh, index=idx)
@@ -487,7 +490,7 @@ def main() -> None:
                                        line=dict(color=BARVA["uravnavana"], width=1.8)))
             fig.add_hline(y=1, line=dict(color=COL_BEAR, width=1, dash="dot"))
             _postavi(fig, 260, "Kotaleča se beta sestave do BTC, okno 12 mesecev")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
             st.caption("Rdeča črta je beta 1,0, torej isto gibanje kot BTC. Nižje pomeni, "
                        "da sestava ni le BTC v drugi obleki.")
         else:
@@ -496,7 +499,7 @@ def main() -> None:
         fig = go.Figure(go.Histogram(x=r_ura * 100, nbinsx=80,
                                      marker=dict(color=BARVA["uravnavana"])))
         _postavi(fig, 260, "Porazdelitev dnevnih donosov sestave, v odstotkih")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
     with t3:
         st.markdown("**Kaj je počela vsaka naložba**")
@@ -519,7 +522,7 @@ def main() -> None:
                 "stanje danes": ("V TRGU" if (not pd.isna(p.iloc[-1]) and p.iloc[-1] > 0.5)
                                  else "zunaj"),
             }
-        st.dataframe(pd.DataFrame(zad).T, use_container_width=True)
+        st.dataframe(pd.DataFrame(zad).T, width="stretch")
 
         st.markdown("**Kdo je zaslužil**")
         prisp = {}
@@ -534,7 +537,7 @@ def main() -> None:
         st.dataframe(pr.style.format({"sam, cel kapital": "{:+.0f} %",
                                       "utež v knjigi": "{:.0f} %",
                                       "približen prispevek": "{:+.1f} točk"}),
-                     use_container_width=True)
+                     width="stretch")
         st.caption("Prvi stolpec je donos sredstva, če bi vanj vložil ves kapital. Zadnji je "
                    "ta donos, pomnožen z utežjo, torej groba ocena prispevka h knjigi. Ni "
                    "natančna razgradnja, ker se uteži med potjo premikajo.")
@@ -552,7 +555,7 @@ def main() -> None:
             fig.add_trace(go.Scatter(x=idx, y=(p.fillna(0) * utezi[k] * 100), name=ime,
                                      stackgroup="one", line=dict(width=0.5)))
         _postavi(fig, 300, "Koliko odstotkov kapitala je bilo v trgu")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         st.markdown("**Korelacije dnevnih donosov sredstev**")
         RR = {}
@@ -560,9 +563,21 @@ def main() -> None:
             s = ("HYPE" if idx[-1] >= sesto_od else "XRP") if k == "SESTO" else k
             RR["6. mesto" if k == "SESTO" else k] = CENE[s]["close"].pct_change().reindex(idx)
         km = pd.DataFrame(RR).dropna().corr()
-        st.dataframe(km.style.format("{:.2f}")
-                       .background_gradient(cmap="RdYlGn_r", vmin=0, vmax=1),
-                     use_container_width=True)
+        # Plotly namesto Styler.background_gradient, ki potrebuje matplotlib.
+        # Tega v okolju ni in stran je zaradi njega padla.
+        fig = go.Figure(go.Heatmap(
+            z=km.values, x=list(km.columns), y=list(km.index),
+            text=[[f"{v:.2f}" for v in vrsta] for vrsta in km.values],
+            texttemplate="%{text}", textfont=dict(size=11, color=COL_TEXT),
+            colorscale=[[0, COL_BG], [0.5, "#3b5b7a"], [1, COL_BEAR]],
+            zmin=0, zmax=1, showscale=False,
+            hovertemplate="%{y} proti %{x}: %{text}<extra></extra>"))
+        _postavi(fig, visina=max(200, len(km) * 42 + 60))
+        fig.update_layout(yaxis=dict(autorange="reversed"))
+        st.plotly_chart(fig, width="stretch")
+        st.caption("Rdeče pomeni, da se sredstvi gibljeta skupaj. Pri kriptu so vrednosti "
+                   "običajno med 0,6 in 0,9, kar pomeni, da razpršitev prinese manj, kot bi "
+                   "človek pričakoval.")
 
     with t4:
         st.markdown("**Kaj bi dobil pri drugem datumu vstopa**")
@@ -586,7 +601,7 @@ def main() -> None:
             fig.add_trace(go.Scatter(x=ob["vstop"], y=ob["BTC Sharpe"], name="sam BTC",
                                      line=dict(color=BARVA["BTC strategija"], width=2)))
             _postavi(fig, 320, "Sharpe glede na datum vstopa")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("mediana sestave", f"{ob['sestava Sharpe'].median():.2f}")
             c2.metric("najslabši vstop", f"{ob['sestava Sharpe'].min():.2f}")
@@ -596,7 +611,7 @@ def main() -> None:
             st.dataframe(ob.style.format({"sestava Sharpe": "{:.2f}", "BTC Sharpe": "{:.2f}",
                                           "sestava letno": "{:.1f} %",
                                           "sestava MaxDD": "{:.0f} %"}),
-                         use_container_width=True, height=280)
+                         width="stretch", height=280)
 
     with t5:
         st.markdown("**Kam gre 100 vloženih enot**")
@@ -613,7 +628,7 @@ def main() -> None:
               .style.format({"signali": "{:.1f}", "uravnavanje": "{:.1f}",
                              "zamenjava": "{:.1f}", "skupaj": "{:.1f}",
                              "končna vrednost": "{:.0f}", "delež končne": "{:.1f} %"}),
-            use_container_width=True)
+            width="stretch")
         st.markdown(
             "**signali** so provizije od vstopov in izstopov strategije po vsakem sredstvu "
             "posebej.\n\n"
