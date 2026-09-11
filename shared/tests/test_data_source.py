@@ -159,3 +159,69 @@ def test_coinbase_unsupported_interval_raises():
 def test_symbol_map_btc_eth_sol_have_coinbase():
     for sym in ("BTC", "ETH", "SOL"):
         assert "coinbase" in ds.DEFAULT_SYMBOL_MAP[sym], sym
+
+
+# ── transport retry ───────────────────────────────────────────────────────────
+# Regression for the crypto book page dying on a single dropped socket: fetching
+# 5000 Coinbase candles is seventeen sequential requests, and one abort killed
+# the whole render.
+
+class _Resp:
+    status_code = 200
+
+    def __init__(self, payload=None):
+        self._payload = payload if payload is not None else []
+        self.text = ""
+        self.headers = {}
+
+    def json(self):
+        return self._payload
+
+
+def test_get_retries_a_dropped_connection_and_succeeds(monkeypatch):
+    calls = {"n": 0}
+
+    def flaky(url, params=None, timeout=None, headers=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise ConnectionAbortedError(
+                10053, "An established connection was aborted by the software "
+                       "in your host machine")
+        return _Resp({"ok": True})
+
+    monkeypatch.setattr(ds.requests, "get", flaky)
+    monkeypatch.setattr(ds, "_HTTP_BACKOFF", (0.0, 0.0))
+    r = ds._get("https://example.test", params={})
+    assert r.json() == {"ok": True}
+    assert calls["n"] == 2, "should have retried exactly once"
+
+
+def test_get_gives_up_after_the_attempt_budget(monkeypatch):
+    calls = {"n": 0}
+
+    def always_fail(url, params=None, timeout=None, headers=None):
+        calls["n"] += 1
+        raise ConnectionAbortedError(10053, "aborted")
+
+    monkeypatch.setattr(ds.requests, "get", always_fail)
+    monkeypatch.setattr(ds, "_HTTP_BACKOFF", (0.0, 0.0))
+    with pytest.raises(ConnectionAbortedError):
+        ds._get("https://example.test", params={})
+    assert calls["n"] == ds._HTTP_ATTEMPTS
+
+
+def test_get_does_not_retry_an_http_status(monkeypatch):
+    """A 429 or 451 is an answer, not an accident. Repeating the question does
+    not change it, and hammering a rate limit makes it worse."""
+    calls = {"n": 0}
+
+    def rate_limited(url, params=None, timeout=None, headers=None):
+        calls["n"] += 1
+        r = _Resp()
+        r.status_code = 429
+        return r
+
+    monkeypatch.setattr(ds.requests, "get", rate_limited)
+    out = ds._get("https://example.test", params={})
+    assert out.status_code == 429
+    assert calls["n"] == 1, "status codes must reach the caller on the first try"
