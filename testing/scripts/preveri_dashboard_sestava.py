@@ -85,8 +85,8 @@ def racun(D) -> list[tuple[str, bool]]:
     out.append(("najhujsi padec se ujema z MaxDD",
                 abs(float(pad["globina"].iloc[0]) - m["maxdd"]) < 0.1))
     rb, _ = D._eno_kupi_drzi(idx, CENE["BTC"])
-    b, k = D._beta_korelacija(r, rb)
-    out.append(("beta in korelacija sta stevili", np.isfinite(b) and np.isfinite(k)))
+    out.append(("kupi in drzi BTC da koncne stevilke",
+                np.isfinite(rb).all() and len(rb) == len(idx)))
     return out
 
 

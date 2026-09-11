@@ -244,6 +244,56 @@ def _podvodni(pot: np.ndarray) -> np.ndarray:
     return (pot / np.maximum.accumulate(pot) - 1) * 100
 
 
+def _datiraj(cena: pd.Series, k: int = 90, min_faza: int = 120,
+             min_ampl: float = 0.25) -> list[tuple]:
+    """Datiraj faze rasti in padca po Bry-Boschan, razlicica Pagan-Sossounov.
+
+    Akademski standard za dolocanje ciklov. Postopek: najdi lokalne vrhove in
+    dna v oknu +/- k dni, vsili izmenjavanje vrh-dno-vrh, nato odstrani faze,
+    ki so prekratke ali premajhne. Rezultat je objektiven in ponovljiv, za
+    razliko od meje tipa "cena nad 200-dnevnim povprecjem", ki se krizajo sem
+    in tja in stejejo kratek prehod enako kot dvoletni medvedji trg.
+
+    Vrne [(od, do, "rast" ali "padec"), ...].
+    """
+    if len(cena) < 2 * k + min_faza:
+        return []
+    x = np.log(cena.to_numpy(float))
+    n = len(x)
+    tocke = []
+    for i in range(k, n - k):
+        okno = x[i - k:i + k + 1]
+        if x[i] == okno.max():
+            tocke.append((i, "V"))
+        elif x[i] == okno.min():
+            tocke.append((i, "D"))
+
+    ocisceno = []
+    for i, t in tocke:
+        if ocisceno and ocisceno[-1][1] == t:
+            j = ocisceno[-1][0]
+            if (x[i] > x[j]) if t == "V" else (x[i] < x[j]):
+                ocisceno[-1] = (i, t)
+            continue
+        ocisceno.append((i, t))
+
+    spremenjeno = True
+    while spremenjeno and len(ocisceno) > 2:
+        spremenjeno = False
+        for a in range(len(ocisceno) - 1):
+            i, j = ocisceno[a][0], ocisceno[a + 1][0]
+            if (j - i) < min_faza or abs(x[j] - x[i]) < np.log(1 + min_ampl):
+                del ocisceno[a + 1]
+                if a + 1 < len(ocisceno) and ocisceno[a][1] == ocisceno[a + 1][1]:
+                    del ocisceno[a + 1]
+                spremenjeno = True
+                break
+
+    return [(cena.index[ocisceno[a][0]], cena.index[ocisceno[a + 1][0]],
+             "rast" if ocisceno[a][1] == "D" else "padec")
+            for a in range(len(ocisceno) - 1)]
+
+
 def _najhujsi_padci(idx, pot: np.ndarray, n: int = 5) -> pd.DataFrame:
     """Prvih n padcev, vsak z vrhom, dnom, okrevanjem in trajanjem.
 
@@ -286,15 +336,6 @@ def _najhujsi_padci(idx, pot: np.ndarray, n: int = 5) -> pd.DataFrame:
     t["dni do okrevanja"] = [("še traja" if pd.isna(v) else "%d" % v)
                               for v in t["dni do okrevanja"]]
     return t
-
-
-def _beta_korelacija(r_strat: np.ndarray, r_ref: np.ndarray) -> tuple[float, float]:
-    """Beta in korelacija proti referenci. Odgovor na 'ali ni to samo BTC?'."""
-    if r_ref.std() == 0:
-        return float("nan"), float("nan")
-    beta = float(np.cov(r_strat, r_ref)[0, 1] / np.var(r_ref))
-    kor = float(np.corrcoef(r_strat, r_ref)[0, 1])
-    return beta, kor
 
 
 def _kotalec(r: np.ndarray, idx, okno: int = 365):
@@ -429,21 +470,26 @@ def main() -> None:
     for ime, r, pot, kljuc in VRSTE:
         m = _metrike(r)
         m["calmar"] = m["letno"] / abs(m["maxdd"]) if m["maxdd"] else float("nan")
-        m["pod vodo"] = float((_podvodni(pot) < -0.01).mean() * 100)
-        m["beta BTC"], m["kor. BTC"] = _beta_korelacija(r, r_bh)
         vrstice.append(m)
     tab = pd.DataFrame(vrstice, index=[v[0] for v in VRSTE])
     st.dataframe(
         tab.style.format({"skupaj": "{:.0f} %", "letno": "{:.1f} %", "vol": "{:.0f} %",
                           "sharpe": "{:.2f}", "sortino": "{:.2f}", "maxdd": "{:.0f} %",
-                          "calmar": "{:.2f}", "pod vodo": "{:.0f} %",
-                          "beta BTC": "{:.2f}", "kor. BTC": "{:.2f}"})
+                          "calmar": "{:.2f}"})
            .highlight_max(subset=["skupaj", "letno", "sharpe", "sortino", "maxdd", "calmar"],
                           props="background-color:#c6f6d5; color:#111; font-weight:700"),
         width="stretch")
-    st.caption("**calmar** je letni donos deljen z največjim padcem. **pod vodo** je delež "
-               "dni pod prejšnjim vrhom. **beta BTC** pove, koliko se strategija premakne, "
-               "ko se BTC premakne za odstotek: 1,0 pomeni isto gibanje, 0,5 polovično.")
+    st.caption(
+        "**vol** je letna volatilnost, torej kako močno vrednost niha. Izračuna se kot "
+        "standardni odklon dnevnih donosov, pomnožen s korenom iz 365.\n\n"
+        "Primer pri 50 %, brez trenda: od 10.000 EUR se jih v dveh letih od treh znajde "
+        "med približno **6.100 in 16.500 EUR**. Pas ni simetričen, ker se cene množijo, "
+        "ne seštevajo. Simetrična sta razpolovitev in podvojitev, ne minus in plus "
+        "petdeset odstotkov. Pri majhni volatilnosti je razlika zanemarljiva, pri 50 % "
+        "pa ne.\n\n"
+        "Sama po sebi ni dobra ali slaba, je pa imenovalec Sharpa: isti donos pri nižji "
+        "volatilnosti pomeni višji Sharpe.\n\n"
+        "**calmar** je letni donos deljen z največjim padcem.")
 
     t1, t2, t3, t4, t5 = st.tabs(
         ["Krivulja in padci", "Skozi čas", "Sredstva", "Občutljivost na vstop", "Stroški"])
@@ -464,20 +510,31 @@ def main() -> None:
         st.caption("Kupi in drži so ob odprtju skriti. Klikni jih v legendi, da se "
                    "prikažejo, ali klikni katero drugo, da jo skriješ.")
 
+        st.markdown("**Koliko pod prejšnjim vrhom**")
+        st.caption("Vse črte naenkrat so neberljive, zato je ob odprtju prižgana samo "
+                   "uravnavana sestava. Ostale prižgeš s klikom v legendi. Polnilo se "
+                   "nariše le, kadar je prižgana ena sama črta. Časovna os je ista kot "
+                   "zgoraj, zato lahko potegneš navpičnico skozi oba grafa.")
+        prikazi = st.multiselect(
+            "Katere črte narisati", [v[0] for v in VRSTE],
+            default=[IME_URA], label_visibility="collapsed")
         fig2 = go.Figure()
         for ime, r, pot, kljuc in VRSTE:
-            if kljuc in ("sestava B&H", "BTC B&H"):
-                continue                       # sicer je graf neberljiv
+            if ime not in prikazi:
+                continue
             fig2.add_trace(go.Scatter(
-                x=x, y=_podvodni(pot), name=ime, showlegend=False, fill="tozeroy",
-                line=dict(color=BARVA[kljuc], width=1.4),
+                x=x, y=_podvodni(pot), name=ime, showlegend=True,
+                fill="tozeroy" if len(prikazi) == 1 else None,
+                line=dict(color=BARVA[kljuc], width=1.8),
                 hovertemplate=ime + ": %{y:.1f} %<extra></extra>"))
-        _postavi(fig2, 250, "Koliko pod prejšnjim vrhom, v odstotkih")
-        fig2.update_xaxes(range=[x[0], x[-1]])
-        st.plotly_chart(fig2, width="stretch")
-        st.caption("Ista časovna os kot zgoraj, zato lahko potegneš navpičnico skozi oba "
-                   "grafa. Kupi in drži nista narisana, ker bi s padcema okoli 75 % stisnila "
-                   "vse ostalo.")
+        if not prikazi:
+            st.info("Izberi vsaj eno črto.")
+        else:
+            _postavi(fig2, 280, "")
+            fig2.update_xaxes(range=[x[0], x[-1]])
+            fig2.update_layout(legend=dict(orientation="h", yanchor="bottom",
+                                           y=1.02, xanchor="left", x=0))
+            st.plotly_chart(fig2, width="stretch")
 
         st.markdown("**Najhujši padci sestave**")
         pad = _najhujsi_padci(idx, pot_ura)
@@ -656,6 +713,72 @@ def main() -> None:
             "**delež končne** pove, koliko odstotkov končne vrednosti so pojedle provizije. "
             "Pravi ekonomski strošek je večji, ker zgodaj plačana provizija ne raste več s "
             "portfeljem.")
+
+        st.divider()
+        st.markdown("**Koliko je rezultat odvisen od predpostavke o proviziji**")
+        st.caption("0,30 % na stran je predpostavka, ne izmerjena vrednost. Ta tabela "
+                   "pove, koliko se izid premakne, če je resnica drugje.")
+        vrst = []
+        for b in (0, 10, 20, 30, 40, 60):
+            rb_, pv_, kc_, _ = _knjiga(idx, CENE, SIG, utezi, b, True, sesto_od, pog)
+            mb = _metrike(rb_)
+            vrst.append({"provizija na stran": f"{b/100:.2f} %", "Sharpe": mb["sharpe"],
+                         "Sortino": mb["sortino"], "letno": mb["letno"],
+                         "končna vrednost": kc_, "provizije skupaj": sum(pv_.values())})
+        t = pd.DataFrame(vrst).set_index("provizija na stran")
+        st.dataframe(t.style.format({"Sharpe": "{:.2f}", "Sortino": "{:.2f}",
+                                     "letno": "{:.1f} %", "končna vrednost": "{:.0f}",
+                                     "provizije skupaj": "{:.1f}"}), width="stretch")
+        d0 = t["Sharpe"].iloc[0] - t["Sharpe"].loc["0.60 %"]
+        st.caption(f"Med brezplačnim trgovanjem in 0,60 % na stran je razlika "
+                   f"{d0:.2f} Sharpa. Manjša ko je ta številka, manj je rezultat "
+                   f"odvisen od nečesa, česar ne poznamo.")
+
+        st.divider()
+        st.markdown("**Provizije po fazah cikla**")
+        st.caption("Faze so datirane na BTC po algoritmu Bry-Boschan v različici "
+                   "Pagan-Sossounov, ki je akademski standard: lokalni vrhovi in dna v "
+                   "oknu 90 dni, najkrajša faza 120 dni, najmanjša amplituda 25 %. "
+                   "Meja ni ročno izbrana.")
+        faze = _datiraj(CENE["BTC"]["close"].loc[idx[0]:idx[-1]])
+        if len(faze) < 2:
+            st.info("Izbrano obdobje je prekratko za datiranje faz. Razširi ga na "
+                    "vsaj dve leti.")
+        else:
+            vrst = []
+            for od, do, vr in faze:
+                w = idx[(idx >= od) & (idx <= do)]
+                if len(w) < 30:
+                    continue
+                rr, pp, kk, _ = _knjiga(w, CENE, SIG, utezi, bps, True, sesto_od, pog)
+                bh = float(CENE["BTC"]["close"].loc[do] /
+                           CENE["BTC"]["close"].loc[od] - 1) * 100
+                vrst.append({"od": str(od.date()), "do": str(do.date()),
+                             "vrsta": "rast" if vr == "rast" else "padec",
+                             "dni": len(w), "BTC kupi in drži": bh,
+                             "sestava": (kk / 100 - 1) * 100,
+                             "provizije": sum(pp.values())})
+            f = pd.DataFrame(vrst)
+            st.dataframe(f.style.format({"BTC kupi in drži": "{:+.0f} %",
+                                         "sestava": "{:+.0f} %",
+                                         "provizije": "{:.2f}"}),
+                         width="stretch", hide_index=True)
+            r_ = f[f["vrsta"] == "rast"]
+            p_ = f[f["vrsta"] == "padec"]
+            if len(r_) and len(p_):
+                c1, c2, c3 = st.columns(3)
+                c1.metric("povprečje v rasti", f"{r_['sestava'].mean():+.0f} %",
+                          f"BTC {r_['BTC kupi in drži'].mean():+.0f} %")
+                c2.metric("povprečje v padcu", f"{p_['sestava'].mean():+.0f} %",
+                          f"BTC {p_['BTC kupi in drži'].mean():+.0f} %")
+                c3.metric("provizije padec proti rasti",
+                          f"{p_['provizije'].mean() / r_['provizije'].mean():.2f}x"
+                          if r_["provizije"].mean() > 0 else "n/a")
+                st.caption(
+                    "Zadnja številka je pomembnejša, kot izgleda. Strategija naj v "
+                    "padajočih fazah trguje MANJ, ker izstopi in ostane zunaj. Če se "
+                    "razmerje približa ena, pomeni, da plačuje provizije prav tam, kjer "
+                    "ni donosa, ki bi jih pokril.")
 
 
 if __name__ == "__main__":

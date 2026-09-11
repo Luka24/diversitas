@@ -45,8 +45,14 @@ _VARIANT_DIRS = {
     "lean":     _ROOT / "lean",
     "momentum": _ROOT / "momentum",
     "full":     _ROOT / "full",     # reference only
+    # The ETF sleeve keeps the same public surface (`*Config`, `run_strategy`,
+    # `S_BULL`) precisely so it can be driven from here with no special case.
+    # Note that every metric taken from it must be annualised with td=252, not
+    # the 365 the crypto call sites assume — see `testing/scripts/etf_eval.py`.
+    "etf":      _ROOT / "etf",
 }
 VARIANTS = ("lean", "momentum")
+VARIANTS_ALL = ("lean", "momentum", "etf")
 
 
 def _switch_variant(variant: str):
@@ -79,7 +85,7 @@ def _config_cls(variant: str):
     _switch_variant(variant)
     cfg_mod = importlib.import_module("diversitas.config")
     # LeanConfig / MomentumConfig — pick the dataclass that isn't the alias
-    for name in ("LeanConfig", "MomentumConfig", "Config"):
+    for name in ("LeanConfig", "MomentumConfig", "ETFConfig", "Config"):
         if hasattr(cfg_mod, name):
             return getattr(cfg_mod, name)
     raise RuntimeError(f"no Config class found for {variant}")

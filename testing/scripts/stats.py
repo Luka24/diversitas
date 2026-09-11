@@ -57,12 +57,20 @@ def probabilistic_sharpe(r: np.ndarray, sr_benchmark: float = 0.0) -> float:
 
 
 def deflated_sharpe(r: np.ndarray, n_trials: int,
-                    trials_sharpe_std: Optional[float] = None) -> dict:
+                    trials_sharpe_std: Optional[float] = None,
+                    td: float = _SQRT_TD) -> dict:
     """Deflated Sharpe Ratio. Returns {sr_ann, sr0_ann, dsr, p_value}.
 
-    `trials_sharpe_std` = std of the (per-bar) Sharpe ratios across all configs
+    `trials_sharpe_std` = std of the **per-bar** Sharpe ratios across all configs
     tried on this asset. If unknown, a conservative default of 0.5/sqrt(n) is used
     on the annualized scale, converted back to per-bar.
+
+    Passing an *annualised* std here is a silent, large error: the variance term
+    is then off by `td`, the benchmark SR0 explodes, and the deflated Sharpe comes
+    back as a confident zero. Divide by sqrt(td) before calling.
+
+    `td` defaults to 365 for the crypto call sites this module was written for.
+    Pass 252 for equities, or every annualised figure is 20 % too high.
     """
     r = np.asarray(r, float)
     r = r[np.isfinite(r)]
@@ -76,8 +84,8 @@ def deflated_sharpe(r: np.ndarray, n_trials: int,
         var_sr = float(trials_sharpe_std) ** 2
     sr0 = expected_max_sharpe(n_trials, var_sr)          # per-bar benchmark
     dsr = probabilistic_sharpe(r, sr_benchmark=sr0)
-    return dict(sr_ann=sr_bar * np.sqrt(_SQRT_TD),
-                sr0_ann=sr0 * np.sqrt(_SQRT_TD),
+    return dict(sr_ann=sr_bar * np.sqrt(td),
+                sr0_ann=sr0 * np.sqrt(td),
                 dsr=dsr, p_value=(1.0 - dsr) if np.isfinite(dsr) else np.nan)
 
 
