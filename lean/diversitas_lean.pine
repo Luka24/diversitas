@@ -4,52 +4,104 @@ indicator("Diversitas Lean", shorttitle="DIV-LEAN", overlay=true, max_bars_back=
 // ============================================================================
 // DIVERSITAS LEAN — MINIMAL MODEL
 //
-// The "strip it to the bones" experiment. Keeps only what proved valuable
-// across the whole project:
-//   - Kijun trackline (direction)
-//   - 50 MA (trend confirmation) + 200 MA (regime filter)
-//   - Blow-off top detection (exit)
-//   - Vol shock (exit)
-//   - Anti-churn state machine (signal hygiene, not complexity)
-//   - Optional vol-targeted sizing (additive, off the signal path)
+// This file is now the MIRROR of `lean/diversitas/strategy.py`, not its
+// ancestor. Where the two ever disagree, the Python is the source of truth:
+// it is the one the dashboard runs, the one the test suite pins, and the one
+// every measurement in the project was made with.
 //
-// Deliberately DROPPED: conviction score, ADX, market structure,
-// weekly gate, on-chain pipe, macro pipe.
+// The model, in order:
+//   - Donchian(20) top-quartile breakout  -> ENTRY
+//   - Kijun trackline(75) +/- 3 % band    -> EXIT
+//   - 200 SMA regime block                -> hard veto on entry
+//   - Blow-off top (dist > 25 % & RSI>80) -> EXIT, and vetoes entry
+//   - Anti-churn state machine            -> 3-bar confirm, 15-bar lock
+//   - Binary 0/100 allocation + 5 % floor
 //
-// No request.security on BTC (BTC filter optional, off by default) —
-// the core model is fully self-contained on daily OHLCV.
+// Deliberately DROPPED: conviction score, ADX, market structure, weekly gate,
+// on-chain pipe, macro pipe.
+//
+// ---------------------------------------------------------------------------
+// WHAT CHANGED IN THIS FILE, AND WHY (the Python moved first)
+//
+//   2026-08-03  Three rules removed after each was switched off and the
+//               position series came back BIT-IDENTICAL on all 2700 bars:
+//                 close > maMed      never bound; blocked 65 days, none of
+//                                    which would have become a trade.
+//                 distEntryOK        arithmetic duplicate of aboveTL, which
+//                                    already requires distPct > trackBuf.
+//                 volShock exit      fired on 0 of 21 exits. NOT structurally
+//                                    dead — inert only at trackPeriod 75,
+//                                    trackBuf 3 %, exitGrace 3, reentryHold 15.
+//                                    Re-measure it before calling it dead if
+//                                    ANY of those four ever changes.
+//               All three are gone from the signal path here too. maMed and
+//               annualVol are still computed and plotted; they decide nothing.
+//
+//   2026-08-10  ENTRY GATE REPLACED. Was `aboveTL` (close above the 75-day
+//               trackline + 3 %). Is now `donchianOK` (close in the top
+//               quartile of the 20-day range). Same shape, two differences:
+//               a shorter lookback, and a band measured in units of the range
+//               rather than a fixed percent — so it widens when the market is
+//               wild and narrows when it is calm.
+//
+//               The trackline has NOT gone away. It still drives the exit
+//               (belowTL), the slope condition and the blow-off distance.
+//               It simply no longer decides entry — the single easiest thing
+//               to wire back by accident.
+//
+//               Measured on BTC/ETH net of 0.30 % per side: Sortino
+//               1.505 -> 1.936 and 1.078 -> 1.858; worst drawdown
+//               -45.2 % -> -30.2 % and -60.7 % -> -42.3 %. Cleared the nested
+//               walk-forward, CSCV at 97.5 %, circular-shift placebo at the
+//               96th percentile. It was adopted for the MECHANISM — during a
+//               collapse the close cannot be in the top quartile of the 20-day
+//               range — not for the numbers: the BTC confidence interval spans
+//               zero and everything rests on 8 to 21 trades.
+//
+//   2026-08-18  5 % permanent floor. An exit now sells 95 %, not 100 %.
+//
+//   ALLOCATION IS NOW BINARY. This file used to report `100 * volScale`
+//   (e.g. 50 % when vol is twice target). The Python treats the signal as the
+//   source of truth — fully in or fully out — so this file does too. The vol
+//   sizing inputs are kept for a future position-sizing layer and are wired to
+//   the display only.
 // ============================================================================
 
-// === TRACKLINE ===
+// === TRACKLINE (drives the EXIT, not the entry) ===
 trackPeriod = input.int(75, "Trackline Period", minval=20, maxval=120, group="Core")
 trackBuf = input.float(3.0, "Trackline Buffer %", minval=0.0, maxval=5.0, step=0.25, group="Core")
 
+// === ENTRY GATE ===
+useDonchian = input.bool(true, "Donchian Entry Gate", group="Entry", tooltip="ON = the current model. OFF removes the price gate ENTIRELY — it does NOT restore the old trackline gate — leaving entry to the slope and regime terms alone. Mirrors the Python, where use_donchian=False sets donchian_ok=True.")
+donchianPeriod = input.int(20, "Donchian Period", minval=10, maxval=60, group="Entry", tooltip="DO NOT TUNE. 20 is the classic Turtle length, chosen outside this data. Probability of backtest overfitting when selecting this number was measured at 0.672, and the in-sample pick alternates between 12 and 40 — opposite ends of the grid. The previous default of 55 sat in the WORST part of it. The value in the rule is the rule, not the number.")
+donchianTopFrac = input.float(0.75, "Donchian Top Fraction", minval=0.5, maxval=0.95, step=0.05, group="Entry", tooltip="Close must sit above this fraction of the N-day high/low range.")
+
 // === MOVING AVERAGES ===
-maMedLen = input.int(50, "Trend MA (medium)", minval=20, maxval=100, group="Moving Averages", tooltip="Price must be above this for a BULL. Confirms medium-term trend.")
-maLongLen = input.int(200, "Regime MA (long)", minval=100, maxval=300, group="Moving Averages", tooltip="Bear-market filter. No entries when price is below a falling long MA.")
+maMedLen = input.int(50, "Trend MA (medium, display only)", minval=20, maxval=100, group="Moving Averages", tooltip="PLOTTED, NOT USED. Removed from the entry condition on 2026-08-03 after the position series came back bit-identical without it.")
+maLongLen = input.int(200, "Regime MA (long)", minval=100, maxval=300, group="Moving Averages", tooltip="Bear-market filter. No entries when price is below a FALLING long MA. Below a rising one is fine.")
 maSlope = input.int(5, "Regime MA Slope Lookback", minval=1, maxval=20, group="Moving Averages")
 
 // === EXITS ===
-blowoffDist = input.float(25.0, "Blow-off Distance %", minval=10.0, maxval=40.0, step=1.0, group="Exits", tooltip="Exit if price is this % above trackline AND RSI > 80.")
-rsiLen = input.int(14, "RSI Length", group="Exits")
-volShockMul = input.float(1.5, "Vol Shock Multiplier", minval=1.2, maxval=3.0, step=0.1, group="Exits")
-volLookback = input.int(20, "Vol Lookback Days", minval=5, maxval=60, group="Exits")
+blowoffDist = input.float(25.0, "Blow-off Distance %", minval=10.0, maxval=40.0, step=1.0, group="Exits", tooltip="Exit if price is this % above the trackline AND RSI > 80. Also vetoes entry — see the note on bullCondition.")
+rsiLen = input.int(14, "RSI Length", group="Exits", tooltip="Textbook 14, paired with a hard 80 threshold. Left fixed on purpose so the blow-off rule has one free parameter, not two.")
 
 // === RANGE FILTER (kills sideways chop) ===
-trackSlopeBars = input.int(10, "Trackline Slope Lookback", minval=1, maxval=30, group="Range Filter", tooltip="BULL requires the trackline to be rising over this many bars. In a range the Kijun trackline goes flat, so this blocks sideways whipsaws.")
-minDistEntry = input.float(0.0, "Min Entry Distance % (extra)", minval=0.0, maxval=15.0, step=0.5, group="Range Filter", tooltip="Optional: require price this % above trackline to enter (on top of the buffer). 0 = off.")
+trackSlopeBars = input.int(10, "Trackline Slope Lookback", minval=1, maxval=30, group="Range Filter", tooltip="ONE comparison of today against the bar this many back. It does NOT require the trackline to have risen on each of those bars.")
 
 // === ANTI-CHURN ===
 confirmBars = input.int(3, "Confirmation Bars", minval=1, maxval=5, group="Anti-Churn")
-reentryHold = input.int(15, "Re-entry Hold Lock", minval=1, maxval=30, group="Anti-Churn")
+reentryHold = input.int(15, "Re-entry Hold Lock", minval=1, maxval=30, group="Anti-Churn", tooltip="Applies after EVERY signal change, in both directions — not only after an exit.")
 exitGraceBars = input.int(3, "Exit Grace", minval=1, maxval=5, group="Anti-Churn")
 
-// === SIZING (optional, additive — never changes signal timing) ===
-useVolSizing = input.bool(true, "Volatility-Targeted Sizing", group="Sizing")
+// === POSITION ===
+bearAlloc = input.float(5.0, "Permanent Floor %", minval=0.0, maxval=20.0, step=1.0, group="Position", tooltip="When the signal says out, this much stays invested. NOT a measured improvement — on BTC from 2021 the 0 % floor wins on both Sortino and drawdown. It is insurance against the signal degrading, priced small.")
+
+// === SIZING (display only — does NOT modulate the allocation) ===
+useVolSizing = input.bool(false, "Show Vol-Targeted Size", group="Sizing", tooltip="Display only. The reported allocation is binary 0/100; this plots what a vol-targeted layer WOULD size to.")
 targetVol = input.float(50.0, "Target Vol %", minval=20.0, maxval=100.0, step=5.0, group="Sizing")
 
 // === OPTIONAL ===
-useBtcFilter = input.bool(false, "BTC Filter (for altcoins)", group="Optional", tooltip="Off by default. Turn on for altcoins: requires BTC above its 50 EMA.")
+useBtcFilter = input.bool(false, "BTC Filter (for altcoins)", group="Optional", tooltip="Off in Lean. Turn on for altcoins: requires BTC above its 50 EMA.")
 
 // === DISPLAY ===
 showDots = input.bool(true, "Show Dots", group="Display")
@@ -63,11 +115,11 @@ showLabels = input.bool(true, "Show Labels", group="Display")
 trackHigh = ta.highest(high, trackPeriod)
 trackLow = ta.lowest(low, trackPeriod)
 trackline = (trackHigh + trackLow) / 2.0
-trackRising = trackline > trackline[1]
-trackRisingWindow = trackline > trackline[trackSlopeBars]
+trackRising = trackline > trackline[1]                      // colours the line only
+trackRisingWindow = trackline > trackline[trackSlopeBars]   // the real condition
 bufAmt = trackline * (trackBuf / 100.0)
-aboveTL = close > (trackline + bufAmt)
-belowTL = close < (trackline - bufAmt)
+aboveTL = close > (trackline + bufAmt)                      // display state only
+belowTL = close < (trackline - bufAmt)                      // EXIT
 distPct = (close - trackline) / trackline * 100
 
 maMed = ta.sma(close, maMedLen)
@@ -76,16 +128,34 @@ maLongRising = maLong > maLong[maSlope]
 maLongFalling = maLong < maLong[maSlope]
 aboveMaLong = close > maLong
 
-// Regime: blocked only in a confirmed bear (below a falling long MA)
+// Regime: blocked only in a CONFIRMED bear — below the long MA *and* it falling.
 bearRegime = not aboveMaLong and maLongFalling
 regimeOK = not bearRegime
 
 rsiVal = ta.rsi(close, rsiLen)
 
-// Volatility
+// Volatility. `ta.stdev` is population by default (biased=true), which is what
+// the Python uses (`ind.stdev_pop`). Display and sizing only.
 logRet = math.log(close / close[1])
-dailyStd = ta.stdev(logRet, volLookback)
+dailyStd = ta.stdev(logRet, 20)
 annualVol = dailyStd * math.sqrt(365) * 100
+
+// Donchian entry gate. Guard the division: on a dead-flat range dcHi == dcLo,
+// and the Python maps that to False rather than to a signal.
+dcHi = ta.highest(high, donchianPeriod)
+dcLo = ta.lowest(low, donchianPeriod)
+dcRange = dcHi - dcLo
+donchianPos = dcRange > 0 ? (close - dcLo) / dcRange : na
+donchianRaw = not na(donchianPos) and donchianPos > donchianTopFrac
+// OFF removes the price gate ENTIRELY (`donchian_ok = True` in the Python) —
+// it does NOT restore the pre-2026-08-10 trackline gate. Written as `true`
+// rather than `aboveTL` for that reason: an earlier draft of this file put
+// `aboveTL` here, which quietly made the toggle mean something the Python
+// never meant. With it off, entry rests on the slope and regime terms alone.
+donchianOK = useDonchian ? donchianRaw : true
+// The close the gate would need today — the same inequality solved for price,
+// so the chart never restates the formula and cannot drift away from it.
+donchianTrigger = dcLo + donchianTopFrac * dcRange
 
 // Optional BTC filter
 btcClose = request.security("COINBASE:BTCUSD", "D", close)
@@ -96,18 +166,22 @@ btcFilterOK = not useBtcFilter or (btcClose > btcEMA50)
 // ENTRY / EXIT CONDITIONS
 // ============================================================================
 
-// BULL entry: above trackline + above medium MA + trackline RISING (range filter)
-//   + optional extra distance + not in bear regime + (optional) BTC OK
-distEntryOK = distPct >= (trackBuf + minDistEntry)
-bullCondition = aboveTL and close > maMed and trackRisingWindow and distEntryOK and regimeOK and btcFilterOK
-
-// Exits
 trendBreak = belowTL
 blowoff = distPct > blowoffDist and rsiVal > 80
-volShock = annualVol > ta.sma(annualVol, 50) * volShockMul and belowTL
+
+// `not blowoff` is NOT redundant. Blow-off is an EXIT rule and the state
+// machine only consults exits while already long, so without this term the same
+// bar can be a valid buy and a screaming sell at once. That is not a corner
+// case: blow-off needs distPct > 25 % while entry needs only > 3 %, so EVERY
+// blow-off bar clears the entry hurdle. 30 of the 31 blow-off bars in the
+// history satisfy every other entry condition too.
+bullCondition = donchianOK and trackRisingWindow and regimeOK and btcFilterOK and not blowoff
 
 // ============================================================================
 // STATE MACHINE — strict BULL/BEAR alternation + anti-churn
+//
+// Order matters: the counters run on EVERY bar, in both states, and only then
+// are transitions judged. Counting bullHold only while BEAR delays every entry.
 // ============================================================================
 
 greenDot = bullCondition
@@ -128,15 +202,13 @@ if bullCondition
 else
     bullHoldCount := 0
 
-// BEAR exits (only when currently BULL) — immediate
+// BEAR exits (only when currently BULL). The volShock exit was removed here on
+// 2026-08-03 — see the header for the condition under which it is inert.
 if signalState == 1
     if trendBreak and belowCount >= exitGraceBars
         signalState := 3
         barsSinceSignal := 0
     else if blowoff
-        signalState := 3
-        barsSinceSignal := 0
-    else if volShock
         signalState := 3
         barsSinceSignal := 0
 
@@ -160,29 +232,99 @@ else if aboveTL and not bullCondition
     displayState := 2
 
 // ============================================================================
-// SIZING LAYER (additive — applied after signal)
+// POSITION — binary 0/100, held from the NEXT bar, with a drifting floor
+//
+// Two things the signal alone does not give you.
+//
+// 1. Position is YESTERDAY's signal. The strategy decides at a close and the
+//    earliest that decision can be held is the next bar. Reading signalState
+//    directly claims the move into the very close that produced the signal.
+//
+// 2. The floor is never rebalanced. An exit sells down to it ONCE and the
+//    remainder is then left alone, so its share moves with the price — on BTC
+//    it has ranged from 1.6 % to 6.9 % while flat. Charging turnover for that
+//    drift would price a transaction nobody makes, so `tradedFrac` is non-zero
+//    only on the two rebalances at a signal switch.
+//
+// One boundary difference, stated so nobody hunts it. The Python discards its
+// warm-up bars and carries the previous close across that cut, so its first
+// bar has a real return. On a chart there is no cut: bar 0 has no `close[1]`,
+// `nz()` gives 0, and that one missing return multiplies forward through the
+// drifting floor for the rest of the series. Measured at 0.018 percentage
+// points of a 5 % floor — it moves no decision and no trade, and it is a
+// property of where the series starts, not of the rules.
+//
+// Verified by `testing/scripts/preveri_pine.py`, which re-implements this file
+// from its own text and diffs it against the Python: signal and position match
+// bar for bar on BTC, ETH and SOL (2801 / 2801 / 1711 bars).
 // ============================================================================
 
+floorFrac = bearAlloc / 100.0
+// `nz(..., 3)` is not decoration. On bar 0 a `var` series has no history, so
+// `signalState[1]` is na, and whether `na == 1` yields false or na is a detail
+// of the language I do not want the first bar of every chart to depend on.
+// 3 is BEAR, which is also the state the machine starts in.
+posBull = nz(signalState[1], 3) == 1
+
+// Every one of these is declared with a real value, never a bare `na`. `na` on
+// its own carries no type, so Pine infers the narrowest one it can — `var bool
+// prevBull = na` landed on `const bool`, and the first `:=` from a series then
+// failed to compile. An explicit `posInit` flag replaces the `na(vAsset)` test
+// that made the na-initialisation necessary in the first place.
+var bool  posInit    = false
+var float vAsset     = 0.0
+var float vCash      = 0.0
+var bool  prevBull   = false
+var float tradedFrac = 0.0
+tradedFrac := 0.0                      // turnover is a per-bar quantity
+
+barRet = nz(close / close[1] - 1.0)
+
+if not posInit
+    vAsset   := posBull ? 1.0 : floorFrac
+    vCash    := posBull ? 0.0 : 1.0 - floorFrac
+    prevBull := posBull
+    posInit  := true
+else if posBull != prevBull
+    tot        = vAsset + vCash
+    target     = posBull ? tot : floorFrac * tot
+    tradedFrac := math.abs(target - vAsset) / tot
+    vAsset     := target
+    vCash      := tot - target
+    prevBull   := posBull
+
+totalV = vAsset + vCash
+heldFrac = totalV > 0 ? vAsset / totalV : 0.0
+vAsset := vAsset * (1.0 + barRet)      // only the asset sleeve moves
+
+targetAlloc = signalState == 1 ? 100 : 0
+heldPct = heldFrac * 100.0
+
+// Display only — what a vol-targeted layer WOULD size to. Not the allocation.
 volScale = (useVolSizing and annualVol > 0) ? math.min(1.0, targetVol / annualVol) : 1.0
-targetAlloc = signalState == 1 ? math.round(math.max(0.0, math.min(100.0, 100.0 * volScale))) : 0
+volSizedPct = math.round(math.max(0.0, math.min(100.0, 100.0 * volScale)))
 
 // ============================================================================
 // PLOTS
 // ============================================================================
 
 plot(trackline, "Trackline", color=trackRising ? color.new(#00E676, 0) : color.new(#FF5252, 0), linewidth=3)
-plot(maMed, "Trend MA", color=color.new(#42A5F5, 30), linewidth=1)
+plot(maMed, "Trend MA (display only)", color=color.new(#42A5F5, 30), linewidth=1)
 plot(maLong, "Regime MA", color=maLongRising ? color.new(#00C853, 40) : color.new(#FF1744, 40), linewidth=2)
-plot(targetAlloc, "Allocation %", color=color.new(#42A5F5, 0), linewidth=2, style=plot.style_stepline, display=display.pane + display.data_window)
+plot(useDonchian ? donchianTrigger : na, "Donchian Trigger", color=color.new(#AB47BC, 25), linewidth=2, style=plot.style_stepline)
+
+plot(targetAlloc, "Signal Allocation %", color=color.new(#42A5F5, 0), linewidth=2, style=plot.style_stepline, display=display.data_window)
+plot(heldPct, "Held %", color=color.new(#26C6DA, 0), linewidth=1, style=plot.style_stepline, display=display.data_window)
+plot(tradedFrac * 100.0, "Traded %", color=color.new(#FFA726, 0), linewidth=1, display=display.data_window)
+plot(useVolSizing ? volSizedPct : na, "Vol-Sized % (display)", color=color.new(#8D6E63, 0), linewidth=1, display=display.data_window)
 
 plotshape(showDots and greenDot, title="Green Dot", style=shape.circle, location=location.belowbar, color=color.new(#00E676, 0), size=size.tiny)
 plotshape(showDots and redDot, title="Red Dot", style=shape.circle, location=location.abovebar, color=color.new(#FF5252, 0), size=size.tiny)
 
-var color bg = na
-if showBG
-    bg := displayState == 1 ? color.new(#00C853, 92) : displayState == 2 ? color.new(#FFD600, 93) : color.new(#FF1744, 94)
-else
-    bg := na
+// Plain expression, not `var color bg = na` + `:=`. Same reason as the position
+// block: a bare `na` initialiser leaves Pine to guess the type. This is
+// recomputed every bar anyway, so it never needed to persist.
+color bg = not showBG ? na : displayState == 1 ? color.new(#00C853, 92) : displayState == 2 ? color.new(#FFD600, 93) : color.new(#FF1744, 94)
 bgcolor(bg)
 
 if showLabels and signalChanged
@@ -195,7 +337,7 @@ if showLabels and signalChanged
 // STATUS TABLE
 // ============================================================================
 
-var table tbl = table.new(position.top_right, 2, 7, bgcolor=color.new(#0D1117, 0), border_width=1, border_color=color.new(#30363D, 0))
+var table tbl = table.new(position.top_right, 2, 8, bgcolor=color.new(#0D1117, 0), border_width=1, border_color=color.new(#30363D, 0))
 
 if barstate.islast
     sigStr = signalState == 1 ? "BULL" : "BEAR"
@@ -210,17 +352,18 @@ if barstate.islast
     table.cell(tbl, 1, 1, dispStr, text_color=dispClr, text_size=size.small)
 
     table.cell(tbl, 0, 2, "Allocation", text_color=color.gray, text_size=size.small)
-    allClr = targetAlloc >= 75 ? color.new(#00E676, 0) : targetAlloc >= 40 ? color.new(#EF9F27, 0) : targetAlloc > 0 ? color.new(#FFD600, 0) : color.new(#FF5252, 0)
-    table.cell(tbl, 1, 2, str.tostring(targetAlloc) + "%", text_color=allClr, text_size=size.small)
+    allClr = targetAlloc > 0 ? color.new(#00E676, 0) : color.new(#FF5252, 0)
+    table.cell(tbl, 1, 2, str.tostring(targetAlloc) + "%  (held " + str.tostring(heldPct, "#.0") + "%)", text_color=allClr, text_size=size.small)
 
-    table.cell(tbl, 0, 3, "Regime MA", text_color=color.gray, text_size=size.small)
+    table.cell(tbl, 0, 3, "Entry gate", text_color=color.gray, text_size=size.small)
+    dcClr = donchianOK ? color.new(#00E676, 0) : color.new(#FF5252, 0)
+    dcTxt = useDonchian ? (str.tostring(donchianPos * 100, "#.0") + "% of " + str.tostring(donchianPeriod) + "d range, need " + str.tostring(donchianTopFrac * 100, "#") + "%") : "OFF - no price gate"
+    table.cell(tbl, 1, 3, dcTxt, text_color=dcClr, text_size=size.small)
+
+    table.cell(tbl, 0, 4, "Regime MA", text_color=color.gray, text_size=size.small)
     maStr = bearRegime ? "BEAR (blocked)" : aboveMaLong ? "ABOVE" : "BELOW"
     maClr = bearRegime ? color.new(#FF1744, 0) : aboveMaLong ? color.new(#00E676, 0) : color.new(#EF9F27, 0)
-    table.cell(tbl, 1, 3, maStr, text_color=maClr, text_size=size.small)
-
-    table.cell(tbl, 0, 4, "Trend MA", text_color=color.gray, text_size=size.small)
-    tmClr = close > maMed ? color.new(#00E676, 0) : color.new(#FF5252, 0)
-    table.cell(tbl, 1, 4, close > maMed ? "ABOVE" : "BELOW", text_color=tmClr, text_size=size.small)
+    table.cell(tbl, 1, 4, maStr, text_color=maClr, text_size=size.small)
 
     table.cell(tbl, 0, 5, "Trackline", text_color=color.gray, text_size=size.small)
     tClr = trackRisingWindow ? color.new(#00E676, 0) : color.new(#FF5252, 0)
@@ -231,6 +374,9 @@ if barstate.islast
     dClr = distPct > 0 ? color.new(#00E676, 0) : color.new(#FF5252, 0)
     table.cell(tbl, 1, 6, (distPct > 0 ? "+" : "") + str.tostring(distPct, "#.1") + "%", text_color=dClr, text_size=size.small)
 
+    table.cell(tbl, 0, 7, "Counters", text_color=color.gray, text_size=size.small)
+    table.cell(tbl, 1, 7, "hold " + str.tostring(bullHoldCount) + " / below " + str.tostring(belowCount) + " / since " + str.tostring(barsSinceSignal), text_color=color.gray, text_size=size.small)
+
 // ============================================================================
 // ALERTS
 // ============================================================================
@@ -238,4 +384,3 @@ if barstate.islast
 alertcondition(signalChanged and signalState == 1, title="BULL", message="DIVERSITAS LEAN: BULL - {{ticker}} at {{close}}")
 alertcondition(signalChanged and signalState == 3, title="BEAR", message="DIVERSITAS LEAN: BEAR - {{ticker}} at {{close}}")
 alertcondition(blowoff, title="BLOW-OFF", message="DIVERSITAS LEAN: BLOW-OFF exit - {{ticker}} at {{close}}")
-alertcondition(volShock, title="VOL SHOCK", message="DIVERSITAS LEAN: VOL SHOCK exit - {{ticker}} at {{close}}")
