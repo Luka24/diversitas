@@ -208,6 +208,23 @@ def _load_candles(symbol: str, bars: int) -> pd.DataFrame:
     raise RuntimeError(f"{symbol}: noben vir ni odgovoril — {' | '.join(errors)}")
 
 
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_btc(bars: int) -> pd.DataFrame:
+    """BTC za medsredstveni filter.
+
+    Ta funkcija je bila ob razdelitvi Lean od Full izgubljena, njeni klici pa
+    ne -- uporabljena je bila na treh mestih in definirana na nobenem, zato je
+    vsaka od teh poti koncala z `name '_load_btc' is not defined`.
+
+    Zakaj je tako dolgo ostalo neopazeno: vse tri poti so redke. Kljukica
+    `BTC cross-asset filter` je privzeto IZKLOPLJENA, najhujse okno se racuna
+    le, ce je filter vklopljen, gumb `Refresh now` pa vecina pusti pri miru,
+    ker samodejno osvezevanje ze tece. Kdor nicesar od tega ne stori, strani
+    nikoli ne zlomi.
+    """
+    return fetch_btc_daily(bars=bars, config=DEFAULT_CONFIG)
+
 @st.cache_data(ttl=60, show_spinner=False)
 def _run(symbol: str, bars: int, use_btc_filter: bool):
     _td   = 252 if symbol in STOCK_SYMBOLS else TRADING_DAYS
