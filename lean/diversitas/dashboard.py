@@ -2176,7 +2176,7 @@ def main() -> None:
         dark_mode    = st.session_state.get("lean_dark_theme", True)
         auto_refresh = st.checkbox("Auto-refresh (60 s)", value=True,
                                    help="Automatically reload data every 60 seconds.")
-        if st.button("↺  Refresh now", type="primary", use_container_width=True):
+        if st.button("↺  Refresh now", type="primary", width="stretch"):
             _load_candles.clear()
             _load_btc.clear()
             _run.clear()
@@ -2395,14 +2395,14 @@ def main() -> None:
         _pc_tabs = st.tabs(_pc_labels)
         with _pc_tabs[0]:
             st.plotly_chart(_build_price_chart(df, symbol, bear_alloc),
-                            use_container_width=True, key="pc_a")
+                            width="stretch", key="pc_a")
         with _pc_tabs[1]:
             st.plotly_chart(_build_price_chart(df_b_al, sym_b, bear_alloc),
-                            use_container_width=True, key="pc_b")
+                            width="stretch", key="pc_b")
         if _spx_tab_label:
             with _pc_tabs[2]:
                 st.markdown(_render_spx_bar(spx_m), unsafe_allow_html=True)
-                st.plotly_chart(_build_spx_chart(spx_eq), use_container_width=True, key="pc_spx_port")
+                st.plotly_chart(_build_spx_chart(spx_eq), width="stretch", key="pc_spx_port")
     else:
         st.markdown(_section_label(f"Price chart · {symbol}/USD"), unsafe_allow_html=True)
         _pc_labels = [f"▲ {symbol} / USD"]
@@ -2412,13 +2412,13 @@ def main() -> None:
             _pc_tabs = st.tabs(_pc_labels)
             with _pc_tabs[0]:
                 st.plotly_chart(_build_price_chart(df, symbol, bear_alloc),
-                                use_container_width=True, key="pc_single")
+                                width="stretch", key="pc_single")
             with _pc_tabs[1]:
                 st.markdown(_render_spx_bar(spx_m), unsafe_allow_html=True)
-                st.plotly_chart(_build_spx_chart(spx_eq), use_container_width=True, key="pc_spx_single")
+                st.plotly_chart(_build_spx_chart(spx_eq), width="stretch", key="pc_spx_single")
         else:
             st.plotly_chart(_build_price_chart(df, symbol, bear_alloc),
-                            use_container_width=True, key="pc_only")
+                            width="stretch", key="pc_only")
 
     # ── gates + status (tabs in portfolio mode) ───────────────────────────────
     if portfolio_mode and s_b is not None:
@@ -2439,11 +2439,11 @@ def main() -> None:
         )
         st.plotly_chart(
             _build_signal_timeline_dual(df_a_al, df_b_al, symbol, sym_b),
-            use_container_width=True, key="timeline_port",
+            width="stretch", key="timeline_port",
         )
     else:
         st.markdown(_section_label(f"Signal timeline · {symbol}"), unsafe_allow_html=True)
-        st.plotly_chart(_build_signal_timeline(df), use_container_width=True, key="timeline_single")
+        st.plotly_chart(_build_signal_timeline(df), width="stretch", key="timeline_single")
 
     # ── equity curve ──────────────────────────────────────────────────────────
     if portfolio_mode:
@@ -2453,13 +2453,13 @@ def main() -> None:
         )
         st.plotly_chart(
             _build_equity_chart_portfolio(symbol, sym_b, m_a, m_b, m_port, spx_eq=spx_eq),
-            use_container_width=True, key="equity_port",
+            width="stretch", key="equity_port",
         )
     else:
         st.markdown(_section_label(f"Performance · {symbol} strategy vs buy & hold"),
                     unsafe_allow_html=True)
         st.plotly_chart(_build_equity_chart(metrics, symbol=symbol, spx_eq=spx_eq),
-                        use_container_width=True, key="equity_single")
+                        width="stretch", key="equity_single")
 
     # ── stress test expander ─────────────────────────────────────────────────
     if worst_w:
@@ -2487,7 +2487,7 @@ def main() -> None:
                             _build_stress_test_chart(
                                 rc, ww.get("cagr_start"), ww.get("cagr_end"), sym
                             ),
-                            use_container_width=True,
+                            width="stretch",
                             key=f"stress_{sym}",
                         )
                 if tab_ctx is not None:
@@ -2514,12 +2514,12 @@ def main() -> None:
         st.plotly_chart(
             _build_rolling_sharpe(df, bear_alloc, port_ret=port_ret,
                                   title=_sharpe_title, td=td),
-            use_container_width=True, key="sharpe",
+            width="stretch", key="sharpe",
         )
     with a_right:
         st.plotly_chart(
             _build_monthly_heatmap(df, bear_alloc, port_ret=port_ret, title=_heat_title),
-            use_container_width=True, key="heatmap",
+            width="stretch", key="heatmap",
         )
 
     # ── trade ledger ──────────────────────────────────────────────────────────
@@ -2537,16 +2537,16 @@ def main() -> None:
                 st.download_button(
                     "Export CSV", data=_trades_to_csv(trades),
                     file_name=f"trades_{symbol}_{pd.Timestamp.now():%Y%m%d}.csv",
-                    mime="text/csv", use_container_width=True, key="dl_a",
+                    mime="text/csv", width="stretch", key="dl_a",
                 )
             st.markdown(_render_trade_ledger(trades, n=n_a), unsafe_allow_html=True)
             tl, tr = st.columns(2, gap="medium")
             with tl:
                 st.plotly_chart(_build_trade_distribution(trades),
-                                use_container_width=True, key="tdist_a")
+                                width="stretch", key="tdist_a")
             with tr:
                 st.plotly_chart(_build_trade_scatter(trades),
-                                use_container_width=True, key="tscat_a")
+                                width="stretch", key="tscat_a")
         with tab_b:
             n_b = len(trades_b)
             hc_b, dc_b = st.columns([8, 2])
@@ -2559,16 +2559,16 @@ def main() -> None:
                 st.download_button(
                     "Export CSV", data=_trades_to_csv(trades_b),
                     file_name=f"trades_{sym_b}_{pd.Timestamp.now():%Y%m%d}.csv",
-                    mime="text/csv", use_container_width=True, key="dl_b",
+                    mime="text/csv", width="stretch", key="dl_b",
                 )
             st.markdown(_render_trade_ledger(trades_b, n=n_b), unsafe_allow_html=True)
             tl2, tr2 = st.columns(2, gap="medium")
             with tl2:
                 st.plotly_chart(_build_trade_distribution(trades_b),
-                                use_container_width=True, key="tdist_b")
+                                width="stretch", key="tdist_b")
             with tr2:
                 st.plotly_chart(_build_trade_scatter(trades_b),
-                                use_container_width=True, key="tscat_b")
+                                width="stretch", key="tscat_b")
     else:
         n_trades = len(trades)
         hdr_col, dl_col = st.columns([8, 2])
@@ -2581,17 +2581,17 @@ def main() -> None:
             st.download_button(
                 "Export CSV", data=_trades_to_csv(trades),
                 file_name=f"trades_{symbol}_{pd.Timestamp.now():%Y%m%d}.csv",
-                mime="text/csv", use_container_width=True,
+                mime="text/csv", width="stretch",
             )
         st.markdown(_render_trade_ledger(trades, n=n_trades), unsafe_allow_html=True)
 
         t_left, t_right = st.columns(2, gap="medium")
         with t_left:
             st.plotly_chart(_build_trade_distribution(trades),
-                            use_container_width=True, key="tdist_single")
+                            width="stretch", key="tdist_single")
         with t_right:
             st.plotly_chart(_build_trade_scatter(trades),
-                            use_container_width=True, key="tscat_single")
+                            width="stretch", key="tscat_single")
 
     # Spell out the exact window the numbers above were computed on. Without this
     # the dashboard (live data, rolling `bars` fetch) and a written report (frozen
