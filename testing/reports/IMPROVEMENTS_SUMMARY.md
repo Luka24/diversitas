@@ -8,8 +8,9 @@ benefit-vs-complexity. Detailed per-idea numbers live in the linked reports.
 ## Document coverage — now complete
 
 **Every idea in `Diversitas_vprašanja_3.6.2026.docx` that is testable on free data
-has been tested.** The only untested item is **MVRV** (needs a paid on-chain feed;
-recipe documented in `external_report.md`). Full mapping: `coverage_and_methodology.md`.
+has been tested.** MVRV was later tested on free CoinMetrics data (2026-10-11,
+`testing/nacrt_word_ideje.md`): untestable, the rule fires only 4 times, all before
+mid-2021. Full mapping: `coverage_and_methodology.md`.
 
 | Q&A area | Status |
 |---|---|
@@ -20,7 +21,7 @@ recipe documented in `external_report.md`). Full mapping: `coverage_and_methodol
 | OHLC volatility (Parkinson), profit-taking, weekend-skip, rolling-peak brake | ✅ swept |
 | BTC filter on/off | ✅ tested |
 | **On-chain (Coinbase premium) + Macro (DXY+BBB)** | ✅ tested (inert as doc predicted) |
-| MVRV | ⏸ paid data — recipe documented |
+| MVRV | ✅ 2026-10-11, untestable (4 events, none after 2021) — `nacrt_word_ideje.md` |
 | Conviction-score family (weights, z-score, ADX, weekly) | ⛔ Full-variant only, not in Lean/Momentum |
 
 ## Methodology (leakage-safe) — how these were judged

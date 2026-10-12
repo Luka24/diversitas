@@ -58,6 +58,9 @@ conviction score) · ⏸ excluded per user (external data) · 📌 design decisi
 MVRV thresholds/dynamic, MVRV-for-alts, Coinbase premium (−0.05/−0.1/−0.2, SMA 7 vs 14), DXY
 YoY (period, 2% threshold), BBB SMA (21/42/63), macro pipe. **Not tested** (need new data
 sources; user scoped these out). Listed here for completeness so nothing is silently dropped.
+Update 2026-10-11: MVRV (BTC, dynamic 95th percentile) tested on free CoinMetrics data,
+see `testing/nacrt_word_ideje.md`: only 4 blocked entries, all before mid-2021, so it is
+untestable and stays a dashboard display only.
 
 ### §8 Convergence gate + anti-churn
 | # | Q&A idea | Status | Where / parameters |

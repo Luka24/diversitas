@@ -331,3 +331,80 @@ naše obstoječe številke poštene.
   https://twoquants.substack.com/p/why-trend-systems-work
 - Volatilnostni stop: https://www.luxalgo.com/library/concept/volatility-stop.md
 - Primer "extension" izstopa: https://www.luxalgo.com/library/indicator/hjHwHStD-trend-following-rsi-strategy/
+
+## Rezultati (2026-10-11)
+
+Vsi štirje testi so tekli po zgoraj zapisanih merilih. Pozitivne kontrole so
+povsod prešle. Produkcija ostane nespremenjena.
+
+### Test 3, MVRV: ni preverljivo
+
+Pravilo (MVRV včeraj nad 95. percentilom zadnjih 1460 dni) je aktivno 153 od
+3861 dni, v štirih epizodah, vse v 2017 in začetku 2021. Po juniju 2021 ni
+epizode. Blokiralo bi 4 od 30 vstopov osnove (2017-05-15, 2017-06-08,
+2017-12-17, 2021-03-11). 4 < 5, zato se je test ustavil po koraku 1, donosi niso
+izračunani. MVRV ostane na dashboardu samo kot informacija.
+
+### Test 1, blow-off: oba kandidata zavrnjena, 25 % ostane
+
+| Sortino | A0 danes | A1 brez blow-offa | A2 ATR-percentil |
+|---|---|---|---|
+| BTC | 2,22 | 2,23 | 2,24 |
+| ETH | 2,10 | 1,99 | 1,74 |
+| knjiga | 2,43 | 2,43 | 2,39 |
+
+MaxDD ETH: −44,6 % (A0) proti −65,5 % (A1 in A2). MaxDD knjige: −43,7 %, −45,3 %,
+−45,9 %. C2 in C4 padeta povsod. Ure zaključka: A1 zmaga na 11/24, A2 na 13/24
+(potrebno 16). Placebo: A0 je boljši le od 69 % (BTC) oziroma 68 % (ETH)
+naključno postavljenih izstopov, kar ni ločljivo od naključja. Diagnostika (ni
+merilo): od 2018 dalje bi bil BTC brez blow-offa nekoliko boljši (1,58 proti
+1,45), ETH obratno.
+
+### Test 2, buffer po volatilnosti: B1 zavrnjen
+
+Mediane bufferjev B1: ETH 4,0 %, SOL 5,5 %, LINK 5,0 %, BNB 3,5 %, HYPE 6,6 %.
+Sortino osnova → B1: ETH 2,10 → 2,06, SOL 1,02 → 0,87, LINK 0,46 → 0,33,
+BNB 1,31 → 1,39, HYPE 1,38 → 1,25. Knjiga 2,43 → 2,41 (v šumu). C1 drži, C2-C4
+padejo. Mehanizem formalno drži (35 % proti 37 % izstopov s ponovnim nakupom
+dražje v 30 dneh), a premalo, da bi pomenil kaj. Obrnjeno pravilo B− da +0,01.
+
+### Test 4, preživeli: napihnjenost okoli 0,35 Sortina, prednost lean ni dokazana
+
+Univerzum (top 5 po prometu v Q4 prejšnjega leta, vsaj 365 dni zgodovine):
+
+| leto | kovanci |
+|---|---|
+| 2019 | ETH, BCC, BNB, LTC, NEO |
+| 2020 | ETH, BNB, XRP, EOS, BCHABC |
+| 2021 | ETH, XRP, LTC, LINK, BNB |
+| 2022 | ETH, BNB, SOL, SAND, MANA |
+| 2023 | ETH, DOGE, XRP, BNB, SOL |
+| 2024 | ETH, SOL, XRP, BNB, AVAX |
+| 2025 | ETH, DOGE, XRP, SOL, PEPE |
+| 2026 | ETH, SOL, BNB, ZEC, XRP |
+
+Okno 2019-01-01 do 2026-08-30:
+
+| knjiga | Sortino | MaxDD | CAGR |
+|---|---|---|---|
+| (i) današnji alti, lean | 1,99 | −34,2 % | 41,3 % |
+| (ii) dinamični alti, lean | 1,64 | −35,2 % | 31,7 % |
+| (iii) dinamični alti, kupi in drži | 1,25 | −83,7 % | 43,5 % |
+
+(i) − (ii): Sortino +0,35, CAGR +9,6 o.t. To je ocena, koliko backtesta altov
+izvira iz izbire kovancev za nazaj. (ii) proti (iii): rast 0/4, padec 4/4,
+kombinacije 48 %, C4 ne (interval vključuje nič). Po vnaprej zapisanem pravilu
+izbire altov ne utemeljujemo z backtestom. Lean na altih zmanjša padce, ne
+moremo pa trditi, da prinese več donosa kot kupi in drži.
+
+Študiji primera: LUNA, zadnji izstop lean 2022-05-08 (−43 % na poslu), kupi in
+drži −100 %. FTT, lean zunaj od 2022-04-13, novembrski zlom ga ne zadane.
+
+Odstopanja od načrta:
+- Pozitivna kontrola BNB je ob prvem zagonu padla samo na zadnjem dnevu
+  predpomnilnika cene() (2026-08-30, −1,3 %, sveča shranjena pred zaprtjem).
+  Ostalih 3219 dni se ujema natančno, zato se zadnji dan pri primerjavi izpusti.
+- Bitcoin Cash je bil v 2019 (BCC) in 2020 (BCHABC) izbran pod oznakama, ki ju je
+  Binance kmalu preimenoval, zato zanju v tistem letu ni podatkov. V teh dveh letih
+  so bili v knjigi 4 alti namesto 5.
+- Okno se začne 2019, ne 2017 kot ostali testi, zato 1,99 ni primerljivo z 2,43.
