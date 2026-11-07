@@ -889,6 +889,32 @@ def _section_label(txt: str) -> str:
 
 # ── status bar ────────────────────────────────────────────────────────────────
 
+def _bar_unclosed(ts, symbol: str) -> bool:
+    """Is this daily bar still forming?
+
+    The signal is defined at the close. Until the bar closes, its "close" is the
+    live price, so a signal on it can still disappear. Crypto bars close at
+    00:00 UTC; the stock ETFs at 16:00 New York time.
+    """
+    ts = pd.Timestamp(ts)
+    if ts.tzinfo is None:
+        ts = ts.tz_localize("UTC")
+    now = pd.Timestamp.now(tz="UTC")
+    if symbol in STOCK_SYMBOLS:
+        ny = now.tz_convert("America/New_York")
+        return ts.date() >= ny.date() and ny.hour < 16
+    return ts.tz_convert("UTC").date() >= now.date()
+
+
+def _marker_text(word: str, ts, symbol: str) -> str:
+    """Chart label; a signal on a bar that has not closed carries a question mark."""
+    return f"{word}?" if _bar_unclosed(ts, symbol) else word
+
+
+def _closes_at(symbol: str) -> str:
+    return "16:00 New York" if symbol in STOCK_SYMBOLS else "00:00 UTC"
+
+
 def _status_bar(s: dict, symbol: str, cfg: LeanConfig) -> str:
     sig_col  = COL_BULL if s["signal"] == "BULL" else COL_BEAR
     reg_col  = {"BULL": COL_BULL, "HEDGED": COL_NEUTRAL, "BEAR": COL_BEAR}[s["regime"]]
@@ -918,7 +944,29 @@ def _status_bar(s: dict, symbol: str, cfg: LeanConfig) -> str:
     sep = (f'<span style="color:{COL_BORDER};padding:0 14px;'
            f'font-size:15px;vertical-align:middle">│</span>')
 
+    provisional = _bar_unclosed(s["time"], symbol)
+    prev_sig = s.get("prev_signal")
+    flipped = provisional and prev_sig is not None and prev_sig != s["signal"]
+    if provisional:
+        sig_html = (chip(s["signal"], sig_col, bold=True)
+                    + f'<span style="color:{COL_NEUTRAL};font-size:10px;font-weight:700;'
+                      f'margin-left:6px;letter-spacing:0.4px">PROVISIONAL</span>')
+        sig_tip = (f"Today's bar has not closed yet (closes at {_closes_at(symbol)}). "
+                   f"The signal is computed on the live price and can still change. "
+                   f"Last closed bar: {prev_sig or '—'}.")
+    else:
+        sig_html = chip(s["signal"], sig_col, bold=True)
+        sig_tip = ("Current trading signal. BULL = strategy is 100% long. BEAR = 0% (cash). "
+                   "Flips only when all entry conditions are met simultaneously (BULL) "
+                   "or any exit condition triggers (BEAR).")
+
     warnings = ""
+    if flipped:
+        verb = "exit" if s["signal"] == "BEAR" else "entry"
+        warnings += (f'<span title="{sig_tip}" style="color:{COL_NEUTRAL};font-weight:700;'
+                     f'font-size:11px;margin-left:14px;cursor:help">'
+                     f'⚠ {verb} only if today closes like this, confirmed at '
+                     f'{_closes_at(symbol)} (last close: {prev_sig})</span>')
     if s.get("blowoff"):
         warnings += f'<span style="color:{COL_BEAR};font-weight:700;font-size:11px;margin-left:14px">⚠ BLOW-OFF</span>'
 
@@ -935,10 +983,7 @@ def _status_bar(s: dict, symbol: str, cfg: LeanConfig) -> str:
         f' style="color:{COL_TEXT};font-size:15px;font-weight:700;margin-right:10px;cursor:help">{symbol}/USD</span>'
         f'<span title="Last daily close price in USD."'
         f' style="color:{COL_TEXT};font-size:15px;font-family:monospace;margin-right:2px;cursor:help">{close_txt}</span>'
-        + item("Signal", chip(s["signal"], sig_col, bold=True),
-               "Current trading signal. BULL = strategy is 100% long. BEAR = 0% (cash). "
-               "Flips only when all entry conditions are met simultaneously (BULL) "
-               "or any exit condition triggers (BEAR).")
+        + item("Signal", sig_html, sig_tip)
         + item("Regime", chip(s["regime"], reg_col),
                "Display regime from the longer-term state machine. "
                "BULL = confirmed uptrend. BEAR = confirmed downtrend. "
@@ -1052,7 +1097,8 @@ def _build_price_chart(df: pd.DataFrame, symbol: str,
             mode="markers+text",
             marker=dict(color=COL_BULL, size=22, symbol="triangle-up",
                         line=dict(color="white", width=2)),
-            text=["BUY"] * len(bulls), textposition="bottom center",
+            text=[_marker_text("BUY", t, symbol) for t in bulls.index],
+            textposition="bottom center",
             textfont=dict(color=COL_BULL, size=11, family="monospace"),
             name="BULL signal", showlegend=False,
             hovertemplate="▲ BUY  %{x|%Y-%m-%d}  $%{customdata:,.0f}<extra></extra>",
@@ -1064,7 +1110,8 @@ def _build_price_chart(df: pd.DataFrame, symbol: str,
             mode="markers+text",
             marker=dict(color=COL_BEAR, size=22, symbol="triangle-down",
                         line=dict(color="white", width=2)),
-            text=["SELL"] * len(bears), textposition="top center",
+            text=[_marker_text("SELL", t, symbol) for t in bears.index],
+            textposition="top center",
             textfont=dict(color=COL_BEAR, size=11, family="monospace"),
             name="BEAR signal", showlegend=False,
             hovertemplate="▼ SELL  %{x|%Y-%m-%d}  $%{customdata:,.0f}<extra></extra>",
@@ -2268,6 +2315,8 @@ def main() -> None:
         st.stop()
 
     s = build_summary(df)
+    if len(df) > 1:
+        s["prev_signal"] = build_summary(df.iloc[:-1])["signal"]
     trades   = _build_trade_ledger(df)
     metrics  = _compute_metrics(df, bear_alloc_pct=bear_alloc, td=td, df_full=df_full,
                                 fee_per_side_pct=fee_per_side)
