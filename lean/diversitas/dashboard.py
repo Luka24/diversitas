@@ -944,10 +944,13 @@ def _status_bar(s: dict, symbol: str, cfg: LeanConfig) -> str:
     sep = (f'<span style="color:{COL_BORDER};padding:0 14px;'
            f'font-size:15px;vertical-align:middle">│</span>')
 
+    # Provisional only when the signal FLIPS on a bar that has not closed. If it
+    # merely continues the last closed bar's signal, that signal is already
+    # confirmed; marking it provisional made a settled exit look undecided.
     provisional = _bar_unclosed(s["time"], symbol)
     prev_sig = s.get("prev_signal")
     flipped = provisional and prev_sig is not None and prev_sig != s["signal"]
-    if provisional:
+    if flipped:
         sig_html = (chip(s["signal"], sig_col, bold=True)
                     + f'<span style="color:{COL_NEUTRAL};font-size:10px;font-weight:700;'
                       f'margin-left:6px;letter-spacing:0.4px">PROVISIONAL</span>')
