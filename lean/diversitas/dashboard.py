@@ -906,6 +906,48 @@ def _bar_unclosed(ts, symbol: str) -> bool:
     return ts.tz_convert("UTC").date() >= now.date()
 
 
+def _reentry_info(df: pd.DataFrame, hist: pd.DataFrame, cfg: LeanConfig,
+                  symbol: str):
+    """When is the earliest the strategy can buy again after an exit?
+
+    Two rules gate a re-entry (see `run_state_machine`):
+      - `reentry_hold`: at least that many bars since the exit bar, and
+      - `confirm_bars`: the entry conditions held on that many closes in a row,
+        ending on the re-entry bar. They can start counting during the hold.
+    So the earliest buy signal is at the close of exit bar + `reentry_hold`, and
+    only if the `confirm_bars` closes up to it all pass. The position follows a
+    bar later. Returns None while the signal is BULL.
+    """
+    last = df.iloc[-1]
+    if int(last["signal_state"]) != S_BEAR:
+        return None
+    left = max(cfg.reentry_hold - int(last["bars_since_signal"]), 0)
+    if symbol in STOCK_SYMBOLS:
+        step = pd.offsets.BDay(1)       # trading days; ignores exchange holidays
+    else:
+        step = pd.Timedelta(days=1)
+    earliest = last.name + left * step
+    confirm_from = earliest - (cfg.confirm_bars - 1) * step
+    exit_at = last.name - int(last["bars_since_signal"]) * step
+
+    # How long re-entries actually took, over the whole history loaded.
+    ch = hist[hist["signal_changed"]]
+    exits = ch.index[ch["signal_state"] == S_BEAR]
+    entries = ch.index[ch["signal_state"] == S_BULL]
+    pos = {ts: i for i, ts in enumerate(hist.index)}
+    gaps = []
+    for e in exits:
+        nxt = entries[entries > e]
+        if len(nxt):
+            gaps.append(pos[nxt[0]] - pos[e])
+    return {
+        "exit_at": exit_at, "left": left, "earliest": earliest,
+        "confirm_from": confirm_from, "held_from": earliest + step,
+        "bull_hold": int(last["bull_hold"]),
+        "gaps": gaps, "hist_from": hist.index[0],
+    }
+
+
 def _marker_text(word: str, ts, symbol: str) -> str:
     """Chart label; a signal on a bar that has not closed carries a question mark."""
     return f"{word}?" if _bar_unclosed(ts, symbol) else word
@@ -963,6 +1005,33 @@ def _status_bar(s: dict, symbol: str, cfg: LeanConfig) -> str:
                    "Flips only when all entry conditions are met simultaneously (BULL) "
                    "or any exit condition triggers (BEAR).")
 
+    reentry_part = ""
+    ri = s.get("reentry")
+    if ri is not None:
+        d = lambda ts: f"{ts:%Y-%m-%d}"
+        if ri["left"] > 0:
+            chip_txt = f'≥ {ri["earliest"]:%d %b} ({ri["left"]} d)'
+            when = (f'The earliest buy signal is at the close of {d(ri["earliest"])}, '
+                    f'held from {d(ri["held_from"])}, and only if the entry conditions '
+                    f'pass on every close from {d(ri["confirm_from"])} to {d(ri["earliest"])}. ')
+        else:
+            chip_txt = f'open · {ri["bull_hold"]}/{cfg.confirm_bars}'
+            when = (f'The waiting period is over. It buys at the first close on which the '
+                    f'entry conditions have passed {cfg.confirm_bars} closes in a row '
+                    f'(now {ri["bull_hold"]} of {cfg.confirm_bars}). ')
+        g = ri["gaps"]
+        hist_txt = ""
+        if g:
+            n_min = sum(1 for x in g if x == cfg.reentry_hold)
+            med = sorted(g)[len(g) // 2]
+            hist_txt = (f"History since {d(ri['hist_from'])}: {len(g)} re-entries, median "
+                        f"{med} days after the exit, only {n_min} at the minimum of "
+                        f"{cfg.reentry_hold}, longest {max(g)}.")
+        tip = (f"Last exit at the close of {d(ri['exit_at'])}. After an exit the strategy "
+               f"waits at least {cfg.reentry_hold} bars before it may buy again "
+               f"(reentry_hold). " + when + hist_txt)
+        reentry_part = item("Re-entry", chip(chip_txt, COL_NEUTRAL), tip)
+
     warnings = ""
     if flipped:
         verb = "exit" if s["signal"] == "BEAR" else "entry"
@@ -1005,7 +1074,7 @@ def _status_bar(s: dict, symbol: str, cfg: LeanConfig) -> str:
         + item("Vol", chip(vol_txt, COL_DIM),
                "Annualised historical volatility (30-day rolling std of daily returns × √365). "
                "HIGH vol regime can suppress entries. LOW vol favours continuation.")
-        + btc_part + warnings
+        + reentry_part + btc_part + warnings
     )
     ts = f'<span style="color:{COL_VERY_DIM};font-size:10px;font-family:monospace;margin-left:auto">{date_txt}</span>'
 
@@ -2320,6 +2389,7 @@ def main() -> None:
     s = build_summary(df)
     if len(df) > 1:
         s["prev_signal"] = build_summary(df.iloc[:-1])["signal"]
+    s["reentry"] = _reentry_info(df, result.df, cfg, symbol)
     trades   = _build_trade_ledger(df)
     metrics  = _compute_metrics(df, bear_alloc_pct=bear_alloc, td=td, df_full=df_full,
                                 fee_per_side_pct=fee_per_side)
